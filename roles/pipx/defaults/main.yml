@@ -1,0 +1,19 @@
+---
+# pipx_packages:
+#   # Simple package from PyPI
+#   - package-name
+#
+#   # PyPI package with options
+#   - name: package-name
+#     state: present  # or absent
+#     env:  # environment variables for build
+#       CFLAGS: "-I/path/to/include"
+#       LDFLAGS: "-L/path/to/lib"
+#
+#   # Local package (from profile's packages/ directory)
+#   # Paths starting with "packages/" are relative to profile_dir
+#   - name: my-tool
+#     path: packages/my-tool
+#     editable: true  # default: true for local packages
+#     state: present  # or absent
+pipx_packages: []

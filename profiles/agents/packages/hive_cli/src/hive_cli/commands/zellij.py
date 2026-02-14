@@ -1,0 +1,157 @@
+"""Zellij command - open Zellij with agent layout."""
+
+from __future__ import annotations
+
+import os
+import shutil
+import subprocess
+import sys
+import time
+from typing import Annotated
+
+from cyclopts import App, Parameter
+from rich.console import Console
+
+from ..agents import detect_agent
+from ..config import KNOWN_AGENTS, load_config
+from ..git.repo import change_to_main_repo, get_session_name
+from ..utils import error, format_yellow
+
+console = Console()
+stderr_console = Console(stderr=True)
+
+zellij_app = App(
+    name="zellij",
+    help="Open Zellij with AI agent layout.",
+)
+
+
+@zellij_app.default
+def zellij(
+    agent: Annotated[
+        str | None,
+        Parameter(
+            name=["--agent", "-a"],
+            env_var="HIVE_AGENT",
+            help="Specific agent to use (overrides auto-detection).",
+        ),
+    ] = None,
+    restart: Annotated[
+        bool,
+        Parameter(help="Auto-restart Zellij after it exits."),
+    ] = False,
+    restart_delay: Annotated[
+        float,
+        Parameter(
+            name="--restart-delay",
+            help="Delay in seconds between restarts (default: 0).",
+        ),
+    ] = 0,
+):
+    """Open Zellij with AI agent layout.
+
+    Auto-detects available AI agent and opens Zellij with the generic agent layout.
+    Always runs from the main repository (not worktree).
+
+    Examples:
+        hive zellij                          # Auto-detect agent
+        hive zellij -a claude                # Use Claude specifically
+        hive zellij --restart                # Auto-restart after Zellij exits
+        hive zellij --restart --restart-delay 1  # Restart with 1s delay
+        HIVE_AGENT=gemini hive zellij         # Use Gemini via env var
+    """
+    # Check zellij is available
+    if not shutil.which("zellij"):
+        error("zellij is not installed. Install it with: brew install zellij")
+        sys.exit(1)
+
+    # Change to main repo
+    change_to_main_repo()
+    session_name = get_session_name()
+
+    # Detect agent
+    detected = detect_agent(preferred=agent)
+
+    if detected is None:
+        if agent:
+            error(
+                f"Agent '{format_yellow(agent)}' is not available. "
+                f"Is it installed and in your PATH?"
+            )
+        else:
+            agents_list = ", ".join(KNOWN_AGENTS)
+            error(f"No AI coding agent found. Install one of: {agents_list}")
+        sys.exit(1)
+
+    # Set HIVE_AGENT env var for child processes (hive run uses this)
+    os.environ["HIVE_AGENT"] = detected.name
+
+    # Get zellij config
+    config = load_config()
+
+    # Build session name from template
+    # Supports {repo} and {agent} placeholders
+    full_session_name = config.zellij.session_name.format(
+        repo=session_name,
+        agent=detected.name,
+    )
+
+    # Build zellij command
+    cmd = ["zellij"]
+
+    # Add layout if configured
+    if config.zellij.layout:
+        cmd.extend(["--layout", config.zellij.layout])
+
+    cmd.extend(["attach", "--create", full_session_name])
+
+    if restart:
+        # Auto-restart loop
+        try:
+            while True:
+                subprocess.run(cmd)
+                console.print("\n[hive] Zellij exited. Restarting... (Ctrl+C to stop)")
+                if restart_delay > 0:
+                    time.sleep(restart_delay)
+        except KeyboardInterrupt:
+            console.print("\n[hive] Stopped.")
+            sys.exit(0)
+    else:
+        # Execute zellij, replacing the current process
+        os.execvp("zellij", cmd)
+
+
+@zellij_app.command(name="set-status")
+def set_status(
+    status: Annotated[
+        str | None, Parameter(help="Agent status (e.g., '[working]').")
+    ] = None,
+):
+    """Set agent status in pane title.
+
+    Examples:
+        hive zellij set-status "[working]"
+        hive zellij set-status "[idle]"
+        hive zellij set-status           # Clear status
+    """
+    from ..utils.zellij import set_pane_status
+
+    if not set_pane_status(status):
+        stderr_console.print("[dim]Not running in Zellij session[/dim]")
+
+
+@zellij_app.command(name="set-title")
+def set_title(
+    title: Annotated[str | None, Parameter(help="Custom title suffix.")] = None,
+):
+    """Set custom title suffix in pane title.
+
+    Examples:
+        hive zellij set-title "Fixing auth bug"
+        hive zellij set-title "JIRA-123"
+        hive zellij set-title             # Clear custom title
+    """
+    from ..utils.zellij import set_pane_custom_title
+
+    if not set_pane_custom_title(title):
+        stderr_console.print("[dim]Not running in Zellij session[/dim]")

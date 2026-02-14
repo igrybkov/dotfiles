@@ -1,0 +1,3 @@
+# copy current directory to clipboard
+pwd | pbcopy
+echo "Path copied to clipboard:" $(pbpaste)

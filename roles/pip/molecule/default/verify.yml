@@ -1,0 +1,32 @@
+---
+- name: Verify pip role
+  hosts: all
+  gather_facts: false
+  vars:
+    # Use the same venv pip path as converge
+    test_pip_executable: /opt/test-venv/bin/pip
+  tasks:
+    - name: Check pip executable exists
+      ansible.builtin.stat:
+        path: "{{ test_pip_executable }}"
+      register: pip_stat
+
+    - name: Assert pip exists
+      ansible.builtin.assert:
+        that:
+          - pip_stat.stat.exists
+        fail_msg: "pip executable should exist at {{ test_pip_executable }}"
+
+    - name: Check httpie is installed
+      ansible.builtin.command:
+        cmd: "{{ test_pip_executable }} show httpie"
+      register: httpie_check
+      changed_when: false
+      failed_when: httpie_check.rc != 0
+
+    - name: Check rich is installed
+      ansible.builtin.command:
+        cmd: "{{ test_pip_executable }} show rich"
+      register: rich_check
+      changed_when: false
+      failed_when: rich_check.rc != 0

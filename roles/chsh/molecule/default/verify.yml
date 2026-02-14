@@ -1,0 +1,29 @@
+---
+- name: Verify chsh role
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Get current user shell
+      ansible.builtin.command:
+        cmd: getent passwd root
+      register: passwd_entry
+      changed_when: false
+
+    - name: Check fish is in /etc/shells
+      ansible.builtin.command:
+        cmd: grep -q fish /etc/shells
+      register: shells_check
+      changed_when: false
+      failed_when: shells_check.rc != 0
+
+    - name: Assert user shell is fish
+      ansible.builtin.assert:
+        that:
+          - "'/fish' in passwd_entry.stdout"
+        fail_msg: "User shell should be fish, got: {{ passwd_entry.stdout }}"
+
+    - name: Assert fish is in /etc/shells
+      ansible.builtin.assert:
+        that:
+          - shells_check.rc == 0
+        fail_msg: "Fish shell should be listed in /etc/shells"

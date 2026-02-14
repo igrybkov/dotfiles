@@ -1,0 +1,123 @@
+#!/usr/bin/env bash
+# watch-logs: Intelligently find and tail log files in the current repo
+# Uses bat for syntax highlighting when available
+
+set -euo pipefail
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Find git root or use current directory
+find_root() {
+    git rev-parse --show-toplevel 2>/dev/null || pwd
+}
+
+# Find log files in common locations
+find_log_files() {
+    local root="$1"
+    local -a log_files=()
+
+    # Common log file patterns and locations
+    local -a patterns=(
+        "*.log"
+        "*.logs"
+        "log/*.log"
+        "logs/*.log"
+        "var/log/*.log"
+        "tmp/*.log"
+        "storage/logs/*.log"  # Laravel
+        ".next/server/*.log"  # Next.js
+    )
+
+    for pattern in "${patterns[@]}"; do
+        while IFS= read -r -d '' file; do
+            log_files+=("$file")
+        done < <(find "$root" -maxdepth 4 -type f -name "$(basename "$pattern")" -path "*$(dirname "$pattern")*" -print0 2>/dev/null || true)
+    done
+
+    # Also check for recently modified log files
+    while IFS= read -r -d '' file; do
+        log_files+=("$file")
+    done < <(find "$root" -maxdepth 3 -type f -name "*.log" -mmin -60 -print0 2>/dev/null || true)
+
+    # Deduplicate and sort by modification time (newest first)
+    printf '%s\0' "${log_files[@]}" 2>/dev/null | sort -zu | xargs -0 ls -t 2>/dev/null | head -10
+}
+
+# Tail with bat syntax highlighting
+tail_with_bat() {
+    local files=("$@")
+
+    if command -v bat &>/dev/null; then
+        # Use bat for syntax highlighting
+        # Try log syntax, fallback to plain if not available
+        if bat --list-languages 2>/dev/null | grep -q "^log:"; then
+            tail -f "${files[@]}" 2>/dev/null | bat --paging=never --style=numbers -l log --color=always
+        else
+            tail -f "${files[@]}" 2>/dev/null | bat --paging=never --style=numbers --color=always
+        fi
+    else
+        # Fallback to regular tail with some basic highlighting
+        tail -f "${files[@]}" 2>/dev/null | while IFS= read -r line; do
+            case "$line" in
+                *[Ee][Rr][Rr][Oo][Rr]*|*[Ff][Aa][Tt][Aa][Ll]*)
+                    echo -e "${RED}${line}${NC}"
+                    ;;
+                *[Ww][Aa][Rr][Nn]*)
+                    echo -e "${YELLOW}${line}${NC}"
+                    ;;
+                *[Ii][Nn][Ff][Oo]*)
+                    echo -e "${GREEN}${line}${NC}"
+                    ;;
+                *[Dd][Ee][Bb][Uu][Gg]*)
+                    echo -e "${BLUE}${line}${NC}"
+                    ;;
+                *)
+                    echo "$line"
+                    ;;
+            esac
+        done
+    fi
+}
+
+# Main
+main() {
+    local root
+    root=$(find_root)
+
+    echo -e "${BLUE}Searching for log files in ${root}...${NC}"
+
+    # Get log files
+    local -a log_files
+    mapfile -t log_files < <(find_log_files "$root")
+
+    if [[ ${#log_files[@]} -eq 0 ]]; then
+        echo -e "${YELLOW}No log files found. Watching for new *.log files...${NC}"
+        # Watch for any new log files
+        while true; do
+            mapfile -t log_files < <(find_log_files "$root")
+            if [[ ${#log_files[@]} -gt 0 ]]; then
+                break
+            fi
+            sleep 5
+        done
+    fi
+
+    echo -e "${GREEN}Found ${#log_files[@]} log file(s):${NC}"
+    printf '  %s\n' "${log_files[@]}"
+    echo ""
+
+    # Use tail+bat for syntax highlighted log viewing
+    tail_with_bat "${log_files[@]}"
+}
+
+# Allow passing specific files as arguments
+if [[ $# -gt 0 ]]; then
+    tail_with_bat "$@"
+else
+    main
+fi

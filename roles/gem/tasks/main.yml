@@ -1,0 +1,34 @@
+---
+# Gem Role - Main Tasks
+# Variables are passed from the playbook (pre-aggregated from all profiles)
+# Input validation is handled by argument_specs in meta/argument_specs.yml
+
+- name: "[💎 gem] Skip if no gem packages configured"
+  ansible.builtin.meta: end_host
+  when: gem_packages | default([]) | length == 0
+
+- name: "[💎 gem] Check if gem is available"
+  ansible.builtin.command: which gem
+  register: _gem_check
+  changed_when: false
+  failed_when: false
+
+- name: "[💎 gem] gem not found - skipping"  # noqa: ignore-errors
+  ansible.builtin.fail:
+    msg: |
+      gem not found in PATH.
+      Add 'ruby' to brew_packages in your profile config.
+      Skipping gem packages: {{ gem_packages | map(attribute='name') | join(', ') }}
+  when: _gem_check.rc != 0
+  ignore_errors: true
+
+- name: "[💎 gem] End role if gem not found"
+  ansible.builtin.meta: end_host
+  when: _gem_check.rc != 0
+
+- name: "[💎 gem] Install gem packages"
+  community.general.gem:
+    name: "{{ item.name }}"
+    state: "{{ item.state | default('present') }}"
+    version: "{{ item.version | default(omit) }}"
+  loop: "{{ gem_packages }}"

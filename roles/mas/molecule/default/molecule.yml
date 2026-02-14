@@ -1,0 +1,51 @@
+---
+dependency:
+  name: galaxy
+
+driver:
+  name: docker
+
+platforms:
+  - name: mas-test
+    image: ubuntu:24.04
+    pre_build_image: true
+    command: /bin/bash -c "while true; do sleep 1000; done"
+    privileged: true
+    environment:
+      HOME: /root
+
+provisioner:
+  name: ansible
+  config_options:
+    defaults:
+      interpreter_python: auto_silent
+      gathering: implicit
+      roles_path: ../../..:~/.ansible/roles
+  inventory:
+    host_vars:
+      mas-test:
+        ansible_python_interpreter: auto
+  playbooks:
+    converge: converge.yml
+    prepare: prepare.yml
+    verify: verify.yml
+  env:
+    ANSIBLE_ROLES_PATH: "../../..:~/.ansible/roles"
+    ANSIBLE_LOOKUP_PLUGINS: "../../../ansible_plugins/lookup"
+
+verifier:
+  name: ansible
+
+scenario:
+  name: default
+  test_sequence:
+    - dependency
+    - cleanup
+    - destroy
+    - syntax
+    - create
+    - prepare
+    - converge
+    - verify
+    - cleanup
+    - destroy

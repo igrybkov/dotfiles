@@ -1,0 +1,6 @@
+---
+- name: Converge - Test chsh role
+  hosts: all
+  gather_facts: true
+  roles:
+    - role: chsh

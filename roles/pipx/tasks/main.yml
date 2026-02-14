@@ -1,0 +1,169 @@
+---
+- name: "[🐍 pipx] Check if pipx is installed"
+  ansible.builtin.command: which pipx
+  register: pipx_check
+  changed_when: false
+  failed_when: false
+
+- name: "[🐍 pipx] Fail if pipx is not installed"
+  ansible.builtin.fail:
+    msg: "pipx is not installed. Add 'pipx' to brew_packages first."
+  when: pipx_check.rc != 0
+
+# Check for uv - use it for local packages if available (much faster)
+- name: "[⚡ uv] Check if uv is installed"
+  ansible.builtin.command: which uv
+  register: uv_check
+  changed_when: false
+  failed_when: false
+
+# Collect all build dependencies and get their brew prefixes
+- name: "[🐍 pipx] Collect unique build dependencies"
+  ansible.builtin.set_fact:
+    _pipx_build_deps: >-
+      {{ pipx_packages | default([])
+         | selectattr('build_deps', 'defined')
+         | map(attribute='build_deps')
+         | flatten
+         | unique
+         | list }}
+  when: pipx_packages is defined and pipx_packages | length > 0
+
+- name: "[🐍 pipx] Get brew prefix for build dependencies"
+  ansible.builtin.command: brew --prefix "{{ item }}"
+  register: _pipx_brew_prefixes
+  changed_when: false
+  failed_when: false
+  loop: "{{ _pipx_build_deps | default([]) }}"
+  when: _pipx_build_deps | default([]) | length > 0
+
+- name: "[🐍 pipx] Build prefix lookup dict"
+  ansible.builtin.set_fact:
+    _pipx_prefix_map: >-
+      {{ dict(_pipx_brew_prefixes.results
+              | selectattr('rc', 'equalto', 0)
+              | map(attribute='item')
+              | zip(_pipx_brew_prefixes.results
+                    | selectattr('rc', 'equalto', 0)
+                    | map(attribute='stdout'))) }}
+  when: _pipx_brew_prefixes.results is defined
+
+# PyPI packages (no path specified) - always use pipx
+- name: "[🐍 pipx] Install pipx packages from PyPI"
+  community.general.pipx:
+    name: "{{ item.name | default(item) }}"
+    state: "{{ item.state | default('present') }}"
+    executable: "{{ pipx_check.stdout }}"
+  environment: "{{ _pkg_env if (_pkg_env | length > 0) else omit }}"
+  vars:
+    # Get prefixes for this package's build_deps (filter to strings to skip unresolved deps)
+    _resolved_prefixes: >-
+      {{ item.build_deps | default([])
+         | map('extract', _pipx_prefix_map | default({}))
+         | select('string')
+         | list }}
+    # Build CFLAGS/LDFLAGS from resolved prefixes
+    _cflags: "{{ _resolved_prefixes | map('regex_replace', '^(.*)$', '-I\\1/include') | join(' ') }}"
+    _ldflags: "{{ _resolved_prefixes | map('regex_replace', '^(.*)$', '-L\\1/lib') | join(' ') }}"
+    # Create env dict: build flags (if any) + explicit env (explicit takes precedence)
+    _build_env: "{{ {'CFLAGS': _cflags, 'LDFLAGS': _ldflags} if _resolved_prefixes else {} }}"
+    _pkg_env: "{{ _build_env | combine(item.env | default({})) }}"
+  loop: "{{ pipx_packages | selectattr('path', 'undefined') | list }}"
+  when: pipx_packages is defined and pipx_packages | length > 0
+
+# =============================================================================
+# Local packages (path specified)
+# Paths starting with "packages/" are relative to profile_dir
+# Uses uv if available (faster), falls back to pipx
+# =============================================================================
+
+- name: "[🐍] Check local package directories exist"
+  ansible.builtin.stat:
+    path: >-
+      {{
+        (profile_dir ~ '/' ~ item.path)
+        if item.path.startswith('packages/')
+        else item.path
+      }}
+  loop: "{{ pipx_packages | selectattr('path', 'defined') | list }}"
+  register: _pipx_local_paths
+  when: pipx_packages is defined and pipx_packages | length > 0
+
+- name: "[🐍] Fail if local package directory does not exist"
+  ansible.builtin.fail:
+    msg: >-
+      Local package directory does not exist:
+      {{ (profile_dir ~ '/' ~ item.item.path) if item.item.path.startswith('packages/') else item.item.path }}
+  loop: "{{ _pipx_local_paths.results | default([]) }}"
+  when:
+    - item.stat is defined
+    - not item.stat.exists
+
+# --- uv path (faster) ---
+- name: "[⚡ uv] Install local packages (editable)"
+  ansible.builtin.command:
+    cmd: >-
+      {{ uv_check.stdout }} tool install
+      --editable "{{ _full_path }}"
+      --force
+  environment: "{{ _pkg_env if (_pkg_env | length > 0) else omit }}"
+  vars:
+    _full_path: >-
+      {{
+        (profile_dir ~ '/' ~ item.path)
+        if item.path.startswith('packages/')
+        else item.path
+      }}
+    # Get prefixes for this package's build_deps (filter to strings to skip unresolved deps)
+    _resolved_prefixes: >-
+      {{ item.build_deps | default([])
+         | map('extract', _pipx_prefix_map | default({}))
+         | select('string')
+         | list }}
+    # Build CFLAGS/LDFLAGS from resolved prefixes
+    _cflags: "{{ _resolved_prefixes | map('regex_replace', '^(.*)$', '-I\\1/include') | join(' ') }}"
+    _ldflags: "{{ _resolved_prefixes | map('regex_replace', '^(.*)$', '-L\\1/lib') | join(' ') }}"
+    # Create env dict: build flags (if any) + explicit env (explicit takes precedence)
+    _build_env: "{{ {'CFLAGS': _cflags, 'LDFLAGS': _ldflags} if _resolved_prefixes else {} }}"
+    _pkg_env: "{{ _build_env | combine(item.env | default({})) }}"
+  loop: "{{ pipx_packages | selectattr('path', 'defined') | list }}"
+  when:
+    - pipx_packages is defined and pipx_packages | length > 0
+    - uv_check.rc == 0
+  # Only report changed on first install; --force ensures deps are updated silently
+  changed_when: "'Uninstalled' not in _uv_install_result.stderr"
+  register: _uv_install_result
+
+# --- pipx fallback (when uv not available) ---
+- name: "[🐍 pipx] Install local packages (editable) - fallback"
+  community.general.pipx:
+    name: "{{ item.name }}"
+    source: >-
+      {{
+        (profile_dir ~ '/' ~ item.path)
+        if item.path.startswith('packages/')
+        else item.path
+      }}
+    state: "{{ item.state | default('present') }}"
+    editable: "{{ item.editable | default(true) }}"
+    # Force reinstall for local packages to pick up dependency changes
+    force: "{{ item.force | default(true) }}"
+    executable: "{{ pipx_check.stdout }}"
+  environment: "{{ _pkg_env if (_pkg_env | length > 0) else omit }}"
+  vars:
+    # Get prefixes for this package's build_deps (filter to strings to skip unresolved deps)
+    _resolved_prefixes: >-
+      {{ item.build_deps | default([])
+         | map('extract', _pipx_prefix_map | default({}))
+         | select('string')
+         | list }}
+    # Build CFLAGS/LDFLAGS from resolved prefixes
+    _cflags: "{{ _resolved_prefixes | map('regex_replace', '^(.*)$', '-I\\1/include') | join(' ') }}"
+    _ldflags: "{{ _resolved_prefixes | map('regex_replace', '^(.*)$', '-L\\1/lib') | join(' ') }}"
+    # Create env dict: build flags (if any) + explicit env (explicit takes precedence)
+    _build_env: "{{ {'CFLAGS': _cflags, 'LDFLAGS': _ldflags} if _resolved_prefixes else {} }}"
+    _pkg_env: "{{ _build_env | combine(item.env | default({})) }}"
+  loop: "{{ pipx_packages | selectattr('path', 'defined') | list }}"
+  when:
+    - pipx_packages is defined and pipx_packages | length > 0
+    - uv_check.rc != 0

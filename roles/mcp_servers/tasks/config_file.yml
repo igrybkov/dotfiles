@@ -1,0 +1,126 @@
+---
+# MCP Servers Role - Single Config File Update
+# Called with config_file = {key: path, value: [{name, server, state}, ...]}
+
+- name: "[🤖 MCP] Set expanded config file path"
+  ansible.builtin.set_fact:
+    _mcp_config_path: "{{ config_file.key | expanduser }}"
+
+- name: "[🤖 MCP] Check if config directory exists for {{ _mcp_config_path | basename }}"
+  ansible.builtin.stat:
+    path: "{{ _mcp_config_path | dirname }}"
+  register: mcp_config_dir
+
+- name: "[🤖 MCP] Warn if config directory does not exist for {{ _mcp_config_path | basename }}"
+  ansible.builtin.debug:
+    msg: "WARNING: Skipping {{ _mcp_config_path }} - directory {{ _mcp_config_path | dirname }} does not exist (application may not be installed)"
+  when: not mcp_config_dir.stat.exists
+
+- name: "[🤖 MCP] Read existing config {{ _mcp_config_path | basename }}"
+  ansible.builtin.slurp:
+    src: "{{ _mcp_config_path }}"
+  register: mcp_existing_config
+  failed_when: false
+  when: mcp_config_dir.stat.exists
+
+- name: "[🤖 MCP] Parse existing config {{ _mcp_config_path | basename }}"
+  ansible.builtin.set_fact:
+    mcp_current_config: >-
+      {{
+        (mcp_existing_config.content | default('e30=') | b64decode | from_json)
+        if mcp_existing_config.content is defined
+        else {}
+      }}
+  when: mcp_config_dir.stat.exists
+
+- name: "[🤖 MCP] Build updated mcpServers for {{ _mcp_config_path | basename }}"
+  ansible.builtin.set_fact:
+    mcp_updated_servers: >-
+      {%- set current_servers = mcp_current_config.get('mcpServers', {}) -%}
+      {%- set result = current_servers.copy() -%}
+      {%- for entry in config_file.value -%}
+        {%- set name = entry.name -%}
+        {%- set server = entry.server -%}
+        {%- set state = entry.state -%}
+        {%- if state == 'absent' -%}
+          {%- if name in result -%}
+            {%- set _ = result.pop(name) -%}
+          {%- endif -%}
+        {%- else -%}
+          {# Build the server config based on type (command-based vs URL-based) #}
+          {%- set server_config = {} -%}
+          {%- if server.url is defined -%}
+            {# URL-based server (HTTP/SSE transport) #}
+            {%- set _ = server_config.update({'url': server.url}) -%}
+            {%- if server.transport is defined -%}
+              {%- set _ = server_config.update({'transport': server.transport}) -%}
+            {%- endif -%}
+            {# Process headers: resolve Jinja2 templates (vault_secret), then op:// references #}
+            {%- if server.headers is defined -%}
+              {%- set resolved_headers = server.headers | resolve_templates(hostvars[inventory_hostname]) | resolve_op_secrets -%}
+              {%- set _ = server_config.update({'headers': resolved_headers}) -%}
+            {%- endif -%}
+          {%- else -%}
+            {# Command-based server (stdio transport) #}
+            {%- set _ = server_config.update({'command': server.command | expanduser}) -%}
+            {%- if server.args is defined -%}
+              {# Expand paths in args (strings starting with ~) #}
+              {%- set expanded_args = [] -%}
+              {%- for arg in server.args -%}
+                {%- if arg is string and arg.startswith('~') -%}
+                  {%- set _ = expanded_args.append(arg | expanduser) -%}
+                {%- else -%}
+                  {%- set _ = expanded_args.append(arg) -%}
+                {%- endif -%}
+              {%- endfor -%}
+              {%- set _ = server_config.update({'args': expanded_args}) -%}
+            {%- endif -%}
+            {# Process env vars: first resolve Jinja2 templates (vault_secret), then op:// references, then expand ~ #}
+            {%- if server.env is defined -%}
+              {%- set resolved_env = server.env | resolve_templates(hostvars[inventory_hostname]) | resolve_op_secrets -%}
+              {# Expand ~ in env values #}
+              {%- set expanded_env = {} -%}
+              {%- for key, value in resolved_env.items() -%}
+                {%- if value is string and value.startswith('~') -%}
+                  {%- set _ = expanded_env.update({key: value | expanduser}) -%}
+                {%- else -%}
+                  {%- set _ = expanded_env.update({key: value}) -%}
+                {%- endif -%}
+              {%- endfor -%}
+              {%- set _ = server_config.update({'env': expanded_env}) -%}
+            {%- endif -%}
+          {%- endif -%}
+          {%- set _ = result.update({name: server_config}) -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ result }}
+  when: mcp_config_dir.stat.exists
+
+- name: "[🤖 MCP] Build final config for {{ _mcp_config_path | basename }}"
+  ansible.builtin.set_fact:
+    mcp_final_config: >-
+      {{
+        mcp_current_config | combine({'mcpServers': mcp_updated_servers})
+      }}
+  when: mcp_config_dir.stat.exists
+
+# Check if any server in the final result has env vars or headers (for file permissions)
+# Must check mcp_updated_servers (merged result) not config_file.value (current profile only)
+# to ensure consistent mode across all profile runs
+- name: "[🤖 MCP] Check if config has secrets"
+  ansible.builtin.set_fact:
+    mcp_config_has_secrets: >-
+      {{
+        (mcp_updated_servers.values() | selectattr('env', 'defined') | list | length > 0)
+        or
+        (mcp_updated_servers.values() | selectattr('headers', 'defined') | list | length > 0)
+      }}
+  when: mcp_config_dir.stat.exists
+
+- name: "[🤖 MCP] Write updated config {{ _mcp_config_path | basename }}"
+  ansible.builtin.copy:
+    content: "{{ mcp_final_config | to_nice_json(indent=2, sort_keys=true) }}\n"
+    dest: "{{ _mcp_config_path }}"
+    mode: "{{ '0600' if mcp_config_has_secrets else '0644' }}"
+  no_log: "{{ mcp_config_has_secrets }}"
+  when: mcp_config_dir.stat.exists

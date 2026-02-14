@@ -1,0 +1,55 @@
+---
+# MCP Servers Role Defaults
+
+# List of MCP servers to manage
+# Supports two types: command-based (stdio) and URL-based (HTTP/SSE)
+# Paths can use ~/ for home directory (expanded by the role)
+#
+# Example - Command-based server (stdio transport):
+#   mcp_servers:
+#     - name: filesystem
+#       state: present
+#       command: npx
+#       args: ["-y", "@modelcontextprotocol/server-filesystem", "~/Documents"]
+#
+#     - name: custom-server
+#       state: present
+#       git_repo: git@github.com:user/mcp-server.git
+#       git_dest: ~/.local/share/mcp-servers/custom-server
+#       command: ~/.local/share/mcp-servers/custom-server/bin/server
+#       args: ["--config", "~/.config/custom-server/config.json"]
+#       env:
+#         API_KEY: "op://Private/custom-server/api-key"  # 1Password reference
+#         OTHER_KEY: "{{ lookup('vault_secret', 'mcp_secrets.custom.other') }}"
+#       config_files:
+#         - path: ~/.mcp.json
+#           state: present
+#         - path: "~/Library/Application Support/Claude/claude_desktop_config.json"
+#           state: absent
+#
+# Example - URL-based server (HTTP/SSE transport):
+#   mcp_servers:
+#     - name: remote-api
+#       url: "https://api.example.com/mcp"
+#       config_files:
+#         - path: ~/.meta-mcp/servers.json
+#           state: present
+#
+#     - name: authenticated-api
+#       url: "https://secure.example.com/mcp"
+#       transport: streamable-http
+#       headers:
+#         x-api-key: "{{ lookup('vault_secret', 'mcp_secrets.secure.api_key') }}"
+#         x-user-id: "user@example.com"
+#       config_files:
+#         - path: ~/.meta-mcp/servers.json
+#           state: present
+mcp_servers: []
+
+# Default config files to update when config_files is not specified per server
+mcp_default_config_files:
+  - ~/.mcp.json  # Claude Code
+  - ~/Library/Application Support/Claude/claude_desktop_config.json  # Claude Desktop
+
+# Base directory for git-cloned MCP servers
+mcp_servers_git_base: ~/.local/share/mcp-servers

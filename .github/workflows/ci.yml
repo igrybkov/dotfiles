@@ -1,0 +1,293 @@
+---
+name: CI
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch: # Allow manual trigger for macOS integration tests
+
+jobs:
+  yamllint:
+    name: yamllint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the codebase
+        uses: actions/checkout@v6
+
+      - name: Run yamllint
+        uses: karancode/yamllint-github-action@master
+
+  ansible-lint:
+    name: ansible-lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the codebase
+        uses: actions/checkout@v6
+
+      - name: Run ansible-lint
+        uses: ansible/ansible-lint@main
+
+  # Validate argument_specs by running playbook in check mode
+  # This catches schema errors like missing 'name' keys in package lists
+  ansible-check:
+    name: ansible-playbook --check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the codebase
+        uses: actions/checkout@v6
+
+      - name: Install mise
+        uses: jdx/mise-action@v3
+
+      - name: Install dependencies
+        run: mise x -- uv sync --frozen
+
+      - name: Install Ansible collections
+        run: mise x -- ansible-galaxy install -r requirements.yml
+
+      - name: Validate playbook with --check (triggers argument_specs)
+        run: |
+          mise x -- ansible-playbook playbook.yml \
+            --check \
+            --limit common-profile \
+            --skip-tags brew,mas,docker,chsh,mise \
+            -e "ansible_python_interpreter=$(which python3)"
+        env:
+          ANSIBLE_FORCE_COLOR: "1"
+
+  config-schema:
+    name: config-schema
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the codebase
+        uses: actions/checkout@v6
+
+      - name: Install mise
+        uses: jdx/mise-action@v3
+
+      - name: Install dependencies
+        run: mise x -- uv sync --frozen
+
+      - name: Install Ansible collections
+        run: mise x -- ansible-galaxy install -r requirements.yml
+
+      - name: Regenerate config schema
+        run: mise x -- uv run python scripts/generate_config_schema.py
+
+      - name: Verify schema is up-to-date
+        run: git diff --exit-code schemas/config.schema.json
+
+  renovate-config:
+    name: renovate-config
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the codebase
+        uses: actions/checkout@v6
+
+      - name: Validate Renovate config
+        uses: rinchsan/renovate-config-validator@v0.2.0
+        with:
+          pattern: "renovate.json"
+
+  pre-commit:
+    name: pre-commit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the codebase
+        uses: actions/checkout@v6
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+      - name: Install mise
+        uses: jdx/mise-action@v3
+      - name: Run pre-commit
+        uses: pre-commit/action@v3.0.1
+
+  shellcheck:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write # required for uploading SARIF results
+      actions: read # only required for workflows in private repositories
+      contents: read
+    strategy:
+      matrix:
+        include:
+          # - name: All shell scripts
+          #   glob: "**/*.sh"
+          #   cli_args: ""
+          - name: Dotfiles script
+            glob: dotfiles
+            cli_args: ""
+          - name: ZSH configuration
+            glob: "./**/*.zsh"
+            cli_args: ""
+          - name: Custom binaries
+            glob: "files/bin/**/* profiles/common/files/dotfiles/config/fish/conf.d/bin/**/*"
+            cli_args: "-e SC1071"
+    name: "ShellCheck: ${{ matrix.name }}"
+    steps:
+      - uses: actions/checkout@v6
+      - name: Run shellcheck
+        id: shellcheck-global
+        run: "shopt -s globstar nullglob; files=(${{ matrix.glob }}); filtered=(); for f in \"${files[@]}\"; do [ -f \"$f\" ] && filtered+=(\"$f\"); done; if [ ${#filtered[@]} -eq 0 ]; then echo 'No files matched pattern: ${{ matrix.glob }}'; exit 0; else shellcheck ${{ matrix.cli_args }} \"${filtered[@]}\"; fi"
+
+  # Python CLI unit tests
+  python-tests:
+    name: Python CLI Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the codebase
+        uses: actions/checkout@v6
+
+      - name: Install mise
+        uses: jdx/mise-action@v3
+
+      - name: Install dependencies
+        run: mise x -- uv sync --frozen
+
+      - name: Run pytest
+        run: mise x -- uv run pytest
+
+  # Molecule tests for Docker-compatible roles
+  molecule-docker:
+    name: "Molecule: ${{ matrix.role }}"
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        role:
+          - chsh
+          - dotfiles
+          - gem
+          - npm
+          - pip
+          - ssh_config
+    steps:
+      - name: Check out the codebase
+        uses: actions/checkout@v6
+
+      - name: Install mise
+        uses: jdx/mise-action@v3
+
+      - name: Install dependencies
+        run: mise x -- uv sync --frozen
+
+      - name: Install Ansible collections
+        run: mise x -- ansible-galaxy install -r requirements.yml
+
+      - name: Run Molecule tests for ${{ matrix.role }}
+        run: |
+          cd roles/${{ matrix.role }}
+          mise x -- uv run molecule test
+        env:
+          PY_COLORS: "1"
+          ANSIBLE_FORCE_COLOR: "1"
+
+  # Project-level Molecule smoke tests
+  molecule-default:
+    name: Molecule Default Scenario
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the codebase
+        uses: actions/checkout@v6
+
+      - name: Install mise
+        uses: jdx/mise-action@v3
+
+      - name: Install dependencies
+        run: mise x -- uv sync --frozen
+
+      - name: Install Ansible collections
+        run: mise x -- ansible-galaxy install -r requirements.yml
+
+      - name: Run Molecule default scenario
+        run: mise x -- uv run molecule test -s default
+        env:
+          PY_COLORS: "1"
+          ANSIBLE_FORCE_COLOR: "1"
+
+  # macOS integration tests (manual trigger only - expensive)
+  molecule-macos:
+    name: Molecule macOS Integration
+    runs-on: macos-15 # Apple Silicon runner
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Check out the codebase
+        uses: actions/checkout@v6
+
+      - name: Install Tart
+        run: brew install cirruslabs/cli/tart
+
+      - name: Install mise
+        uses: jdx/mise-action@v3
+
+      - name: Install dependencies
+        run: mise x -- uv sync --frozen
+
+      - name: Install Ansible collections
+        run: mise x -- ansible-galaxy install -r requirements.yml
+
+      - name: Run Molecule macOS integration tests
+        run: mise x -- uv run molecule test -s macos-integration
+        env:
+          PY_COLORS: "1"
+          ANSIBLE_FORCE_COLOR: "1"
+        timeout-minutes: 60
+
+  # Legacy full playbook test (disabled)
+  test:
+    name: Test
+    if: ${{ false }} # it's super time consuming, so let's leave it disabled so far
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - macos-12
+
+    steps:
+      - name: Check out the codebase
+        uses: actions/checkout@v6
+
+      - name: Uninstall GitHub Actions' built-in Homebrew
+        run: |
+          curl -sLO https://raw.githubusercontent.com/Homebrew/install/master/uninstall.sh
+          chmod +x ./uninstall.sh
+          sudo ./uninstall.sh --force
+          sudo rm -rf /usr/local/Homebrew /usr/local/Caskroom /usr/local/bin/brew
+
+      - name: Uninstall GitHub Actions' built-in browser installs.
+        run: |
+          sudo rm -rf /Applications/Firefox.app
+          sudo rm -rf /Applications/Google\ Chrome.app
+
+      - name: Install Ansible using pip
+        run: |
+          sudo pip3 install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install Ansible roles and collections
+        run: ansible-galaxy install -r requirements.yml
+
+      - name: Remove Docker from brew role defaults
+        run: sed -ie '/docker/d' ./config.defaults.yml
+
+      - name: Remove gitconfig dotfile
+        run: rm ./profiles/common/files/dotfiles/gitconfig
+
+      - name: Test the playbook's syntax
+        run: ansible-playbook dotfiles.yml --skip-tags "mas,docker" --syntax-check
+
+      - name: Test the playbook
+        run: ansible-playbook dotfiles.yml --skip-tags "mas,docker"
+        env:
+          ANSIBLE_FORCE_COLOR: "1"
+
+      - name: Idempotence check
+        run: |
+          idempotence=$(mktemp)
+          ansible-playbook dotfiles.yml --skip-tags "mas,docker" | tee -a ${idempotence}
+          tail ${idempotence} | grep -q 'changed=0.*failed=0' && (echo 'Idempotence test: pass' && exit 0) || (echo 'Idempotence test: fail' && exit 1)
+        env:
+          ANSIBLE_FORCE_COLOR: "1"

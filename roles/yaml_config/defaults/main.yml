@@ -1,0 +1,21 @@
+---
+# Default variables for yaml_config role
+
+# List of YAML configuration items to apply
+# Each item should have:
+#   - file: Path to YAML file (required)
+#   - content: Dictionary of settings to merge (required)
+#   - create_file: Create file if missing (default: false)
+#
+# Example:
+#   yaml_configs:
+#     - file: ~/.config/myapp/config.yml
+#       content:
+#         editor:
+#           vimMode: true
+#     - file: ~/.config/another/settings.yaml
+#       create_file: true
+#       content:
+#         feature:
+#           enabled: true
+yaml_configs: []

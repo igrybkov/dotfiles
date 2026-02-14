@@ -1,0 +1,11 @@
+---
+- name: Prepare chsh role test
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Install Python, fish shell, and sudo
+      ansible.builtin.raw: >
+        apt-get update -qq &&
+        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq
+        python3 fish sudo
+      changed_when: false

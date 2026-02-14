@@ -1,0 +1,55 @@
+---
+# Apply a single JSON config item using Ansible's combine filter
+# Required variables (from loop_var: config_item):
+#   - config_item.file: Path to JSON file
+#   - config_item.content: Dictionary of settings to merge
+#   - config_item.create_file: Create file if missing (default: false)
+
+- name: "[📋 json_config] Check if file exists - {{ config_item.file }}"
+  ansible.builtin.stat:
+    path: "{{ config_item.file | expanduser }}"
+  register: _json_config_stat
+
+- name: "[📋 json_config] Skip - file doesn't exist and create_file is false"
+  ansible.builtin.debug:
+    msg: "Skipping {{ config_item.file }} - file doesn't exist and create_file is false"
+  when:
+    - not _json_config_stat.stat.exists
+    - not (config_item.create_file | default(false))
+
+- name: "[📋 json_config] Apply configuration to {{ config_item.file }}"
+  when: _json_config_stat.stat.exists or (config_item.create_file | default(false))
+  block:
+    - name: "[📋 json_config] Ensure parent directory exists - {{ config_item.file }}"
+      ansible.builtin.file:
+        path: "{{ (config_item.file | expanduser) | dirname }}"
+        state: directory
+        mode: "0755"
+      when:
+        - not _json_config_stat.stat.exists
+        - config_item.create_file | default(false)
+
+    - name: "[📋 json_config] Read current content - {{ config_item.file }}"
+      ansible.builtin.slurp:
+        src: "{{ config_item.file | expanduser }}"
+      register: _json_current_content
+      when: _json_config_stat.stat.exists
+
+    - name: "[📋 json_config] Set base content"
+      ansible.builtin.set_fact:
+        _json_base: "{{ (_json_current_content.content | b64decode | from_json) if _json_config_stat.stat.exists else {} }}"
+
+    - name: "[📋 json_config] Merge settings"
+      ansible.builtin.set_fact:
+        _json_merged: "{{ _json_base | combine(config_item.content | default({}), recursive=true) }}"
+
+    - name: "[📋 json_config] Check if content changed"
+      ansible.builtin.set_fact:
+        _json_content_changed: "{{ _json_base != _json_merged }}"
+
+    - name: "[📋 json_config] Write updated content - {{ config_item.file }}"
+      ansible.builtin.copy:
+        content: "{{ _json_merged | to_nice_json }}\n"
+        dest: "{{ config_item.file | expanduser }}"
+        mode: "0644"
+      when: (not _json_config_stat.stat.exists) or _json_content_changed

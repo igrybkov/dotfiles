@@ -1,0 +1,98 @@
+---
+- name: Verify cross-platform roles
+  hosts: all
+  gather_facts: false
+  tasks:
+    # Verify dotfiles role
+    - name: Check gitconfig symlink exists
+      ansible.builtin.stat:
+        path: ~/.gitconfig
+      register: gitconfig_stat
+
+    - name: Assert gitconfig is a symlink
+      ansible.builtin.assert:
+        that:
+          - gitconfig_stat.stat.exists
+          - gitconfig_stat.stat.islnk
+        fail_msg: "~/.gitconfig should be a symlink"
+
+    - name: Check zshrc symlink exists
+      ansible.builtin.stat:
+        path: ~/.zshrc
+      register: zshrc_stat
+
+    - name: Assert zshrc is a symlink
+      ansible.builtin.assert:
+        that:
+          - zshrc_stat.stat.exists
+          - zshrc_stat.stat.islnk
+        fail_msg: "~/.zshrc should be a symlink"
+
+    - name: Check config symlinks exist
+      ansible.builtin.stat:
+        path: "~/.config/{{ item }}"
+      loop:
+        - nvim
+        - fish
+      register: config_stats
+
+    - name: Assert config items are symlinks
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+          - item.stat.islnk
+        fail_msg: "~/.config/{{ item.item }} should be a symlink"
+      loop: "{{ config_stats.results }}"
+
+    - name: Check bin symlink exists
+      ansible.builtin.stat:
+        path: ~/.local/bin/test-script
+      register: bin_stat
+
+    - name: Assert bin script is a symlink
+      ansible.builtin.assert:
+        that:
+          - bin_stat.stat.exists
+          - bin_stat.stat.islnk
+        fail_msg: "~/.local/bin/test-script should be a symlink"
+
+    # Verify SSH config role
+    - name: Check SSH config file exists
+      ansible.builtin.stat:
+        path: ~/.ssh/config
+      register: ssh_config_stat
+
+    - name: Assert SSH config exists
+      ansible.builtin.assert:
+        that:
+          - ssh_config_stat.stat.exists
+        fail_msg: "~/.ssh/config should exist"
+
+    - name: Read SSH config content
+      ansible.builtin.slurp:
+        src: ~/.ssh/config
+      register: ssh_config_content
+
+    - name: Decode SSH config
+      ansible.builtin.set_fact:
+        ssh_config: "{{ ssh_config_content.content | b64decode }}"
+
+    - name: Assert SSH config contains test server
+      ansible.builtin.assert:
+        that:
+          - "'Host test-server' in ssh_config"
+          - "'HostName test.example.com' in ssh_config"
+          - "'User testuser' in ssh_config"
+        fail_msg: "SSH config should contain test-server configuration"
+
+    - name: Assert SSH config has top block
+      ansible.builtin.assert:
+        that:
+          - "'Include ~/.ssh/custom_config' in ssh_config"
+        fail_msg: "SSH config should have top block with Include"
+
+    - name: Assert SSH config has bottom block
+      ansible.builtin.assert:
+        that:
+          - "'ServerAliveInterval 60' in ssh_config"
+        fail_msg: "SSH config should have bottom block with ServerAliveInterval"

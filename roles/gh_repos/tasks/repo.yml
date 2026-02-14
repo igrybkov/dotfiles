@@ -1,0 +1,76 @@
+---
+- name: "[🐙 gh_repos] Set repo variables"
+  ansible.builtin.set_fact:
+    repo_name: "{{ repo_item.repo | regex_replace('^.+/', '') }}"
+    repo_dest: "{{ (repo_item.dest | default(gh_repos_default_dest + '/' + (repo_item.repo | regex_replace('^.+/', '')))) | expanduser }}"
+    repo_state: "{{ repo_item.state | default('present') }}"
+    repo_branch: "{{ repo_item.branch | default('') }}"
+    repo_tag: "{{ repo_item.tag | default('') }}"
+
+- name: "[🐙 gh_repos] Check if repo already exists"
+  ansible.builtin.stat:
+    path: "{{ repo_dest }}"
+  register: repo_dir
+
+- name: "[🐙 gh_repos] Ensure parent directory exists"
+  ansible.builtin.file:
+    path: "{{ repo_dest | dirname }}"
+    state: directory
+    mode: "0755"
+  when: not repo_dir.stat.exists
+
+- name: "[🐙 gh_repos] Clone repo {{ repo_item.repo }}" # noqa: command-instead-of-module
+  ansible.builtin.command:
+    cmd: "gh repo clone {{ repo_item.repo }} '{{ repo_dest }}'"
+  when: not repo_dir.stat.exists
+  register: clone_result
+  changed_when: clone_result.rc == 0
+
+- name: "[🐙 gh_repos] Checkout tag {{ repo_tag }}" # noqa: command-instead-of-module
+  ansible.builtin.command:
+    cmd: "git checkout {{ repo_tag }}"
+    chdir: "{{ repo_dest }}"
+  when:
+    - not repo_dir.stat.exists or repo_state == 'latest'
+    - repo_tag | length > 0
+  register: tag_checkout
+  changed_when: "'Already on' not in tag_checkout.stderr and 'HEAD is now at' in tag_checkout.stderr"
+
+- name: "[🐙 gh_repos] Checkout branch {{ repo_branch }}" # noqa: command-instead-of-module
+  ansible.builtin.command:
+    cmd: "git checkout {{ repo_branch }}"
+    chdir: "{{ repo_dest }}"
+  when:
+    - not repo_dir.stat.exists or repo_state == 'latest'
+    - repo_tag | length == 0
+    - repo_branch | length > 0
+  register: branch_checkout
+  changed_when: "'Already on' not in branch_checkout.stderr and 'Switched to' in branch_checkout.stderr"
+
+- name: "[🐙 gh_repos] Update repo (state=latest)"
+  when:
+    - repo_dir.stat.exists
+    - repo_state == 'latest'
+  block:
+    - name: "[🐙 gh_repos] Fetch latest changes" # noqa: command-instead-of-module
+      ansible.builtin.command:
+        cmd: "git fetch --all --tags"
+        chdir: "{{ repo_dest }}"
+      register: fetch_result
+      changed_when: fetch_result.stdout | length > 0
+
+    - name: "[🐙 gh_repos] Pull latest changes" # noqa: command-instead-of-module
+      ansible.builtin.command:
+        cmd: "git pull --ff-only"
+        chdir: "{{ repo_dest }}"
+      register: pull_result
+      changed_when: "'Already up to date' not in pull_result.stdout"
+      when: repo_tag | length == 0
+
+    - name: "[🐙 gh_repos] Checkout tag {{ repo_tag }}" # noqa: command-instead-of-module
+      ansible.builtin.command:
+        cmd: "git checkout {{ repo_tag }}"
+        chdir: "{{ repo_dest }}"
+      when: repo_tag | length > 0
+      register: tag_update
+      changed_when: "'Already on' not in tag_update.stderr and 'HEAD is now at' in tag_update.stderr"

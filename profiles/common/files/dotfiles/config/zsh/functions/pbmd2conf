@@ -1,0 +1,5 @@
+tmpfile=$(mktemp)
+pbpaste >$tmpfile
+markdown2confluence $tmpfile | pbcopy
+rm -rf "$tmpfile"
+echo "Confluence markup copied to clipboard"

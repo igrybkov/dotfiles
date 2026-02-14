@@ -1,0 +1,4 @@
+# Set directories used by pj plugin
+PROJECT_PATHS=(
+  $PROJECT_PATHS
+)

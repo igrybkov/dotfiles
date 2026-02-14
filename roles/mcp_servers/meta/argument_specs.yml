@@ -1,0 +1,109 @@
+---
+argument_specs:
+  main:
+    short_description: Configure MCP servers
+    description:
+      - Configures Model Context Protocol servers for AI coding agents
+      - Can run per-profile or with aggregated data from playbook
+      - Supports both command-based (stdio) and URL-based (HTTP/SSE) servers
+    options:
+      mcp_servers:
+        description: |
+          List of MCP server configurations.
+          Each server must have a name and either a command or url.
+        type: list
+        elements: dict
+        default: []
+        options:
+          name:
+            description: Unique identifier for the server
+            type: str
+            required: true
+          state:
+            description: Whether the server should be present or absent
+            type: str
+            choices:
+              - present
+              - absent
+            default: present
+          command:
+            description: Command to run the server (stdio transport)
+            type: str
+            required: false
+          args:
+            description: Arguments to pass to the command
+            type: list
+            elements: str
+            required: false
+          env:
+            description: Environment variables (supports vault and 1Password secrets)
+            type: dict
+            required: false
+          url:
+            description: HTTP endpoint URL for the MCP server (HTTP/SSE transport)
+            type: str
+            required: false
+          transport:
+            description: "Transport type for URL-based servers (e.g., sse, streamable-http)"
+            type: str
+            required: false
+          headers:
+            description: HTTP headers for URL-based servers (supports vault and 1Password secrets)
+            type: dict
+            required: false
+          git_repo:
+            description: Git repository URL to clone for the server
+            type: str
+            required: false
+          git_dest:
+            description: Destination path for the cloned repository
+            type: path
+            required: false
+          git_version:
+            description: Git version (branch, tag, or commit) to checkout
+            type: str
+            required: false
+          git_force:
+            description: Force git clone/checkout even if destination exists
+            type: bool
+            required: false
+          git_force_reset:
+            description: >
+              Allow destructive operations when local changes
+              (uncommitted/unpushed) exist in the repo
+            type: bool
+            required: false
+          post_clone:
+            description: Shell command to run after cloning the repository
+            type: str
+            required: false
+          config_files:
+            description: List of config files to update for this server
+            type: list
+            elements: dict
+            required: false
+            options:
+              path:
+                description: Path to the config file
+                type: path
+                required: true
+              state:
+                description: Whether to add or remove the server from this config file
+                type: str
+                choices:
+                  - present
+                  - absent
+                default: present
+
+      mcp_default_config_files:
+        description: Default config files to update when config_files is not specified per server
+        type: list
+        elements: str
+        default:
+          - ~/.mcp.json
+          - ~/Library/Application Support/Claude/claude_desktop_config.json
+
+      mcp_servers_git_base:
+        description: Base directory for git-cloned MCP servers
+        type: path
+        default: ~/.local/share/mcp-servers

@@ -1,0 +1,20 @@
+#!/bin/bash
+
+if [ -z "$1" ]; then
+  echo "Usage: $0 docker-registry-url"
+  exit 1
+fi
+if [ -z "$ARTIFACTORY_USER" ]; then
+  if [ -z "$ARTIFACTORY_USERNAME" ]; then
+    echo "ARTIFACTORY_USER is not set"
+    exit 1
+  else
+    ARTIFACTORY_USER="$ARTIFACTORY_USERNAME"
+  fi
+fi
+if [ -z "$ARTIFACTORY_API_TOKEN" ]; then
+  echo "ARTIFACTORY_API_TOKEN is not set"
+  exit 1
+fi
+
+echo "$ARTIFACTORY_API_TOKEN" | docker login -u "$ARTIFACTORY_USER" "$1" --password-stdin

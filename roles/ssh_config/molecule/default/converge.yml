@@ -1,0 +1,11 @@
+---
+- name: Converge - Test ssh_config role
+  hosts: all
+  # gather_facts: true is needed to load cached facts from prepare.yml
+  gather_facts: true
+  roles:
+    - role: ssh_config
+      vars:
+        ssh_config_file: ~/.ssh/config
+        # ssh_client_config and ssh_client_config_block are set as cacheable facts
+        # in prepare.yml so they're available in hostvars for aggregated_profile_var lookup

@@ -1,0 +1,220 @@
+---
+# MCP Servers Role - Git Repository Management
+
+# Filter servers that have git_repo defined and state is present
+- name: "[🤖 MCP] Identify git-based MCP servers"
+  ansible.builtin.set_fact:
+    mcp_git_servers: >-
+      {{
+        mcp_servers
+        | selectattr('git_repo', 'defined')
+        | selectattr('state', 'undefined') | list
+        + mcp_servers
+        | selectattr('git_repo', 'defined')
+        | selectattr('state', 'defined')
+        | selectattr('state', 'equalto', 'present') | list
+      }}
+
+- name: "[🤖 MCP] Manage git-based MCP servers"
+  when: mcp_git_servers | length > 0
+  block:
+    - name: "[🤖 MCP] Ensure MCP servers base directory exists"
+      ansible.builtin.file:
+        path: "{{ mcp_servers_git_base | expanduser }}"
+        state: directory
+        mode: "0755"
+
+    # Check for remote URL changes - if the configured repo URL differs from
+    # the existing remote, we need to delete and re-clone
+    # Note: Use 'git config --get' instead of 'git remote get-url' to get the
+    # original stored URL, not the URL after applying insteadOf rewrite rules
+    - name: "[🤖 MCP] Check existing git remotes"  # noqa: command-instead-of-module
+      ansible.builtin.command:
+        cmd: git config --get remote.origin.url
+        chdir: "{{ (item.git_dest | default(mcp_servers_git_base + '/' + item.name)) | expanduser }}"
+      loop: "{{ mcp_git_servers }}"
+      loop_control:
+        label: "{{ item.name }}"
+      register: mcp_git_remote_check
+      changed_when: false
+      failed_when: false
+
+    # Safety check: detect repos with local changes before any destructive operations
+    - name: "[🤖 MCP] Check for uncommitted changes in existing repos"  # noqa: command-instead-of-module
+      ansible.builtin.command:
+        cmd: git status --porcelain
+        chdir: "{{ (item.git_dest | default(mcp_servers_git_base + '/' + item.name)) | expanduser }}"
+      loop: "{{ mcp_git_servers }}"
+      loop_control:
+        label: "{{ item.name }}"
+      register: mcp_git_status_check
+      changed_when: false
+      failed_when: false
+
+    - name: "[🤖 MCP] Check for unpushed commits in existing repos"  # noqa: command-instead-of-module
+      ansible.builtin.shell: |
+        # Check if upstream is configured
+        if git rev-parse --abbrev-ref @{upstream} >/dev/null 2>&1; then
+          # Show commits that exist locally but not on upstream
+          git log @{upstream}..HEAD --oneline 2>/dev/null
+        fi
+      args:
+        chdir: "{{ (item.git_dest | default(mcp_servers_git_base + '/' + item.name)) | expanduser }}"
+      loop: "{{ mcp_git_servers }}"
+      loop_control:
+        label: "{{ item.name }}"
+      register: mcp_git_unpushed_check
+      changed_when: false
+      failed_when: false
+
+    # Build a dict of repos with local changes for easy lookup
+    # Maps repo name -> combined status message (uncommitted + unpushed)
+    - name: "[🤖 MCP] Identify repos with local changes"
+      vars:
+        _dirty_repos: |
+          {% set dirty = {} %}
+          {% for i in range(mcp_git_status_check.results | length) %}
+          {% set status = mcp_git_status_check.results[i] %}
+          {% set unpushed = mcp_git_unpushed_check.results[i] %}
+          {% set uncommitted = status.stdout | default('') | trim %}
+          {% set unpushed_commits = unpushed.stdout | default('') | trim %}
+          {% if uncommitted or unpushed_commits %}
+          {% set msg_parts = [] %}
+          {% if uncommitted %}{% set _ = msg_parts.append('Uncommitted changes:\n' + uncommitted) %}{% endif %}
+          {% if unpushed_commits %}{% set _ = msg_parts.append('Unpushed commits:\n' + unpushed_commits) %}{% endif %}
+          {% set _ = dirty.update({status.item.name: msg_parts | join('\n\n')}) %}
+          {% endif %}
+          {% endfor %}
+          {{ dirty | to_json }}
+      ansible.builtin.set_fact:
+        mcp_git_dirty_repos: "{{ _dirty_repos | from_json }}"
+
+    # Fail if trying to remove/reset a dirty repo without force flag
+    - name: "[🤖 MCP] Fail if repo with changed remote has local changes (use git_force_reset to override)"
+      ansible.builtin.fail:
+        msg: |
+          MCP server '{{ item.item.name }}' has local changes but remote URL changed.
+          Cannot safely delete and re-clone without losing local changes.
+
+          Local changes detected:
+          {{ mcp_git_dirty_repos[item.item.name] | default('') }}
+
+          To force reset, set 'git_force_reset: true' on this server.
+      loop: "{{ mcp_git_remote_check.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+      when:
+        - item.rc == 0  # Directory exists and is a git repo
+        - item.stdout | trim != item.item.git_repo  # Remote URL changed
+        - item.item.name in mcp_git_dirty_repos  # Has local changes
+        - not (item.item.git_force_reset | default(false))  # Force not enabled
+
+    - name: "[🤖 MCP] Remove repos with changed remote URLs"
+      ansible.builtin.file:
+        path: "{{ (item.item.git_dest | default(mcp_servers_git_base + '/' + item.item.name)) | expanduser }}"
+        state: absent
+      loop: "{{ mcp_git_remote_check.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+      when:
+        - item.rc == 0  # Directory exists and is a git repo
+        - item.stdout | trim != item.item.git_repo  # Remote URL changed
+        # Only remove if clean OR force is enabled
+        - (item.item.name not in mcp_git_dirty_repos) or (item.item.git_force_reset | default(false))
+
+    # Fail if trying to force-update a dirty repo without force_reset flag
+    - name: "[🤖 MCP] Fail if git_force would discard local changes (use git_force_reset to override)"
+      ansible.builtin.fail:
+        msg: |
+          MCP server '{{ item.name }}' has local changes but git_force is enabled.
+          This would discard your local changes.
+
+          Local changes detected:
+          {{ mcp_git_dirty_repos[item.name] | default('') }}
+
+          To force reset and discard changes, set 'git_force_reset: true' on this server.
+      loop: "{{ mcp_git_servers }}"
+      loop_control:
+        label: "{{ item.name }}"
+      when:
+        - item.git_force | default(false)  # git_force is enabled
+        - item.name in mcp_git_dirty_repos  # Has local changes
+        - not (item.git_force_reset | default(false))  # Force reset not enabled
+
+    - name: "[🤖 MCP] Clone/update MCP server repositories"
+      ansible.builtin.git:
+        repo: "{{ item.git_repo }}"
+        dest: "{{ (item.git_dest | default(mcp_servers_git_base + '/' + item.name)) | expanduser }}"
+        version: "{{ item.git_version | default('HEAD') }}"
+        force: "{{ item.git_force | default(false) }}"
+      loop: "{{ mcp_git_servers }}"
+      loop_control:
+        label: "{{ item.name }}"
+      register: mcp_git_clone_result
+
+    # Only consider repos as changed if the actual commit changed, not just the URL
+    # The git module reports changed=true when it updates the remote URL due to
+    # insteadOf rewriting rules, even if no actual content changed
+    - name: "[🤖 MCP] Identify repos that were cloned or updated"
+      vars:
+        _changed_repos: |
+          {% set changed = [] %}
+          {% for result in mcp_git_clone_result.results %}
+          {% if result.changed %}
+          {% if result.before is none or result.before != result.after %}
+          {% set _ = changed.append(result.item.name) %}
+          {% endif %}
+          {% endif %}
+          {% endfor %}
+          {{ changed | to_json }}
+      ansible.builtin.set_fact:
+        mcp_git_changed_names: "{{ _changed_repos | from_json }}"
+
+    - name: "[🤖 MCP] Normalize post-clone to list format (only for changed repos)"
+      ansible.builtin.set_fact:
+        mcp_git_servers_with_post_clone: >-
+          {{
+            mcp_git_servers_with_post_clone | default([]) +
+            [item | combine({
+              'post_clone':
+                item.post_clone | list if item.post_clone is not string
+                else [item.post_clone]
+            })]
+          }}
+      loop: "{{ mcp_git_servers }}"
+      when:
+        - item.post_clone is defined
+        - item.name in mcp_git_changed_names
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: "[🤖 MCP] Run post-clone commands"
+      when: mcp_git_servers_with_post_clone | default([]) | length > 0
+      ansible.builtin.command:
+        cmd: "{{ item.1 }}"
+        chdir: "{{ (item.0.git_dest | default(mcp_servers_git_base + '/' + item.0.name)) | expanduser }}"
+      loop: "{{ mcp_git_servers_with_post_clone | subelements('post_clone', skip_missing=True) }}"
+      loop_control:
+        label: "{{ item.0.name }}: {{ item.1 }}"
+      # Post-clone commands run only for newly cloned/updated repos, expected to change state
+      changed_when: true
+
+# Handle absent state - remove cloned repos
+- name: "[🤖 MCP] Identify git servers to remove"
+  ansible.builtin.set_fact:
+    mcp_git_servers_absent: >-
+      {{
+        mcp_servers
+        | selectattr('git_repo', 'defined')
+        | selectattr('state', 'defined')
+        | selectattr('state', 'equalto', 'absent') | list
+      }}
+
+- name: "[🤖 MCP] Remove absent git-based MCP servers"
+  when: mcp_git_servers_absent | length > 0
+  ansible.builtin.file:
+    path: "{{ (item.git_dest | default(mcp_servers_git_base + '/' + item.name)) | expanduser }}"
+    state: absent
+  loop: "{{ mcp_git_servers_absent }}"
+  loop_control:
+    label: "{{ item.name }}"

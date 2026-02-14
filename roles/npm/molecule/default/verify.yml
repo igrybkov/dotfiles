@@ -1,0 +1,25 @@
+---
+- name: Verify npm role
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Check cowsay is installed globally
+      ansible.builtin.command:
+        cmd: npm list -g cowsay
+      register: cowsay_check
+      changed_when: false
+      failed_when: cowsay_check.rc != 0
+
+    - name: Check is-odd is installed globally
+      ansible.builtin.command:
+        cmd: npm list -g is-odd
+      register: is_odd_check
+      changed_when: false
+      failed_when: is_odd_check.rc != 0
+
+    - name: Assert packages are installed
+      ansible.builtin.assert:
+        that:
+          - cowsay_check.rc == 0
+          - is_odd_check.rc == 0
+        fail_msg: "Expected npm packages should be installed globally"

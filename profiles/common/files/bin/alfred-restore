@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+
+if [ -z "$ALFRED_CONFIG_PATH" ]; then
+  if [ ! -f ~/Library/Application\ Support/Alfred/prefs.json ]; then
+    echo "Alfred is not installed"
+    exit 1
+  fi
+  ALFRED_CONFIG_PATH="$(jq '.current' -r "$HOME/Library/Application Support/Alfred/prefs.json")"
+
+  if [ ! -d "$ALFRED_CONFIG_PATH" ]; then
+    echo "ALFRED_CONFIG_PATH is not a directory"
+    exit 1
+  fi
+fi
+
+if [ -z "$ALFRED_BACKUP_PATH" ]; then
+  ALFRED_BACKUP_PATH="$HOME/Library/Mobile Documents/com~apple~CloudDocs/Backups/Alfred/Alfred.alfredpreferences"
+  if [ ! -d "$ALFRED_BACKUP_PATH" ]; then
+    mkdir -p "$ALFRED_BACKUP_PATH"
+  fi
+fi
+
+cp -R \
+  ~/Library/Mobile\ Documents/com~apple~CloudDocs/Backups/Alfred/Alfred.alfredpreferences \
+  ~/Library/Mobile\ Documents/com~apple~CloudDocs/SyncedApps/Alfred/Alfred.alfredpreferences

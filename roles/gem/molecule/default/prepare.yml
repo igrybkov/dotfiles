@@ -1,0 +1,20 @@
+---
+- name: Prepare gem role test
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Install Ruby and dependencies
+      ansible.builtin.raw: >
+        apt-get update -qq &&
+        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq
+        python3 ruby ruby-dev build-essential
+      changed_when: false
+
+    # Set test variables as cacheable facts so they're available in hostvars
+    # for the aggregated_profile_var lookup plugin
+    - name: Set gem_packages as host fact
+      ansible.builtin.set_fact:
+        gem_packages:
+          - name: colorize
+          - name: rake
+        cacheable: true

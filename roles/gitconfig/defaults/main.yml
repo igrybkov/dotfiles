@@ -1,0 +1,4 @@
+---
+gitconfig_conf_d: ~/.config/git/conf.d
+gitconfig_includes_file: ~/.config/git/conf.d/includes.gitconfig
+gitignore_file: ~/.config/git/gitignore

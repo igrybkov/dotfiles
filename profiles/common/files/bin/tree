@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# tree: Display directory structure using available tools
+# Falls back through: eza -> exa -> tree -> find
+
+set -euo pipefail
+
+# Check if a command exists
+has_cmd() {
+    command -v "$1" &>/dev/null
+}
+
+# Build tree using find (POSIX fallback)
+tree_with_find() {
+    local dir="${1:-.}"
+    find "$dir" -print 2>/dev/null | sed -e 's;[^/]*/;|____;g;s;____|;  |;g'
+}
+
+# Main
+if has_cmd eza; then
+    exec eza --tree "$@"
+elif has_cmd exa; then
+    exec exa --tree "$@"
+elif has_cmd tree; then
+    exec tree "$@"
+else
+    # Fallback to find-based tree
+    # Only supports a single directory argument, no other flags
+    if [[ $# -eq 0 ]]; then
+        tree_with_find "."
+    elif [[ $# -eq 1 && -d "$1" ]]; then
+        tree_with_find "$1"
+    else
+        echo "Error: No tree command available (eza, exa, or tree)." >&2
+        echo "Find-based fallback only supports: tree [directory]" >&2
+        exit 1
+    fi
+fi

@@ -1,0 +1,2 @@
+local DEST="$1"
+mkdir -p "$DEST" && cd "$DEST"

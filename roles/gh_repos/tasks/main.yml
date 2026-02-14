@@ -1,0 +1,31 @@
+---
+# GitHub Repos Role - Main Tasks
+# Variables are passed from the playbook (pre-aggregated from all profiles)
+# Input validation is handled by argument_specs in meta/argument_specs.yml
+
+- name: "[🐙 gh_repos] Check if gh CLI is installed"
+  ansible.builtin.command: which gh
+  register: gh_cli_check
+  changed_when: false
+  failed_when: false
+
+- name: "[🐙 gh_repos] Install gh CLI via Homebrew"
+  community.general.homebrew:
+    name: gh
+    state: present
+  when: gh_cli_check.rc != 0
+
+- name: "[🐙 gh_repos] Process repositories"
+  when: gh_repos | length > 0
+  block:
+    - name: "[🐙 gh_repos] Ensure default destination directory exists"
+      ansible.builtin.file:
+        path: "{{ gh_repos_default_dest | expanduser }}"
+        state: directory
+        mode: "0755"
+
+    - name: "[🐙 gh_repos] Clone or update repositories"
+      ansible.builtin.include_tasks: repo.yml
+      loop: "{{ gh_repos }}"
+      loop_control:
+        loop_var: repo_item

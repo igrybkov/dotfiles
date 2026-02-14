@@ -1,0 +1,178 @@
+[alias]
+# Pretty log output
+# Set up git with personal/work credentials
+a = add
+aa = add -A
+aliases = !git config --get-regexp '^alias\\.' | gsed -e 's/\\(alias.\\)\\([a-zA-Z\\-]\\+\\)\\s*\\(.*\\)/\\2 = \\3/g'
+amend = commit --amend
+br = branch
+branches = branch -a # List of all branches
+cb = checkout -b
+changed-files = diff --name-only # show list of changed files. Accepts branch as an argument
+clean-branches = !gh poi
+cm = commit
+co = checkout
+commend = commit --amend --no-edit # amend commit without editing its message
+dump = cat-file -p
+fa = fetch --all # fetch all
+it = !git init && git commit -m '🚀 Initial commit' --allow-empty
+l = log --name-only
+last-task = log -1 --pretty=format:%s
+lp = log --graph --pretty=format:'%Cred%h%Creset %s%C(yellow)%d%Creset %Cgreen(%cr)%Creset [%an]' --abbrev-commit --date=relative
+open = gh-open                                 # Browse current repository on github
+gh-open = !gh browse                           # Browse current repository on github
+pr = !gh pr view                               # Open existing pull request
+pr-create = !gh pr create --fill-verbose --web # Create new pull request
+pr-open = !gh pr view                          # Open existing pull request
+p = push
+pl = "!f() { if ! git rev-parse --abbrev-ref @{u} >/dev/null 2>&1; then git branch --set-upstream-to=origin/$(git symbolic-ref --short HEAD); fi; git pull \"$@\"; }; f" # pull with auto-set upstream
+please = push --force-with-lease # polite force-push which check for presence of all changes from remote branch
+pta = push --tags                # push with tags
+r = restore
+rb = rebase
+rbi = rebase -i
+rbim = rebase -i origin/main
+readme = !gh browse /README.md                         # Open README.md on github
+remotes = remote -v                                    # List of all remotes
+remove = remote                                        # I often make this typo
+recommit = !git add -A && git commit --amend --no-edit # Replace last commit with current changes
+recommit-force = !git add -A && git commit --amend --no-edit && git push --force-with-lease
+rs = reset
+soft = reset --soft HEAD~
+hard = reset --hard HEAD~
+shorty = status --short --branch #short status
+st = status                      # status
+sup = !git branch --set-upstream-to=origin/$(git symbolic-ref --short HEAD) # set upstream to match current branch
+stash-files = stash show -p --name-only
+sw = switch
+tags = tag -l # Show verbose output about tags, branches or remotes
+type = cat-file -t
+uncommitted = diff HEAD   # show diff against HEAD
+undo = reset --soft HEAD^ # soft reset head commit
+up = !git fetch && git rebase --autostash FETCH_HEAD
+wt = worktree
+wts = "!git worktree list | while read -r line; do \
+    path=$(echo \"$line\" | awk '{print $1}'); \
+    branch=$(echo \"$line\" | sed 's/.*\\[\\(.*\\)\\].*/\\1/' | grep -v 'detached'); \
+    if [ -z \"$branch\" ]; then branch='(detached)'; fi; \
+    commit=$(echo \"$line\" | awk '{print $2}'); \
+    printf '%-50s %s %s\\n' \"$path\" \"$commit\" \"$branch\"; \
+done"
+wtc = worktree prune
+wtr = "!f() { \
+    wt=\"$1\"; \
+    if [ -z \"$wt\" ]; then echo 'Usage: git wtr <worktree-path>'; return 1; fi; \
+    if [ ! -d \"$wt\" ]; then echo \"Worktree not found: $wt\"; return 1; fi; \
+    if [ -n \"$(git -C \"$wt\" status --porcelain 2>/dev/null)\" ]; then \
+        echo \"⚠️  Worktree has uncommitted changes:\"; \
+        git -C \"$wt\" status --short; \
+        printf 'Remove anyway? [y/N] '; \
+        read confirm; \
+        [ \"$confirm\" != 'y' ] && [ \"$confirm\" != 'Y' ] && return 1; \
+    fi; \
+    upstream=$(git -C \"$wt\" rev-parse --abbrev-ref '@{u}' 2>/dev/null); \
+    if [ -n \"$upstream\" ]; then \
+        unpushed=$(git -C \"$wt\" log --oneline \"$upstream\"..HEAD 2>/dev/null | wc -l | tr -d ' '); \
+        if [ \"$unpushed\" -gt 0 ]; then \
+            echo \"⚠️  $unpushed unpushed commit(s)\"; \
+            printf 'Remove anyway? [y/N] '; \
+            read confirm; \
+            [ \"$confirm\" != 'y' ] && [ \"$confirm\" != 'Y' ] && return 1; \
+        fi; \
+    fi; \
+    git worktree remove \"$wt\" && echo \"✓ Removed worktree: $wt\"; \
+}; f"
+
+[color]
+# Use colors in Git commands that are capable of colored output when outputting to the terminal
+ui = auto
+
+[color "branch"]
+current = yellow reverse
+local = yellow
+remote = green
+
+[color "diff"]
+meta = yellow bold
+frag = magenta bold
+old = red bold
+new = green bold
+
+[color "status"]
+added = yellow
+changed = green
+untracked = cyan
+
+# Use `origin` as the default remote on the `master` branch in all cases
+[branch "master"]
+remote = origin
+merge = refs/heads/master
+
+# Use `origin` as the default remote on the `main` branch in all cases
+[branch "main"]
+remote = origin
+merge = refs/heads/main
+
+[credential]
+helper = osxkeychain
+
+[core]
+excludesfile = ~/.config/git/gitignore
+autocrlf = input
+
+[init]
+defaultBranch = main
+
+[tag]
+forceSignAnnotated = true
+
+[pull]
+rebase = false
+
+[push]
+default = simple
+autoSetupRemote = true
+
+[remote "origin"]
+push = HEAD
+
+[filter "lfs"]
+clean = git-lfs clean -- %f
+smudge = git-lfs smudge -- %f
+required = true
+process = git-lfs filter-process
+
+[diff]
+colorMoved = default
+
+[gpg]
+format = ssh
+
+[gpg "ssh"]
+program = "/Applications/1Password.app/Contents/MacOS/op-ssh-sign"
+
+[commit]
+gpgsign = true
+# template = /Users/illia/.gitmessage
+
+[core]
+pager = delta
+
+[pager]
+diff = delta
+blame = delta
+
+[interactive]
+diffFilter = delta --color-only
+
+[delta]
+true-color = always # enable true-color (24-bit)
+line-numbers = true # show line numbers
+#side-by-side = true # enable side-by-side diff view
+navigate = true   # use n and N to move between diff sections
+dark = true       # or light = true, or omit for auto-detection
+hyperlinks = true # turn line numbers, file paths, commit hashes, etc into clickable links
+hyperlinks-file-link-format = "vscode://file/{path}:{line}"
+
+[merge]
+conflictstyle = zdiff3

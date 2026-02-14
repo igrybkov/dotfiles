@@ -1,0 +1,37 @@
+---
+# Symlink agents from current profile to multiple agent destinations
+# Processes agents_dir from current profile and symlinks to all destinations in agent_folders
+#
+# Parameters:
+#   agents_dir: Source directory containing agents (auto-set per profile by inventory plugin)
+#   agent_folders: List of destination directories (aggregated from all profiles)
+
+- name: "[🔗 dotfiles] Check if agents directory exists"
+  ansible.builtin.stat:
+    path: "{{ agents_dir }}"
+  register: agents_dir_stat
+
+- name: "[🔗 dotfiles] Symlink agents to agent folders"
+  when: |
+    agents_dir_stat.stat.exists | default(false) and
+    agents_dir_stat.stat.isdir | default(false) and
+    agent_folders | length > 0
+  block:
+    - name: "[🔗 dotfiles] Ensure agent destination directories exist"
+      ansible.builtin.file:
+        path: "{{ item | expanduser }}"
+        state: directory
+        mode: "0755"
+      loop: "{{ agent_folders }}"
+      loop_control:
+        label: "{{ item }}"
+
+    - name: "[🔗 dotfiles] Symlink agents to {{ item }}"
+      ansible.builtin.include_tasks: symlink_recursive.yml
+      loop: "{{ agent_folders }}"
+      loop_control:
+        label: "{{ item }}"
+      vars:
+        source_dir: "{{ agents_dir }}"
+        target_dir: "{{ item | expanduser }}"
+        prefix: ""

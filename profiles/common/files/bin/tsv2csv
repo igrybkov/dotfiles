@@ -1,0 +1,9 @@
+#!/usr/bin/env python3
+import csv
+import sys
+
+# tabin = csv.reader(sys.stdin, dialect=csv.excel_tab)
+# commaout = csv.writer(open('sample.csv', 'wb'), dialect=csv.excel)
+csv.writer(sys.stdout, dialect=csv.excel).writerows(
+    csv.reader(sys.stdin, dialect=csv.excel_tab)
+)

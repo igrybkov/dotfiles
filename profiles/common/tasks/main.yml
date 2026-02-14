@@ -1,0 +1,26 @@
+---
+# Common profile custom tasks
+# These tasks run after all standard roles complete.
+#
+# Available variables (auto-discovered by inventory plugin):
+#   profile_name: common
+#   profile_dir: Path to this profile directory
+#   profile_roles_dir: Path to roles/ in this profile
+#   dotfiles_dir: Path to files/dotfiles/ in this profile
+#   dotfiles_copy_dir: Path to files/dotfiles-copy/ in this profile
+#
+# To include a custom role from this profile:
+#   - name: Include my custom role
+#     ansible.builtin.include_role:
+#       name: "{{ profile_roles_dir }}/my_role"
+
+# Example tasks:
+# - name: Ensure custom directory exists
+#   ansible.builtin.file:
+#     path: ~/custom-dir
+#     state: directory
+#     mode: "0755"
+
+# - name: Include a profile-specific role
+#   ansible.builtin.include_role:
+#     name: "{{ profile_roles_dir }}/my_custom_role"

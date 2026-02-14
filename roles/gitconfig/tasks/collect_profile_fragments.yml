@@ -1,0 +1,49 @@
+---
+# Collect *.gitconfig fragments and gitignore from a single profile
+# Variables: _profile_host (the profile hostname from inventory)
+
+- name: "[🔧 gitconfig] Get profile info for {{ _profile_host }}"
+  ansible.builtin.set_fact:
+    _profile_dir: "{{ hostvars[_profile_host].profile_dir }}"
+    _profile_name: "{{ hostvars[_profile_host].profile_name }}"
+    _profile_priority: "{{ hostvars[_profile_host].profile_priority | default(1000) }}"
+
+# yamllint disable rule:line-length
+- name: "[🔧 gitconfig] Find *.gitconfig files for {{ _profile_name }}"
+  ansible.builtin.find:
+    paths: "{{ _profile_dir }}/files/gitconfig"
+    patterns: "*.gitconfig"
+    file_type: file
+  register: _found_fragments
+  failed_when: false
+
+- name: "[🔧 gitconfig] Add fragments for {{ _profile_name }}"
+  ansible.builtin.set_fact:
+    _gitconfig_fragments: >-
+      {{ _gitconfig_fragments + [
+        {
+          'source': item.path,
+          'target_name': '%04d' | format(_profile_priority | int) ~ '-' ~ _profile_name ~ '-' ~ (item.path | basename),
+          'priority': _profile_priority | int,
+          'profile': _profile_name
+        }
+      ] }}
+  loop: "{{ _found_fragments.files | default([]) | sort(attribute='path') }}"
+
+- name: "[🔧 gitconfig] Check for gitignore in {{ _profile_name }}"
+  ansible.builtin.stat:
+    path: "{{ _profile_dir }}/files/gitconfig/gitignore"
+  register: _gitignore_stat
+
+- name: "[🔧 gitconfig] Add gitignore source for {{ _profile_name }}"
+  ansible.builtin.set_fact:
+    _gitignore_sources: >-
+      {{ _gitignore_sources + [
+        {
+          'path': _profile_dir ~ '/files/gitconfig/gitignore',
+          'profile': _profile_name,
+          'priority': _profile_priority | int
+        }
+      ] }}
+  when: _gitignore_stat.stat.exists | default(false)
+# yamllint enable rule:line-length

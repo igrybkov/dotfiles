@@ -1,0 +1,66 @@
+---
+# macOS integration tests using Tart VMs
+# Requires Tart installed: brew install cirruslabs/cli/tart
+# Run with: molecule test -s macos-integration
+dependency:
+  name: galaxy
+  options:
+    requirements-file: requirements.yml
+
+driver:
+  name: default
+  options:
+    managed: false
+    ansible_connection_options:
+      ansible_connection: ssh
+
+platforms:
+  - name: macos-sonoma-test
+    groups:
+      - common
+      - personal
+    # Tart VM settings (used by create.yml)
+    tart_image: ghcr.io/cirruslabs/macos-sonoma-vanilla:latest
+    tart_cpu: 4
+    tart_memory: 8192
+
+provisioner:
+  name: ansible
+  config_options:
+    defaults:
+      interpreter_python: auto_silent
+      gathering: implicit
+      host_key_checking: false
+  inventory:
+    host_vars:
+      macos-sonoma-test:
+        ansible_user: admin
+        ansible_become_pass: admin
+        ansible_python_interpreter: /usr/bin/python3
+  playbooks:
+    create: create.yml
+    destroy: destroy.yml
+    converge: converge.yml
+    prepare: prepare.yml
+    verify: verify.yml
+  env:
+    ANSIBLE_ROLES_PATH: "../../roles"
+    ANSIBLE_COLLECTIONS_PATH: "../../.ansible/collections"
+
+verifier:
+  name: ansible
+
+scenario:
+  name: macos-integration
+  test_sequence:
+    - dependency
+    - cleanup
+    - destroy
+    - syntax
+    - create
+    - prepare
+    - converge
+    - idempotence
+    - verify
+    - cleanup
+    - destroy

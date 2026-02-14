@@ -1,0 +1,13 @@
+---
+skip_list:
+  - name[casing]
+  - var-naming[no-role-prefix]
+
+exclude_paths:
+  - .ansible/
+  - .venv/
+  - profiles/common/files/dotfiles/vim/plugged/
+
+kinds:
+  - vars: ./config.*.{yml,yaml}
+  - playbook: ./playbook*.{yml,yaml}

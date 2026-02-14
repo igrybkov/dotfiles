@@ -1,0 +1,30 @@
+---
+argument_specs:
+  main:
+    short_description: Install Ruby gem packages
+    description:
+      - Installs Ruby gems
+      - Expects pre-aggregated data from playbook
+    options:
+      gem_packages:
+        description: List of Ruby gems to install
+        type: list
+        elements: dict
+        default: []
+        options:
+          name:
+            description: Gem name
+            type: str
+            required: true
+          state:
+            description: Gem state
+            type: str
+            choices:
+              - present
+              - absent
+              - latest
+            default: present
+          version:
+            description: Specific version to install
+            type: str
+            required: false

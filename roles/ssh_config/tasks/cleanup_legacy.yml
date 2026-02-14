@@ -1,0 +1,29 @@
+---
+# Clean up legacy per-profile markers from SSH config
+# This removes old markers like "##### BEGIN SSH CONFIG TOP for common-profile #####"
+# and their content so we can migrate to global markers
+
+- name: "[🔐 ssh] Check if SSH config exists"
+  ansible.builtin.stat:
+    path: "{{ ssh_config_file }}"
+  register: _ssh_config_stat
+
+# Remove old per-profile blocks using blockinfile with state: absent
+# This cleanly removes the entire block including markers
+- name: "[🔐 ssh] Remove legacy per-profile TOP blocks"
+  ansible.builtin.blockinfile:
+    path: "{{ ssh_config_file }}"
+    marker: "##### {mark} SSH CONFIG TOP for {{ item }} #####"
+    state: absent
+  loop: "{{ _profile_hosts }}"
+  when: _ssh_config_stat.stat.exists
+  failed_when: false
+
+- name: "[🔐 ssh] Remove legacy per-profile BOTTOM blocks"
+  ansible.builtin.blockinfile:
+    path: "{{ ssh_config_file }}"
+    marker: "##### {mark} SSH CONFIG BOTTOM for {{ item }} #####"
+    state: absent
+  loop: "{{ _profile_hosts }}"
+  when: _ssh_config_stat.stat.exists
+  failed_when: false

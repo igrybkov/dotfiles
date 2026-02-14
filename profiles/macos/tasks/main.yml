@@ -1,0 +1,28 @@
+---
+# macOS profile custom tasks
+# Configures macOS system settings (Touch ID, trackpad, keyboard, dock, finder)
+# Uses a cache marker to skip on subsequent runs
+
+- name: Check for skip-macos marker
+  tags: [macos]
+  ansible.builtin.stat:
+    path: "{{ playbook_dir }}/.cache/skip-macos"
+  register: skip_macos_marker
+
+- name: Include macOS settings role
+  tags: [macos]
+  ansible.builtin.include_role:
+    name: "{{ profile_roles_dir }}/macos"
+  when:
+    - ansible_facts['distribution'] | default('') == 'MacOSX'
+    - not (skip_macos_marker.stat.exists | default(false))
+
+- name: Create skip-macos marker after successful run
+  tags: [macos]
+  ansible.builtin.file:
+    path: "{{ playbook_dir }}/.cache/skip-macos"
+    state: touch
+    mode: "0644"
+  when:
+    - ansible_facts['distribution'] | default('') == 'MacOSX'
+    - not (skip_macos_marker.stat.exists | default(false))

@@ -1,0 +1,28 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended"
+  ],
+  "automerge": true,
+  "lockFileMaintenance": {
+    "enabled": true,
+    "automerge": true
+  },
+  "packageRules": [
+    {
+      "groupName": "ansible dependencies",
+      "matchManagers": ["ansible-galaxy"],
+      "matchDepTypes": ["collection", "role"]
+    },
+    {
+      "groupName": "pre-commit hooks",
+      "matchManagers": ["pre-commit"],
+      "separateMajorMinor": false,
+      "automerge": true
+    },
+    {
+      "groupName": "pytest",
+      "matchPackageNames": ["pytest", "/^pytest-/"]
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+---
+# Process additional dotfiles directory (from profile-specific inventories)
+# Uses the same recursive symlink logic as main dotfiles
+
+- name: "[🔗 dotfiles] Symlink additional dotfiles to home from {{ extra_dotfiles_dir }}"
+  ansible.builtin.include_tasks: symlink_recursive.yml
+  vars:
+    source_dir: "{{ extra_dotfiles_dir }}"
+    target_dir: "{{ _home_dir }}"
+    prefix: "."
+    exclude_dirs:
+      - config
+
+- name: "[🔗 dotfiles] Symlink additional config dotfiles from {{ extra_dotfiles_dir }}"
+  ansible.builtin.include_tasks: symlink_recursive.yml
+  vars:
+    source_dir: "{{ extra_dotfiles_dir }}/config"
+    target_dir: "{{ _home_dir }}/.config"
+    prefix: ""

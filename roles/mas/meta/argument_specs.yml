@@ -1,0 +1,34 @@
+---
+argument_specs:
+  main:
+    short_description: Install Mac App Store packages
+    description:
+      - Installs and manages Mac App Store applications
+      - Expects pre-aggregated data from playbook
+    options:
+      mas_packages:
+        description: List of Mac App Store packages to install
+        type: list
+        elements: dict
+        default: []
+        options:
+          name:
+            description: Application name (for display)
+            type: str
+            required: true
+          id:
+            description: Mac App Store application ID
+            type: int
+            required: true
+          state:
+            description: Package state
+            type: str
+            choices:
+              - present
+              - absent
+            default: present
+
+      mas_upgrade_all:
+        description: Whether to upgrade all Mac App Store packages
+        type: bool
+        default: false

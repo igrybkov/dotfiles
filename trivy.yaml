@@ -1,0 +1,28 @@
+---
+scan:
+  # # Same as '--file-patterns'
+  # # Default is empty
+  # file-patterns:
+  #   -
+
+  # Same as '--skip-dirs'
+  # Default is empty
+  # skip-dirs:
+  # - files/dotfiles/config/fish/local/
+
+  # Same as '--skip-files'
+  # Default is empty
+  skip-files:
+    - profiles/common/files/dotfiles/config/zsh/.zsh_history
+    - profiles/common/files/dotfiles/config/fish/local/*.fish
+
+  # # Same as '--offline-scan'
+  # # Default is false
+  # offline-scan: false
+
+  # # Same as '--scanners'
+  # # Default depends on subcommand
+  # scanners:
+  #   - vuln
+  #   - config
+  #   - secret

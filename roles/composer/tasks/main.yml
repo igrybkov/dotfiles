@@ -1,0 +1,35 @@
+---
+# Composer Role - Main Tasks
+# Variables are passed from the playbook (pre-aggregated from all profiles)
+# Input validation is handled by argument_specs in meta/argument_specs.yml
+
+- name: "[🎼 composer] Skip if no composer packages configured"
+  ansible.builtin.meta: end_host
+  when: composer_packages | default([]) | length == 0
+
+- name: "[🎼 composer] Check if composer is available"
+  ansible.builtin.command: which composer
+  register: _composer_check
+  changed_when: false
+  failed_when: false
+
+- name: "[🎼 composer] composer not found - skipping"  # noqa: ignore-errors
+  ansible.builtin.fail:
+    msg: |
+      composer not found in PATH.
+      Add 'composer' to brew_packages in your profile config.
+      Skipping composer packages: {{ composer_packages | map(attribute='name') | join(', ') }}
+  when: _composer_check.rc != 0
+  ignore_errors: true
+
+- name: "[🎼 composer] End role if composer not found"
+  ansible.builtin.meta: end_host
+  when: _composer_check.rc != 0
+
+- name: "[🎼 composer] Install global composer packages"
+  community.general.composer:
+    arguments: "{{ item.name }}"
+    command: require
+    global_command: "{{ item.global_command | default(true) }}"
+    working_dir: "{{ item.working_dir | default(omit) }}"
+  loop: "{{ composer_packages }}"

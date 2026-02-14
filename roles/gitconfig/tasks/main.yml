@@ -1,0 +1,66 @@
+---
+# Gitconfig Role - Main Tasks
+# This role manages git config fragments and gitignore using a conf.d pattern.
+# Each profile can provide *.gitconfig fragments in files/gitconfig/.
+# Fragments are symlinked to ~/.config/git/conf.d/ with priority-prefixed names.
+
+- name: "[🔧 gitconfig] Get sorted profile hosts"
+  ansible.builtin.set_fact:
+    _sorted_hosts: "{{ lookup('aggregated_profile_var', '_hosts') }}"
+
+# ==============================================================================
+# Collect gitconfig fragments from all profiles
+# ==============================================================================
+
+- name: "[🔧 gitconfig] Initialize fragment list"
+  ansible.builtin.set_fact:
+    _gitconfig_fragments: []
+    _gitignore_sources: []
+
+- name: "[🔧 gitconfig] Collect fragments from each profile"
+  ansible.builtin.include_tasks: collect_profile_fragments.yml
+  loop: "{{ _sorted_hosts }}"
+  loop_control:
+    loop_var: _profile_host
+
+# ==============================================================================
+# Set up conf.d directory and symlinks
+# ==============================================================================
+
+- name: "[🔧 gitconfig] Ensure conf.d directory exists"
+  ansible.builtin.file:
+    path: "{{ gitconfig_conf_d }}"
+    state: directory
+    mode: "0755"
+
+- name: "[🔧 gitconfig] Clean dead symlinks in conf.d"
+  ansible.builtin.include_tasks: cleanup_dead_symlinks.yml
+
+- name: "[🔧 gitconfig] Symlink each fragment to conf.d"
+  ansible.builtin.include_tasks: symlink_fragment.yml
+  loop: "{{ _gitconfig_fragments }}"
+  loop_control:
+    loop_var: _fragment
+
+# ==============================================================================
+# Generate includes file
+# ==============================================================================
+
+- name: "[🔧 gitconfig] Generate includes.gitconfig"
+  ansible.builtin.include_tasks: generate_includes.yml
+
+# ==============================================================================
+# Aggregate gitignore from all profiles
+# ==============================================================================
+
+- name: "[🔧 gitconfig] Aggregate gitignore files"
+  ansible.builtin.include_tasks: aggregate_gitignore.yml
+
+# ==============================================================================
+# Clean up legacy files
+# ==============================================================================
+
+- name: "[🔧 gitconfig] Remove legacy local.gitconfig if it exists"
+  ansible.builtin.file:
+    path: ~/.config/git/local.gitconfig
+    state: absent

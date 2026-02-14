@@ -1,0 +1,20 @@
+---
+# Default variables for json_config role
+
+# List of JSON configuration items to apply
+# Each item should have:
+#   - file: Path to JSON file (required)
+#   - content: Dictionary of settings to merge (required)
+#   - create_file: Create file if missing (default: false)
+#
+# Example:
+#   json_configs:
+#     - file: ~/.cursor/cli-config.json
+#       content:
+#         editor:
+#           vimMode: true
+#     - file: ~/.claude/settings.json
+#       create_file: true
+#       content:
+#         planModeByDefault: true
+json_configs: []

@@ -1,0 +1,7 @@
+{
+  "respectGitignore": true,
+  "fileSuggestion": {
+    "type": "command",
+    "command": ".claude/file-suggestion.sh"
+  }
+}

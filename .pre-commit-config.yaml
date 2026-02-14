@@ -1,0 +1,111 @@
+---
+# Globally exclude worktrees directory (used for multi-agent collaboration)
+exclude: '^\.worktrees/'
+default_install_hook_types:
+  - pre-commit
+  - post-checkout
+  - post-merge
+  - post-rewrite
+default_stages:
+  - pre-commit
+default_language_version:
+  python: python3.14
+repos:
+  - repo: https://github.com/adrienverge/yamllint.git
+    rev: v1.37.1
+    hooks:
+      - id: yamllint
+        args: [--strict]
+  - repo: https://github.com/ansible/ansible-lint
+    rev: v25.12.1
+    hooks:
+      - id: ansible-lint
+        language_version: python3.14
+        always_run: false
+        files: ^(playbook\.yml|requirements\.yml|\.config/ansible-lint\.yml|profiles/.*/config\.yml|roles/|molecule/|ansible_plugins/|profiles/.*/tasks/|profiles/.*/roles/)
+  - repo: https://github.com/koalaman/shellcheck-precommit
+    rev: v0.11.0
+    hooks:
+      - id: shellcheck
+        exclude: '(bin/mise|git-forgit|\.fish$)'
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-case-conflict
+      - id: check-executables-have-shebangs
+      - id: check-shebang-scripts-are-executable
+      - id: detect-aws-credentials
+        args: [--allow-missing-credentials]
+      - id: detect-private-key
+      - id: debug-statements
+      - id: check-merge-conflict
+      - id: forbid-submodules
+  #      - id: no-commit-to-branch # prevent commits to specified branches
+  #        args: [--branch, production, --branch, main]
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    # Ruff version.
+    rev: v0.14.9
+    hooks:
+      # Run the linter.
+      - id: ruff
+        args: [--fix]
+      # Run the formatter.
+      - id: ruff-format
+  - repo: https://github.com/tox-dev/pyproject-fmt
+    rev: "v2.11.1" # Use the sha / tag you want to point at
+    hooks:
+      - id: pyproject-fmt
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    # uv version.
+    rev: 0.9.18
+    hooks:
+      # Update the uv lockfile
+      - id: uv-lock
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    # uv version.
+    rev: 0.9.18
+    hooks:
+      - id: uv-sync
+        stages:
+          - pre-commit
+          - post-checkout
+          - post-merge
+          - post-rewrite
+  - repo: https://github.com/renovatebot/pre-commit-hooks
+    rev: 42.71.0
+    hooks:
+      - id: renovate-config-validator
+  - repo: local
+    hooks:
+      - id: generate-config-schema
+        name: generate-config-schema
+        description: Ensure config.schema.json is up-to-date with argument_specs
+        entry: bash -c 'mise x -- uv run python scripts/generate_config_schema.py && git diff --exit-code schemas/config.schema.json'
+        language: system
+        pass_filenames: false
+        files: (roles/.*/meta/argument_specs\.yml|scripts/generate_config_schema\.py)
+      - id: trufflehog
+        name: TruffleHog
+        description: Detect secrets in your data.
+        entry: bash -c 'docker run --rm -v "$(pwd):/workdir" -i --rm trufflesecurity/trufflehog:latest git file:///workdir --since-commit HEAD --results=verified,unknown --fail'
+        language: system
+        stages: ["pre-commit", "pre-push"]
+#  - repo: https://github.com/mxab/pre-commit-trivy.git
+#    rev: v0.14.0
+#    hooks:
+#      - id: trivyfs-docker
+#        args:
+#          - --skip-dirs
+#          - ./.venv
+#          - --skip-dirs
+#          - .pre-commit-trivy-cache/
+#          - . # last arg indicates the path/file to scan
+#      - id: trivyconfig-docker
+#        args:
+#          - --skip-dirs
+#          - ./.venv
+#          - --skip-dirs
+#          - .pre-commit-trivy-cache/
+#          - . # last arg indicates the path/file to scan

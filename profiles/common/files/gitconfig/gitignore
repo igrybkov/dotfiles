@@ -1,0 +1,44 @@
+# Folder view configuration files
+.DS_Store
+Desktop.ini
+
+# Thumbnail cache files
+._*
+Thumbs.db
+
+# Files that might appear on external disks
+.Spotlight-V100
+.Trashes
+
+# IDE specific settings
+.idea
+.vscode
+.cursor/mcp.json
+
+# Log files
+*.log
+
+# VIM swap files
+*.swp
+
+# vi temp files
+*~
+
+# dotenv files
+.env
+
+# direnv files
+.envrc
+
+# Claude Code local files
+CLAUDE.local.md
+.mcp.local.json
+**/.claude/*.local.json
+**/.claude/*.local.md
+**/.claude/worktree-context.md
+**/.claude/local-agents/
+**/.claude/handoffs/
+**/.claude/HANDOFF.md
+
+# Agent worktrees
+.worktrees/

@@ -1,0 +1,10 @@
+---
+- name: Converge - Test dotfiles role
+  hosts: all
+  gather_facts: false
+  roles:
+    - role: dotfiles
+      vars:
+        dotfiles_dir: /tmp/test-dotfiles
+        dotfiles_copy_dir: /tmp/test-dotfiles-copy
+        bin_dir: /tmp/test-bin

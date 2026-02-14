@@ -1,0 +1,3 @@
+---
+pip_system_python_path: "{{ ansible_facts[\"env\"].SYSTEM_PYTHON | default(None) }}"
+pip_system_pip_path: "{{ ansible_facts[\"env\"].SYSTEM_PIP | default(None) }}"

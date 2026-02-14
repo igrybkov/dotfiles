@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# auto-restart: Automatically restart a command when it exits
+# Usage: auto-restart <command> [args...]
+# Useful for Zellij panes where you want commands to restart on exit
+#
+# Environment variables:
+#   AUTO_RESTART_MAX_FAILURES - max failures before stopping (default: 5)
+#   AUTO_RESTART_WINDOW_SECS  - time window in seconds to track failures (default: 60)
+#   AUTO_RESTART_DELAY_SECS   - delay before restart in seconds (default: 1)
+
+set -uo pipefail
+
+# Configuration via environment variables
+MAX_FAILURES="${AUTO_RESTART_MAX_FAILURES:-5}"
+WINDOW_SECS="${AUTO_RESTART_WINDOW_SECS:-60}"
+DELAY_SECS="${AUTO_RESTART_DELAY_SECS:-1}"
+
+# Track failure timestamps
+failure_times=()
+
+if [[ $# -eq 0 ]]; then
+    echo "Usage: auto-restart <command> [args...]"
+    echo "Automatically restarts a command when it exits."
+    echo ""
+    echo "Environment variables:"
+    echo "  AUTO_RESTART_MAX_FAILURES - max failures before stopping (default: 5)"
+    echo "  AUTO_RESTART_WINDOW_SECS  - time window in seconds (default: 60)"
+    echo "  AUTO_RESTART_DELAY_SECS   - delay before restart (default: 1)"
+    exit 1
+fi
+
+# Remove timestamps older than WINDOW_SECS
+prune_old_failures() {
+    local now=$1
+    local cutoff=$((now - WINDOW_SECS))
+    local new_times=()
+
+    for ts in "${failure_times[@]}"; do
+        if [[ $ts -ge $cutoff ]]; then
+            new_times+=("$ts")
+        fi
+    done
+
+    failure_times=("${new_times[@]}")
+}
+
+while true; do
+    "$@"
+    exit_code=$?
+    now=$(date +%s)
+
+    echo ""
+
+    if [[ $exit_code -eq 0 ]]; then
+        # Success - clear failure history
+        failure_times=()
+        echo "[auto-restart] Process exited cleanly. Restarting in ${DELAY_SECS}s..."
+    else
+        # Failure - track it
+        failure_times+=("$now")
+        prune_old_failures "$now"
+        failure_count=${#failure_times[@]}
+
+        if [[ $failure_count -ge $MAX_FAILURES ]]; then
+            echo "[auto-restart] Crash loop detected: $failure_count failures in ${WINDOW_SECS}s"
+            echo "[auto-restart] Stopping. Press Enter to retry or Ctrl+C to exit."
+            read -r
+            failure_times=()
+            echo "[auto-restart] Retrying..."
+            continue
+        fi
+
+        echo "[auto-restart] Process failed (code $exit_code). Failures: $failure_count/${MAX_FAILURES} in ${WINDOW_SECS}s window"
+        echo "[auto-restart] Restarting in ${DELAY_SECS}s..."
+    fi
+
+    sleep "$DELAY_SECS"
+done

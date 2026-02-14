@@ -1,0 +1,14 @@
+---
+- name: Converge - Test mas role error handling
+  hosts: all
+  gather_facts: false
+  vars:
+    # Enable upgrade to trigger the mock timeout error
+    mas_upgrade_all: true
+    # Test installing a package that's not in the mock "installed" list
+    mas_packages:
+      - name: "NewApp"
+        id: 123456789
+
+  roles:
+    - role: mas

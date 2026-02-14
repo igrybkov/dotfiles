@@ -1,0 +1,44 @@
+---
+# Docker Role - Main Tasks
+# Cleans up unused Docker resources
+
+- name: "[🐳 docker] Check if Docker daemon is running"
+  ansible.builtin.command: docker info
+  register: _docker_check
+  changed_when: false
+  failed_when: false
+
+- name: "[🐳 docker] Docker not available - skipping"  # noqa: ignore-errors
+  ansible.builtin.fail:
+    msg: |
+      Docker daemon not running or docker command not found.
+      Install Docker Desktop and ensure it's running.
+      Skipping docker cleanup.
+  when: _docker_check.rc != 0
+  ignore_errors: true
+
+- name: "[🐳 docker] End role if Docker not available"
+  ansible.builtin.meta: end_host
+  when: _docker_check.rc != 0
+
+- name: "[🐳 docker] Prune unused containers older >24h"
+  community.docker.docker_prune:
+    containers: true
+    containers_filters:
+      until: 24h
+
+- name: "[🐳 docker] Prune unused images"
+  community.docker.docker_prune:
+    images: true
+
+- name: "[🐳 docker] Prune unused networks"
+  community.docker.docker_prune:
+    networks: true
+
+- name: "[🐳 docker] Prune unused volumes"
+  community.docker.docker_prune:
+    volumes: true
+
+- name: "[🐳 docker] Prune builder cache"
+  community.docker.docker_prune:
+    builder_cache: true

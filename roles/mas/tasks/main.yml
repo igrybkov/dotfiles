@@ -1,0 +1,108 @@
+---
+# Mac App Store Role - Main Tasks
+# Variables are passed from the playbook (pre-aggregated from all profiles)
+# Input validation is handled by argument_specs in meta/argument_specs.yml
+
+- name: "[🍎 mas] Initialize mas errors list"
+  ansible.builtin.set_fact:
+    mas_errors: []
+
+- name: "[🍎 mas] Check installed Mac App Store packages"
+  become: false
+  ansible.builtin.command: mas list
+  register: mas_installed
+  changed_when: false
+  ignore_errors: true
+
+- name: "[🍎 mas] Record mas list error"
+  ansible.builtin.set_fact:
+    mas_errors: "{{ mas_errors + ['Failed to list installed packages: ' + mas_installed.stderr | default(mas_installed.msg | default('Unknown error'))] }}"
+  when: mas_installed.failed | default(false)
+
+- name: "[🍎 mas] Install Mac App Store packages"
+  become: false
+  ansible.builtin.command: "mas install {{ item.id }}"
+  loop: "{{ mas_packages }}"
+  when:
+    - mas_installed.failed is not defined or not mas_installed.failed
+    - item.id is defined
+    - item.state is not defined or item.state == "present"
+    - (item.id | string) not in mas_installed.stdout
+  register: mas_install_results
+  changed_when: true
+  ignore_errors: true
+
+- name: "[🍎 mas] Record mas install errors"
+  ansible.builtin.set_fact:
+    mas_errors: "{{ mas_errors + ['Failed to install ' + item.item.name | default(item.item.id | string) + ': ' + item.stderr | default(item.msg | default('Unknown error'))] }}"
+  loop: "{{ mas_install_results.results | default([]) }}"
+  when: item.failed | default(false)
+  loop_control:
+    label: "{{ item.item.name | default(item.item.id | default('unknown')) }}"
+
+- name: "[🍎 mas] Uninstall Mac App Store packages"
+  become: true
+  ansible.builtin.command: "mas uninstall {{ item.id }}"
+  loop: "{{ mas_packages }}"
+  when:
+    - mas_installed.failed is not defined or not mas_installed.failed
+    - item.id is defined
+    - item.state is defined
+    - item.state == "absent"
+    - (item.id | string) in mas_installed.stdout
+  register: mas_uninstall_results
+  changed_when: true
+  ignore_errors: true
+
+- name: "[🍎 mas] Record mas uninstall errors"
+  ansible.builtin.set_fact:
+    mas_errors: "{{ mas_errors + ['Failed to uninstall ' + item.item.name | default(item.item.id | string) + ': ' + item.stderr | default(item.msg | default('Unknown error'))] }}"
+  loop: "{{ mas_uninstall_results.results | default([]) }}"
+  when: item.failed | default(false)
+  loop_control:
+    label: "{{ item.item.name | default(item.item.id | default('unknown')) }}"
+
+- name: "[🍎 mas] Make sure app files are removed for Mac App Store packages"
+  become: true
+  ansible.builtin.file:
+    path: /Applications/{{ item.name }}.app
+    state: absent
+  loop: "{{ mas_packages }}"
+  when: item.name is defined and item.state is defined and item.state == "absent"
+
+- name: "[🍎 mas] Upgrade Mac App Store packages"
+  become: true
+  ansible.builtin.command: mas upgrade
+  register: mas_upgrade_result
+  when: mas_upgrade_all | default(false)
+  changed_when: mas_upgrade_result.stdout | default('') | length > 0
+  ignore_errors: true
+
+- name: "[🍎 mas] Record mas upgrade error"
+  ansible.builtin.set_fact:
+    mas_errors: "{{ mas_errors + ['Failed to upgrade packages: ' + mas_upgrade_result.stderr | default(mas_upgrade_result.msg | default('Unknown error'))] }}"
+  when:
+    - mas_upgrade_result is defined
+    - mas_upgrade_result.failed | default(false)
+
+- name: "[🍎 mas] Report mas errors"
+  ansible.builtin.debug:
+    msg: |
+      Mac App Store operations completed with errors:
+      {% for error in mas_errors %}
+        - {{ error }}
+      {% endfor %}
+  when: mas_errors | length > 0
+
+- name: "[🍎 mas] Write mas errors to cache file for final summary"
+  ansible.builtin.copy:
+    content: "{{ mas_errors | to_json }}"
+    dest: "{{ playbook_dir }}/.cache/mas_errors.json"
+    mode: "0644"
+  when: mas_errors | length > 0
+
+- name: "[🍎 mas] Clear mas errors cache file if no errors"
+  ansible.builtin.file:
+    path: "{{ playbook_dir }}/.cache/mas_errors.json"
+    state: absent
+  when: mas_errors | length == 0

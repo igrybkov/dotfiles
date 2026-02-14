@@ -1,0 +1,88 @@
+---
+# GitHub CLI Extensions Role - Main Tasks
+# Variables are passed from the playbook (pre-aggregated from all profiles)
+# Input validation is handled by argument_specs in meta/argument_specs.yml
+
+- name: "[🔌 gh_extensions] Skip if no extensions configured"
+  ansible.builtin.meta: end_host
+  when: gh_extensions | default([]) | length == 0
+
+- name: "[🔌 gh_extensions] Check if gh CLI is installed"
+  ansible.builtin.command: which gh
+  register: gh_cli_check
+  changed_when: false
+  failed_when: false
+
+- name: "[🔌 gh_extensions] gh CLI not found - skipping"  # noqa: ignore-errors
+  ansible.builtin.fail:
+    msg: |
+      gh CLI not found in PATH.
+      Add 'gh' to brew_packages in your profile config.
+      Skipping extensions: {{ gh_extensions | map(attribute='name') | join(', ') }}
+  when: gh_cli_check.rc != 0
+  ignore_errors: true
+
+- name: "[🔌 gh_extensions] End role if gh not found"
+  ansible.builtin.meta: end_host
+  when: gh_cli_check.rc != 0
+
+- name: "[🔌 gh_extensions] List installed extensions"
+  ansible.builtin.command: gh extension list
+  register: gh_extensions_list
+  changed_when: false
+  failed_when: false
+
+- name: "[🔌 gh_extensions] Set fact for installed extension names"
+  ansible.builtin.set_fact:
+    gh_extensions_installed: >-
+      {{
+        gh_extensions_installed | default([]) +
+        [item.split()[0] | trim]
+      }}
+  loop: "{{ gh_extensions_list.stdout_lines | default([]) }}"
+  when: gh_extensions_list.stdout_lines is defined
+  loop_control:
+    label: "{{ item }}"
+
+- name: "[🔌 gh_extensions] Remove extensions"
+  ansible.builtin.command: gh extension remove {{ item.name }}
+  loop: "{{ gh_extensions }}"
+  when:
+    - item.state is defined
+    - item.state == "absent"
+    - item.name in (gh_extensions_installed | default([]))
+  register: gh_extension_remove
+  failed_when: false
+  changed_when: gh_extension_remove.rc == 0
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: "[🔌 gh_extensions] Install extensions (present state)"
+  ansible.builtin.command:
+    cmd: "gh extension install {{ item.name }}"
+  loop: "{{ gh_extensions }}"
+  when:
+    - item.state is not defined or item.state == "present"
+    - item.name not in (gh_extensions_installed | default([]))
+  register: gh_extension_install_present
+  failed_when: false
+  changed_when: >
+    gh_extension_install_present.rc == 0
+    and ("already up to date" not in (gh_extension_install_present.stdout | default("")))
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: "[🔌 gh_extensions] Install or upgrade extensions (latest state)"
+  ansible.builtin.command:
+    cmd: "gh extension install {{ item.name }} --force"
+  loop: "{{ gh_extensions }}"
+  when:
+    - item.state is defined
+    - item.state == "latest"
+  register: gh_extension_install_latest
+  failed_when: false
+  changed_when: >
+    gh_extension_install_latest.rc == 0
+    and ("already up to date" not in (gh_extension_install_latest.stdout | default("")))
+  loop_control:
+    label: "{{ item.name }}"

@@ -1,0 +1,64 @@
+---
+- name: Prepare ssh_config role test
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Install Python and required packages using raw module
+      ansible.builtin.raw: |
+        apt-get update -qq
+        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq python3 python3-pip python3-apt git curl ca-certificates bash
+        pip3 install --break-system-packages paramiko
+      changed_when: false
+
+    - name: Ensure .ssh directory exists
+      ansible.builtin.file:
+        path: ~/.ssh
+        state: directory
+        mode: "0700"
+
+    - name: Create existing SSH config
+      ansible.builtin.copy:
+        content: |
+          # Existing SSH configuration
+          Host existing-host
+            hostname existing.example.com
+            user existinguser
+        dest: ~/.ssh/config
+        mode: "0600"
+
+    # Create dummy SSH key files for testing
+    # The ssh_config module validates that identity_file exists
+    - name: Create dummy SSH key files for testing
+      ansible.builtin.file:
+        path: "~/.ssh/{{ item }}"
+        state: touch
+        mode: "0600"
+      loop:
+        - server1_key
+
+    # Set test variables as cacheable facts so they're available in hostvars
+    # for the aggregated_profile_var lookup plugin
+    - name: Set ssh_client_config as host fact
+      ansible.builtin.set_fact:
+        ssh_client_config:
+          - host: server1
+            hostname: server1.example.com
+            identity_file: ~/.ssh/server1_key
+          - host: server2
+            hostname: server2.example.com
+            port: 2222
+        # Test blocks: top (before entries), bottom (after entries)
+        ssh_client_config_block:
+          - content: |-
+              # 1Password SSH agent (top)
+              Host *
+                  identityagent "~/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
+            position: top
+          - content: |-
+              # Default settings (bottom)
+              Host *
+                  serveraliveinterval 60
+                  serveralivecountmax 3
+                  addkeystoagent yes
+            position: bottom
+        cacheable: true

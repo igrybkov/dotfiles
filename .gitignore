@@ -1,0 +1,35 @@
+# Mac meta
+.DS_Store
+
+# dotfiles overrides
+.env
+
+# Python virtual environment
+/.venv
+
+# ignore locally installed binaries
+/.bin/
+
+# Ignore trivy cache for pre-commit hook
+.pre-commit-trivy-cache
+
+# python cache
+__pycache__/
+
+# runtime cache
+.cache
+.ansible
+
+# legacy files directory (content moved to profiles/)
+/files/
+
+# vault password file (never commit)
+.vault_password
+
+# backup files
+*.bak
+*~
+*.swp
+
+# log files
+*.log

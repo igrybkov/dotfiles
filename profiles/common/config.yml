@@ -1,0 +1,220 @@
+---
+# yaml-language-server: $schema=../../schemas/config.schema.json
+# Common profile configuration
+# Base packages and settings shared across all workstations
+#
+# Profile configuration for dynamic inventory
+profile:
+  name: common
+  priority: 150
+
+# Upgrade packages during common config run
+brew_upgrade_all: true
+
+brew_taps:
+  - name: charmbracelet/tap
+  - name: domt4/autoupdate
+  - name: frdmn/formulas
+  - name: hashicorp/tap
+  - name: homebrew/bundle
+  - name: homebrew/services
+
+brew_packages:
+  - name: awscli
+  - name: bat
+  - name: blueutil
+  - name: coreutils
+  - name: curl
+  - name: direnv
+  - name: dust # https://github.com/bootandy/dust
+  - name: exiftool
+  - name: eza
+  - name: faas-cli
+  - name: fd # faster, colorized alternative to find
+  - name: ffmpeg
+  - name: fish
+  - name: fish-lsp
+  - name: fzf
+  - name: fzy
+  - name: gh
+  - name: git
+  - name: graphviz
+  - name: git-delta
+  - name: git-extras
+  - name: git-lfs
+  - name: gnu-sed
+  - name: go-task/tap/go-task
+  - name: hashicorp/tap/terraform
+  - name: helm
+  - name: hidetatz/tap/kubecolor
+  - name: htop
+  - name: hub
+  - name: joerdav/xc/xc
+  - name: jq
+  - name: jupyterlab
+  - name: just
+  - name: k9s
+  - name: lazydocker
+  - name: lazygit
+  - name: less
+  - name: make
+  - name: mas
+  - name: mise
+  - name: multitail
+  - name: mycli
+  - name: mysql-client
+  - name: neovim
+  - name: ngrep
+  - name: nmap
+  - name: php # used by some alfred workflows
+  - name: pillow
+  - name: pipx
+  - name: poetry
+  - name: pv
+  - name: ruff
+  - name: ripgrep
+  - name: runme
+  - name: shfmt
+  - name: stylua
+  - name: switchaudio-osx
+  - name: tcpdump
+  - name: terminal-notifier
+  - name: tmux
+    state: absent
+  - name: ttyd
+  - name: uping
+  - name: uv
+  - name: vhs
+  - name: watch
+  - name: watchexec
+  - name: wget
+  - name: yq
+  - name: yt-dlp
+  - name: zellij
+  - name: zoxide
+  - name: zsh
+
+cask_packages:
+  - name: 1password
+  - name: 1password-cli
+  - name: alfred
+  - name: anki
+  - name: claude-code
+  - name: copilot-cli
+  - name: daisydisk
+  - name: dash
+  - name: dbngin
+  - name: docker-desktop
+  - name: elgato-stream-deck
+  - name: firefox
+  - name: focus
+  - name: google-chrome
+  - name: handy
+  - name: hazel
+  - name: jetbrains-toolbox
+  - name: mongodb-compass
+  - name: obsidian
+  - name: telegram
+  - name: visual-studio-code
+  - name: vlc
+  - name: ghostty
+
+gem_packages:
+  - name: nokogiri
+
+mas_upgrade_all: true
+
+mas_packages:
+  - name: GoodNotes
+    id: 1444383602
+  - name: Keynote
+    id: 409183694
+  - name: Just Press Record
+    id: 1033342465
+  - name: Magnet
+    id: 441258766
+  - name: Numbers
+    id: 409203825
+  - name: MindNode
+    id: 1289197285
+  - name: Pages
+    id: 409201541
+  - name: Amphetamine
+    id: 937984704
+  - name: Obsidian Web Clipper
+    id: 6720708363
+  - name: OmniFocus 4
+    id: 1542143627
+
+npm_packages:
+  - name: alfred-vscode
+  - name: "@bchatard/alfred-jetbrains"
+  - name: "@google/gemini-cli"
+  - name: eslint
+  - name: gitignore-it
+  - name: prettier
+  - name: prettyjson
+  - name: yo
+
+gh_extensions:
+  - name: seachicken/gh-poi
+    state: latest
+  - name: HaywardMorihara/gh-tidy
+    state: latest
+  - name: meiji163/gh-notify
+    state: latest
+  - name: garnertb/gh-gitignore
+    state: latest
+  - name: chelnak/gh-changelog
+    state: latest
+
+composer_packages: []
+pip_packages: []
+# - name: git+https://github.com/marcolardera/chatgpt-cli
+
+# pipx packages (installed in isolated environments)
+# Packages with native dependencies can use build_deps to auto-set CFLAGS/LDFLAGS
+# The role will run `brew --prefix <dep>` and set -I and -L flags accordingly
+pipx_packages:
+  - name: erdantic
+    build_deps:
+      - graphviz
+  - name: mlx-whisper
+
+# MCP Servers configuration
+# Secrets are stored in profile secrets.yml (vault encrypted)
+# Use lookup('vault_secret', 'path.to.secret') for vault secrets, "op://..." for 1Password
+# Git-based servers use git_repo/git_dest and are cloned/updated automatically
+mcp_servers: []
+
+ssh_client_config: []
+
+# SSH config text blocks to work with params that are not supported by ansible.builtin.ssh_config
+ssh_client_config_block:
+  - content: |
+      Include ~/.ssh/1Password/config
+    position: top
+  - content: |
+      Host *
+          identityagent "~/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
+    position: bottom
+
+# GitHub repositories to clone using gh CLI
+# Each item must be a dict with:
+#   repo: "owner/repo" (required)
+#   dest: "/path/to/destination" (optional, defaults to ~/Projects/{repo_name})
+#   state: "present" or "latest" (optional, defaults to "present")
+#          - present: only clone if repo doesn't exist
+#          - latest: fetch and pull on every run
+#   branch: "branch-name" (optional)
+#   tag: "tag-name" (optional, takes precedence over branch)
+#
+# gh_repos:
+#   - repo: owner/simple-repo
+#   - repo: owner/another-repo
+#     dest: ~/Code/custom-path
+#     state: latest
+#   - repo: owner/versioned-repo
+#     tag: v1.0.0
+#   - repo: owner/feature-repo
+#     branch: develop

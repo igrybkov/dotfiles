@@ -1,0 +1,106 @@
+---
+- name: Create Tart macOS VM
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    molecule_instance_config: "{{ lookup('env', 'MOLECULE_INSTANCE_CONFIG') }}"
+  tasks:
+    - name: Check if Tart is installed
+      ansible.builtin.command:
+        cmd: which tart
+      register: tart_check
+      changed_when: false
+      failed_when: false
+
+    - name: Fail if Tart is not installed
+      ansible.builtin.fail:
+        msg: |
+          Tart is not installed. Install it with:
+            brew install cirruslabs/cli/tart
+      when: tart_check.rc != 0
+
+    - name: Pull Tart image if not present
+      ansible.builtin.command:
+        cmd: "tart pull {{ item.tart_image }}"
+      loop: "{{ molecule_yml.platforms }}"
+      register: tart_pull
+      changed_when: "'Already up to date' not in tart_pull.stdout | default('')"
+      failed_when: tart_pull.rc != 0
+
+    - name: Check if VM already exists
+      ansible.builtin.command:
+        cmd: "tart list"
+      register: tart_list
+      changed_when: false
+
+    - name: Delete existing VM if present
+      ansible.builtin.command:
+        cmd: "tart delete {{ item.name }}"
+      loop: "{{ molecule_yml.platforms }}"
+      when: item.name in tart_list.stdout
+      changed_when: true
+      failed_when: false
+
+    - name: Clone VM from image
+      ansible.builtin.command:
+        cmd: "tart clone {{ item.tart_image }} {{ item.name }}"
+      loop: "{{ molecule_yml.platforms }}"
+      changed_when: true
+
+    - name: Set VM resources
+      ansible.builtin.command:
+        cmd: >
+          tart set {{ item.name }}
+          --cpu {{ item.tart_cpu | default(4) }}
+          --memory {{ item.tart_memory | default(8192) }}
+      loop: "{{ molecule_yml.platforms }}"
+      changed_when: true
+
+    - name: Start VM in background
+      ansible.builtin.shell:
+        cmd: "nohup tart run {{ item.name }} --no-graphics > /dev/null 2>&1 &"
+      loop: "{{ molecule_yml.platforms }}"
+      changed_when: true
+
+    - name: Wait for VM to boot (30 seconds)
+      ansible.builtin.pause:
+        seconds: 30
+
+    - name: Get VM IP address
+      ansible.builtin.command:
+        cmd: "tart ip {{ item.name }}"
+      loop: "{{ molecule_yml.platforms }}"
+      register: vm_ips
+      until: vm_ips.stdout | default('') | length > 0
+      retries: 30
+      delay: 10
+      changed_when: false
+
+    - name: Wait for SSH to be available
+      ansible.builtin.wait_for:
+        host: "{{ item.stdout | trim }}"
+        port: 22
+        delay: 5
+        timeout: 300
+      loop: "{{ vm_ips.results }}"
+
+    - name: Create instance config
+      ansible.builtin.copy:
+        content: |
+          {% for platform in molecule_yml.platforms %}
+          - instance: "{{ platform.name }}"
+            address: "{{ vm_ips.results[loop.index0].stdout | trim }}"
+            user: "admin"
+            port: 22
+            identity_file: ""
+          {% endfor %}
+        dest: "{{ molecule_instance_config }}"
+        mode: "0644"
+
+    - name: Display VM information
+      ansible.builtin.debug:
+        msg: "VM {{ item.name }} is running at {{ vm_ips.results[loop.index0].stdout | trim }}"
+      loop: "{{ molecule_yml.platforms }}"
+      loop_control:
+        index_var: loop_index0

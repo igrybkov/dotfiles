@@ -1,0 +1,70 @@
+---
+# Pip Role - Main Tasks
+# Variables are passed from the playbook (pre-aggregated from all profiles)
+# Input validation is handled by argument_specs in meta/argument_specs.yml
+
+- name: "[🐍 pip] Skip if no pip packages configured"
+  ansible.builtin.meta: end_host
+  when: pip_packages | default([]) | length == 0
+
+- name: "[🐍 pip] Check if system pip binary exists"
+  ansible.builtin.stat:
+    path: "{{ pip_system_pip_path }}"
+  register: system_pip_binary
+
+- name: "[🐍 pip] Set pip executable"
+  ansible.builtin.set_fact:
+    pip_executable: "{{ pip_system_pip_path }}"
+  when: system_pip_binary.stat.exists is defined and system_pip_binary.stat.exists and pip_executable is not defined
+
+- name: "[🐍 pip] Check if miniconda pip is installed"
+  ansible.builtin.stat:
+    path: "{{ pip_miniconda_path }}/bin/pip"
+  register: pip_miniconda_binary
+  when: pip_miniconda_path is defined and pip_executable is not defined
+
+- name: "[🐍 pip] Set miniconda pip executable"
+  ansible.builtin.set_fact:
+    pip_executable: "{{ pip_miniconda_path }}/bin/pip"
+  when: pip_miniconda_binary.stat.exists is defined and pip_miniconda_binary.stat.exists and pip_executable is not defined
+
+- name: "[🐍 pip] Check if macos pip is installed"
+  ansible.builtin.stat:
+    path: /usr/bin/pip3
+  register: pip_macos_binary
+  when: pip_executable is not defined
+
+- name: "[🐍 pip] Set macos pip executable"
+  ansible.builtin.set_fact:
+    pip_executable: /usr/bin/pip3
+  when: pip_macos_binary.stat.exists is defined and pip_macos_binary.stat.exists and pip_executable is not defined
+
+- name: "[🐍 pip] pip not found - skipping"  # noqa: ignore-errors
+  ansible.builtin.fail:
+    msg: |
+      pip not found. Searched: {{ pip_system_pip_path }}, {{ pip_miniconda_path | default('N/A') }}/bin/pip, /usr/bin/pip3
+      Add 'python@3' to brew_packages in your profile config.
+      Skipping pip packages: {{ pip_packages | map(attribute='name') | join(', ') }}
+  when: pip_executable is not defined
+  ignore_errors: true
+
+- name: "[🐍 pip] End role if pip not found"
+  ansible.builtin.meta: end_host
+  when: pip_executable is not defined
+
+- name: "[🐍 pip] Print which pip executable is being used"
+  ansible.builtin.debug:
+    var: pip_executable
+
+- name: "[🐍 pip] Upgrade pip"  # noqa: package-latest
+  ansible.builtin.pip:
+    name: pip
+    state: latest
+    executable: "{{ pip_executable }}"
+
+- name: "[🐍 pip] Install pip packages"
+  ansible.builtin.pip:
+    name: "{{ item.name }}"
+    state: "{{ item.state | default('latest') }}"
+    executable: "{{ pip_executable }}"
+  loop: "{{ pip_packages }}"

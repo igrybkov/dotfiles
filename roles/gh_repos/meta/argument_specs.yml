@@ -1,0 +1,42 @@
+---
+argument_specs:
+  main:
+    short_description: Clone GitHub repositories
+    description:
+      - Clones GitHub repositories using gh CLI
+      - Expects pre-aggregated data from playbook
+    options:
+      gh_repos:
+        description: List of GitHub repositories to clone
+        type: list
+        elements: dict
+        default: []
+        options:
+          repo:
+            description: Repository in owner/repo format
+            type: str
+            required: true
+          dest:
+            description: Destination path (defaults to ~/Projects/{repo_name})
+            type: path
+            required: false
+          state:
+            description: Repository state
+            type: str
+            choices:
+              - present
+              - latest
+            default: present
+          branch:
+            description: Branch to checkout
+            type: str
+            required: false
+          tag:
+            description: Tag to checkout (takes precedence over branch)
+            type: str
+            required: false
+
+      gh_repos_default_dest:
+        description: Default destination directory for repositories
+        type: path
+        default: ~/Projects

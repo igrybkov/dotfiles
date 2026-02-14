@@ -1,0 +1,119 @@
+---
+- name: Converge - Test cross-platform roles
+  hosts: all
+  gather_facts: true
+  vars:
+    # Test dotfiles role with mock data
+    dotfiles_dir: /tmp/test-dotfiles
+    dotfiles_copy_dir: /tmp/test-dotfiles-copy
+    bin_dir: /tmp/test-bin
+
+    # Test SSH config
+    # Note: content uses lowercase directives and 4-space indent to match
+    # how community.general.ssh_config normalizes the file
+    ssh_config_file: ~/.ssh/config
+    ssh_client_config:
+      - host: test-server
+        hostname: test.example.com
+        identity_file: ~/.ssh/test_key
+    ssh_client_config_block:
+      - content: |
+          # Top block for testing
+          include ~/.ssh/custom_config
+        position: top
+      - content: |
+          # Bottom block for testing
+          Host *
+              serveraliveinterval 60
+        position: bottom
+
+  pre_tasks:
+    - name: Create test dotfiles directory
+      ansible.builtin.file:
+        path: /tmp/test-dotfiles
+        state: directory
+        mode: "0755"
+
+    - name: Create test dotfiles
+      ansible.builtin.copy:
+        content: "# Test {{ item }}"
+        dest: "/tmp/test-dotfiles/{{ item }}"
+        mode: "0644"
+      loop:
+        - gitconfig
+        - zshrc
+
+    - name: Create test dotfiles config directory
+      ansible.builtin.file:
+        path: /tmp/test-dotfiles/config
+        state: directory
+        mode: "0755"
+
+    - name: Create test config files
+      ansible.builtin.copy:
+        content: "# Test {{ item }} config"
+        dest: "/tmp/test-dotfiles/config/{{ item }}"
+        mode: "0644"
+      loop:
+        - nvim
+
+    - name: Create test fish config directory
+      ansible.builtin.file:
+        path: /tmp/test-dotfiles/config/fish
+        state: directory
+        mode: "0755"
+
+    - name: Create test fish config file
+      ansible.builtin.copy:
+        content: "# Test fish config"
+        dest: /tmp/test-dotfiles/config/fish/config.fish
+        mode: "0644"
+
+    - name: Add directory marker for fish (test directory-level symlinks)
+      ansible.builtin.copy:
+        content: ""
+        dest: /tmp/test-dotfiles/config/fish/.symlink-as-directory
+        mode: "0644"
+
+    - name: Create test dotfiles-copy directory
+      ansible.builtin.file:
+        path: /tmp/test-dotfiles-copy
+        state: directory
+        mode: "0755"
+
+    - name: Create test copy files
+      ansible.builtin.copy:
+        content: "# Copy test file"
+        dest: /tmp/test-dotfiles-copy/copy-test-file
+        mode: "0644"
+
+    - name: Create test bin directory
+      ansible.builtin.file:
+        path: /tmp/test-bin
+        state: directory
+        mode: "0755"
+
+    - name: Create test bin script
+      ansible.builtin.copy:
+        content: |
+          #!/bin/bash
+          echo "test script"
+        dest: /tmp/test-bin/test-script
+        mode: "0755"
+
+    - name: Create dummy SSH key for testing
+      ansible.builtin.copy:
+        content: "dummy-key-content-for-testing"
+        dest: ~/.ssh/test_key
+        mode: "0600"
+      changed_when: false
+
+    # Set facts so they appear in hostvars for aggregated_profile_var lookup
+    - name: Set SSH config facts for aggregation lookup
+      ansible.builtin.set_fact:
+        ssh_client_config: "{{ ssh_client_config }}"
+        ssh_client_config_block: "{{ ssh_client_config_block }}"
+
+  roles:
+    - role: dotfiles
+    - role: ssh_config

@@ -1,0 +1,291 @@
+#!/usr/bin/env bash
+# watch-tests: Intelligently detect test framework and run tests in watch mode
+# Supports: pytest, jest, vitest, mocha, go test, cargo test
+
+set -euo pipefail
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Find git root or use current directory
+find_root() {
+    git rev-parse --show-toplevel 2>/dev/null || pwd
+}
+
+# Check if a command exists
+has_cmd() {
+    command -v "$1" &>/dev/null
+}
+
+# Check if package.json has a dependency
+has_npm_dep() {
+    local root="$1"
+    local dep="$2"
+    if [[ -f "$root/package.json" ]]; then
+        grep -q "\"$dep\"" "$root/package.json" 2>/dev/null
+    else
+        return 1
+    fi
+}
+
+# Check if package.json has a script
+has_npm_script() {
+    local root="$1"
+    local script="$2"
+    if [[ -f "$root/package.json" ]]; then
+        grep -q "\"$script\":" "$root/package.json" 2>/dev/null
+    else
+        return 1
+    fi
+}
+
+# Detect and run pytest
+run_pytest() {
+    local root="$1"
+    echo -e "${GREEN}Detected: pytest${NC}"
+
+    cd "$root"
+
+    # Check for pytest-watcher (ptw) - modern replacement for pytest-watch
+    if has_cmd ptw; then
+        echo -e "${BLUE}Running: ptw --notify-on-failure .${NC}"
+        exec ptw --notify-on-failure .
+    elif has_cmd watchexec; then
+        echo -e "${BLUE}Running: watchexec pytest${NC}"
+        exec watchexec -e py -- pytest
+    elif has_cmd entr; then
+        echo -e "${BLUE}Running: pytest with entr${NC}"
+        find . -name "*.py" -type f | entr -c pytest
+    else
+        echo -e "${YELLOW}No watch tool found. Install pytest-watcher: pip install pytest-watcher${NC}"
+        echo -e "${BLUE}Running: pytest (one-shot)${NC}"
+        pytest
+    fi
+}
+
+# Detect and run jest
+run_jest() {
+    local root="$1"
+    echo -e "${GREEN}Detected: jest${NC}"
+
+    cd "$root"
+
+    if has_npm_script "$root" "test:watch"; then
+        echo -e "${BLUE}Running: npm run test:watch${NC}"
+        exec npm run test:watch
+    elif has_npm_script "$root" "test"; then
+        # Check if test script uses jest
+        if grep -q "jest" "$root/package.json" 2>/dev/null; then
+            echo -e "${BLUE}Running: npx jest --watch${NC}"
+            exec npx jest --watch
+        fi
+    else
+        echo -e "${BLUE}Running: npx jest --watch${NC}"
+        exec npx jest --watch
+    fi
+}
+
+# Detect and run vitest
+run_vitest() {
+    local root="$1"
+    echo -e "${GREEN}Detected: vitest${NC}"
+
+    cd "$root"
+
+    if has_npm_script "$root" "test:watch"; then
+        echo -e "${BLUE}Running: npm run test:watch${NC}"
+        exec npm run test:watch
+    else
+        # vitest runs in watch mode by default
+        echo -e "${BLUE}Running: npx vitest${NC}"
+        exec npx vitest
+    fi
+}
+
+# Detect and run mocha
+run_mocha() {
+    local root="$1"
+    echo -e "${GREEN}Detected: mocha${NC}"
+
+    cd "$root"
+
+    if has_npm_script "$root" "test:watch"; then
+        echo -e "${BLUE}Running: npm run test:watch${NC}"
+        exec npm run test:watch
+    else
+        echo -e "${BLUE}Running: npx mocha --watch${NC}"
+        exec npx mocha --watch
+    fi
+}
+
+# Detect and run go test
+run_go_test() {
+    local root="$1"
+    echo -e "${GREEN}Detected: go${NC}"
+
+    cd "$root"
+
+    if has_cmd watchexec; then
+        echo -e "${BLUE}Running: watchexec go test${NC}"
+        exec watchexec -e go -- go test ./...
+    elif has_cmd entr; then
+        echo -e "${BLUE}Running: go test with entr${NC}"
+        find . -name "*.go" -type f | entr -c go test ./...
+    else
+        echo -e "${YELLOW}No watch tool found. Install watchexec or entr${NC}"
+        echo -e "${BLUE}Running: go test (one-shot)${NC}"
+        go test ./...
+    fi
+}
+
+# Detect and run cargo test
+run_cargo_test() {
+    local root="$1"
+    echo -e "${GREEN}Detected: cargo (Rust)${NC}"
+
+    cd "$root"
+
+    if has_cmd cargo-watch; then
+        echo -e "${BLUE}Running: cargo watch -x test${NC}"
+        exec cargo watch -x test
+    elif has_cmd watchexec; then
+        echo -e "${BLUE}Running: watchexec cargo test${NC}"
+        exec watchexec -e rs -- cargo test
+    else
+        echo -e "${YELLOW}No watch tool found. Install cargo-watch: cargo install cargo-watch${NC}"
+        echo -e "${BLUE}Running: cargo test (one-shot)${NC}"
+        cargo test
+    fi
+}
+
+# Detect and run mix test (Elixir)
+run_mix_test() {
+    local root="$1"
+    echo -e "${GREEN}Detected: mix (Elixir)${NC}"
+
+    cd "$root"
+
+    if has_cmd fswatch || has_cmd inotifywait; then
+        echo -e "${BLUE}Running: mix test --stale --listen-on-stdin${NC}"
+        exec mix test --stale --listen-on-stdin
+    else
+        echo -e "${BLUE}Running: mix test${NC}"
+        exec mix test --stale --listen-on-stdin
+    fi
+}
+
+# Detect test framework
+detect_framework() {
+    local root="$1"
+
+    # Python: pytest
+    if [[ -f "$root/pyproject.toml" ]] || [[ -f "$root/pytest.ini" ]] || [[ -f "$root/setup.cfg" ]]; then
+        if grep -q "pytest" "$root/pyproject.toml" 2>/dev/null || \
+           grep -q "pytest" "$root/setup.cfg" 2>/dev/null || \
+           [[ -f "$root/pytest.ini" ]]; then
+            echo "pytest"
+            return
+        fi
+    fi
+
+    # Check for test directories that suggest pytest
+    if [[ -d "$root/tests" ]] || [[ -d "$root/test" ]]; then
+        if ls "$root"/tests/*.py &>/dev/null || ls "$root"/test/*.py &>/dev/null; then
+            if has_cmd pytest; then
+                echo "pytest"
+                return
+            fi
+        fi
+    fi
+
+    # JavaScript/TypeScript: vitest (check first as it's newer)
+    if has_npm_dep "$root" "vitest"; then
+        echo "vitest"
+        return
+    fi
+
+    # JavaScript/TypeScript: jest
+    if has_npm_dep "$root" "jest" || [[ -f "$root/jest.config.js" ]] || [[ -f "$root/jest.config.ts" ]]; then
+        echo "jest"
+        return
+    fi
+
+    # JavaScript: mocha
+    if has_npm_dep "$root" "mocha" || [[ -f "$root/.mocharc.js" ]] || [[ -f "$root/.mocharc.json" ]]; then
+        echo "mocha"
+        return
+    fi
+
+    # Go
+    if [[ -f "$root/go.mod" ]]; then
+        echo "go"
+        return
+    fi
+
+    # Rust
+    if [[ -f "$root/Cargo.toml" ]]; then
+        echo "cargo"
+        return
+    fi
+
+    # Elixir
+    if [[ -f "$root/mix.exs" ]]; then
+        echo "mix"
+        return
+    fi
+
+    echo "unknown"
+}
+
+# Main
+main() {
+    local root
+    root=$(find_root)
+
+    echo -e "${BLUE}Detecting test framework in ${root}...${NC}"
+
+    local framework
+    framework=$(detect_framework "$root")
+
+    case "$framework" in
+        pytest)
+            run_pytest "$root"
+            ;;
+        jest)
+            run_jest "$root"
+            ;;
+        vitest)
+            run_vitest "$root"
+            ;;
+        mocha)
+            run_mocha "$root"
+            ;;
+        go)
+            run_go_test "$root"
+            ;;
+        cargo)
+            run_cargo_test "$root"
+            ;;
+        mix)
+            run_mix_test "$root"
+            ;;
+        *)
+            echo -e "${RED}Could not detect test framework.${NC}"
+            echo -e "${YELLOW}Supported frameworks: pytest, jest, vitest, mocha, go, cargo, mix${NC}"
+            echo ""
+            echo "Looking for:"
+            echo "  - pyproject.toml/pytest.ini (pytest)"
+            echo "  - package.json with jest/vitest/mocha"
+            echo "  - go.mod (Go)"
+            echo "  - Cargo.toml (Rust)"
+            echo "  - mix.exs (Elixir)"
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"

@@ -1,0 +1,103 @@
+# ~/.bashrc - Interactive shell configuration
+# Sourced by bash_profile for login shells and directly for non-login interactive shells
+
+#
+# Paths
+#
+export PATH="$HOME/.local/bin:$PATH"
+export PATH="$HOME/.composer/vendor/bin:$PATH"
+export PATH="/usr/local/bin:/usr/local/sbin:$PATH"
+export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:$PATH"
+
+#
+# Editors
+#
+export EDITOR='vim'
+export VISUAL='vim'
+export PAGER='less'
+
+# Use nvim instead of vim/vi when available
+if command -v nvim &>/dev/null; then
+  alias vim="nvim"
+  alias vi="nvim"
+  export EDITOR='nvim'
+  export VISUAL='nvim'
+elif command -v vim &>/dev/null; then
+  alias vi="vim"
+fi
+
+#
+# Language
+#
+if [[ -z "$LANG" ]]; then
+  export LC_ALL='en_US.UTF-8'
+  export LANG='en_US.UTF-8'
+fi
+
+#
+# History
+#
+HISTCONTROL=ignoreboth:erasedups
+HISTSIZE=                    # Unlimited
+HISTFILESIZE=                # Unlimited
+HISTTIMEFORMAT="%Y-%m-%d %H:%M.%S | "
+
+#
+# Shell options
+#
+shopt -s histappend cmdhist lithist histreedit histverify globstar direxpand \
+  cdspell checkwinsize dotglob extglob
+
+#
+# Misc
+#
+export QUOTING_STYLE=literal  # Fix ls quoting names with spaces
+export GPG_TTY=$(tty)         # GPG signing support
+
+# Go
+if [[ -d "$HOME/go" ]]; then
+  export GOPATH="$HOME/go"
+  export PATH="${GOPATH}/bin:${PATH}"
+fi
+
+#
+# Less
+#
+export LESS='-F -g -i -M -R -S -w -X -z-4'
+export CLICOLOR=1
+export LSCOLORS=exfxcxdxbxegedabagacad
+
+#
+# NVM
+#
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
+
+#
+# Completions
+#
+[[ -x /opt/homebrew/bin/terraform ]] && complete -C /opt/homebrew/bin/terraform terraform
+[[ -x /opt/homebrew/bin/terragrunt ]] && complete -C /opt/homebrew/bin/terragrunt terragrunt
+[[ -x /opt/homebrew/bin/vault ]] && complete -C /opt/homebrew/bin/vault vault
+
+#
+# Starship prompt
+#
+command -v starship >/dev/null && eval "$(starship init bash)"
+
+#
+# Source all files from ~/.config/bash/conf.d/
+#
+if [[ -d "${XDG_CONFIG_HOME:-$HOME/.config}/bash/conf.d" ]]; then
+  for file in "${XDG_CONFIG_HOME:-$HOME/.config}/bash/conf.d"/*.bash; do
+    [[ -r "$file" ]] && source "$file"
+  done
+  unset file
+fi
+
+#
+# SDKMAN - THIS MUST BE AT THE END OF THE FILE FOR SDKMAN TO WORK!!!
+#
+export SDKMAN_DIR="$HOME/.sdkman"
+[[ -s "$SDKMAN_DIR/bin/sdkman-init.sh" ]] && source "$SDKMAN_DIR/bin/sdkman-init.sh"
