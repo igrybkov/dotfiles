@@ -10,6 +10,7 @@ A directory is only considered a profile if it contains a config.yml file.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +29,9 @@ def discover_profiles(profiles_dir: Path) -> list[ProfileInfo]:
     - profiles/{repo}/{profile}/config.yml (nested level)
     - profiles/{dir}/{repo}/{profile}/config.yml (deep nested level)
 
+    Demo mode (DEMO=1): Skips profiles under the "private" directory to avoid
+    exposing private information in demos and documentation.
+
     Args:
         profiles_dir: Path to the profiles directory
 
@@ -39,8 +43,14 @@ def discover_profiles(profiles_dir: Path) -> list[ProfileInfo]:
     if not profiles_dir.exists():
         return profiles
 
+    demo_mode = os.environ.get("DEMO", "").strip() in ("1", "true", "True", "TRUE")
+
     for level1 in sorted(profiles_dir.iterdir()):
         if not level1.is_dir() or level1.name.startswith("."):
+            continue
+
+        # Skip private profiles in demo mode
+        if demo_mode and level1.name == "private":
             continue
 
         config_file = level1 / "config.yml"
