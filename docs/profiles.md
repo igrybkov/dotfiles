@@ -117,14 +117,6 @@ ssh_client_config:
     remote_user: myuser
     identity_file: ~/.ssh/example.pub
 
-# Git configuration block (injected into ~/.config/git/local.gitconfig)
-git_config_block_content: |
-  [alias]
-  my-alias = !echo "profile-specific alias"
-
-  [includeIf "hasconfig:remote.*.url:git@github.com:myorg/**"]
-  path = ~/.config/git/myorg.gitconfig
-
 # YAML config settings (merged into existing files)
 yaml_configs:
   - file: ~/.config/hive/hive.yml

@@ -205,10 +205,6 @@ ssh_client_config:
     identity_file: ~/.ssh/company_key
     remote_user: myuser
 
-git_config_block_content: |
-  [user]
-  name = Your Name
-  email = you@company.com
 ```
 
 ### Creating a profile
