@@ -1,0 +1,61 @@
+#compdef prettier
+
+# zsh completion for prettier
+# https://prettier.io/
+# prettier --help
+
+__prettier() {
+	_arguments \
+		--arrow-parens"[Include parentheses around a sole arrow function parameter. Defaults to always.]:arrow-parens:(always avoid)" \
+		--bracket-same-line"[Put > of opening tags on the last line instead of on a new line. Defaults to false.]" \
+		--cache"[Only format changed files. Cannot use with --stdin-filepath. Defaults to false.]" \
+		--cache-strategy"[Strategy for the cache to use for detecting changed files.]:cache-strategy:(metadata content)" \
+		--compiler"[The Solidity compiler version to help us avoid critical errors in format for the wrong version.]" \
+		--config"[<path> Path to a Prettier configuration file (.prettierrc, package.json, prettier.config.js).]" \
+		--config-precedence"[Define in which order config files and CLI options should be evaluated. Defaults to cli-override.]:config-precedence:(cli-override file-override prefer-file)" \
+		--cursor-offset"[<int>Print (to stderr) where a cursor at the given position would move to after formatting. This option cannot be used with --range-start and --range-end. Defaults to -1.]" \
+		--embedded-language-formatting"[Control how Prettier formats quoted code embedded in the file. Defaults to auto.]:embedded-language-formatting:(auto off)" \
+		--end-of-line"[Which end of line characters to apply. Defaults to lf.]:end-of-line:(lf crlf cr auto)" \
+		--explicit-types"[Change when type aliases are used. Defaults to always.]:explicit-types:(always|never|preserve)" \
+		--file-info"[<path>Extract the following info (as JSON) for a given file path.]" \
+		--find-config-path"<path> [Find and print the path to a configuration file for the given input file.]" \
+		--html-whitespace-sensitivity"[How to handle whitespaces in HTML. Defaults to css.]:html-whitespace-sensitivity:(css strict ignore)" \
+		--ignore-path"[<path> Path to a file with patterns describing files to ignore. Defaults to .prettierignore.]" \
+		--insert-pragma"[Insert @format pragma into file's first docblock comment. Defaults to false.]" \
+		--jsx-single-quote"[Use single quotes in JSX. Defaults to false.]" \
+		--loglevel"[What level of logs to report. Defaults to log.]:loglevel:(silent error warn log debug)" \
+		--no-bracket-spacing"[Do not print spaces between brackets.]" \
+		--no-color"[Do not colorize error messages.]" \
+		--no-config"[Do not look for a configuration file.]" \
+		--no-editorconfig"[Don't take .editorconfig into account when parsing configuration.]" \
+		--no-error-on-unmatched-pattern"[Prevent errors when pattern is unmatched.]" \
+		--no-plugin-search"[Disable plugin autoloading.]" \
+		--no-semi"[Do not print semicolons, except at the beginning of lines which may need them.]" \
+		--parser"[Which parser to use.]:parser:(flow babel babel-flow babel-ts typescript acorn espree meriyah css less scss json json5 json-stringify graphql markdown mdx vue yaml glimmer html angular lwc solidity-parse)" \
+		--plugin"[<path> Add a plugin. Multiple plugins can be passed as separate --plugins. Defaults to.]" \
+		--plugin-search-dir"[<path> Custom directory that contains prettier plugins in node_modules subdirectory. Overrides default behavior when plugins are searched relatively to the location of Prettier.]" \
+		--print-width"[<int>The line length where Prettier will try wrap. Defaults to 80.]" \
+		--prose-wrap"[How to wrap prose. Defaults to preserve.]:prose-wrap:(always never preserve)" \
+		--quote-props"[Change when properties in objects are quoted. Defaults to as-needed.]:quote-props:(as-needed|consistent|preserve)" \
+		--range-end"[<int>Format code ending at a given character offset (exclusive). The range will extend forwards to the end of the selected statement. This option cannot be used with --cursor-offset. Defaults to Infinity.]" \
+		--range-start"[<int>Format code starting at a given character offset.]" \
+		--require-pragma"[Require either '@prettier' or '@format' to be present in the file's first docblock comment in order for it to be formatted. Defaults to false.]" \
+		--single-attribute-per-line"[Enforce single attribute per line in HTML, Vue and JSX. Defaults to false.]" \
+		--single-quote"[Use single quotes instead of double quotes. Defaults to false.]" \
+		--stdin-filepath"[<path> Path to the file to pretend that stdin comes from.]" \
+		--support-info"[Print support information as JSON.]" \
+		--tab-width"[<int>Number of spaces per indentation level. Defaults to 2.]" \
+		--trailing-comma"[Print trailing commas wherever possible when multi-line. Defaults to es5.]:trailing-comma:(es5 none all)" \
+		--use-tabs"[Indent with tabs instead of spaces. Defaults to false.]" \
+		--vue-indent-script-and-style"[Indent script and style tags in Vue files. Defaults to false.]" \
+		--with-node-modules"[Process files inside 'node_modules' directory.]" \
+		{-c,--check}"[Check if the given files are formatted, print a human-friendly summary.]" \
+		{-h,--help}"[<flag> Show CLI usage, or details about the given flag. Example: --help write]" \
+		{-l,--list-different}"[Print the names of files that are different from Prettier's formatting (see also --check).]" \
+		{-u,--ignore-unknown}"[Ignore unknown files.]" \
+		{-v,--version}"[Print Prettier version.]" \
+		{-w,--write}"[Edit files in-place. (Beware!)]" \
+		'*:filename:_files'
+}
+
+__prettier

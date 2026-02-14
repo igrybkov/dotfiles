@@ -1,0 +1,25 @@
+---
+- name: Verify gem role
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Check colorize gem is installed
+      ansible.builtin.command:
+        cmd: gem list colorize -i
+      register: colorize_check
+      changed_when: false
+      failed_when: colorize_check.rc != 0
+
+    - name: Check rake gem is installed
+      ansible.builtin.command:
+        cmd: gem list rake -i
+      register: rake_check
+      changed_when: false
+      failed_when: rake_check.rc != 0
+
+    - name: Assert gems are installed
+      ansible.builtin.assert:
+        that:
+          - colorize_check.rc == 0
+          - rake_check.rc == 0
+        fail_msg: "Expected gems should be installed"

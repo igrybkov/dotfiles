@@ -1,0 +1,37 @@
+---
+- name: Verify - Check mas role error handling
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Check that mas errors cache file exists
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/.cache/mas_errors.json"
+      register: mas_errors_file
+
+    - name: Assert mas errors file was created
+      ansible.builtin.assert:
+        that:
+          - mas_errors_file.stat.exists
+        fail_msg: "mas_errors.json should exist when mas upgrade fails"
+        success_msg: "mas_errors.json was created as expected"
+
+    - name: Read mas errors file content
+      ansible.builtin.slurp:
+        src: "{{ playbook_dir }}/.cache/mas_errors.json"
+      register: mas_errors_content
+
+    - name: Parse mas errors JSON
+      ansible.builtin.set_fact:
+        mas_errors: "{{ mas_errors_content.content | b64decode | from_json }}"
+
+    - name: Assert errors contain timeout message
+      ansible.builtin.assert:
+        that:
+          - mas_errors | length > 0
+          - "'timeout' in (mas_errors | join(' ') | lower) or 'upgrade' in (mas_errors | join(' ') | lower)"
+        fail_msg: "mas_errors should contain timeout/upgrade error: {{ mas_errors }}"
+        success_msg: "mas errors correctly captured: {{ mas_errors }}"
+
+    - name: Verify role completed (we can run tasks after it)
+      ansible.builtin.debug:
+        msg: "Role completed successfully despite mas upgrade failure - error handling works!"

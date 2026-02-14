@@ -1,0 +1,22 @@
+---
+extends: default
+
+ignore: |
+  .github/workflows/ci.yml
+  .venv/
+  profiles/common/files/dotfiles/vim/bundle/
+  files/amethyst/amethyst.yml
+  secrets/
+
+rules:
+  line-length: disable
+  comments:
+    ignore-shebangs: true
+    require-starting-space: true
+    min-spaces-from-content: 1
+  comments-indentation: false
+  braces:
+    max-spaces-inside: 1
+  octal-values:
+    forbid-implicit-octal: true
+    forbid-explicit-octal: true

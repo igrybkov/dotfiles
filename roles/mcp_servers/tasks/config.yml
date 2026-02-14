@@ -1,0 +1,38 @@
+---
+# MCP Servers Role - Configuration File Management
+
+# Build a list of all config files we need to update
+- name: "[ MCP] Collect all target config files"
+  ansible.builtin.set_fact:
+    mcp_all_config_files: >-
+      {%- set files = {} -%}
+      {%- for name, server in mcp_servers.items() -%}
+        {%- if server.config_files is defined -%}
+          {%- for cf in server.config_files -%}
+            {%- set path = cf.path | replace('~', lookup('env', 'HOME')) -%}
+            {%- set state = cf.state | default('present') -%}
+            {%- if path not in files -%}
+              {%- set _ = files.update({path: []}) -%}
+            {%- endif -%}
+            {%- set _ = files[path].append({'name': name, 'server': server, 'state': state}) -%}
+          {%- endfor -%}
+        {%- else -%}
+          {%- for path in mcp_default_config_files -%}
+            {%- set path = path | replace('~', lookup('env', 'HOME')) -%}
+            {%- set state = server.state | default('present') -%}
+            {%- if path not in files -%}
+              {%- set _ = files.update({path: []}) -%}
+            {%- endif -%}
+            {%- set _ = files[path].append({'name': name, 'server': server, 'state': state}) -%}
+          {%- endfor -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ files }}
+
+# Process each config file
+- name: "[ MCP] Update MCP configuration files"
+  ansible.builtin.include_tasks: config_file.yml
+  loop: "{{ mcp_all_config_files | dict2items }}"
+  loop_control:
+    loop_var: config_file
+    label: "{{ config_file.key }}"

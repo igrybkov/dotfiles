@@ -1,0 +1,11 @@
+---
+- name: Prepare npm role test
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Install Node.js and npm
+      ansible.builtin.raw: >
+        apt-get update -qq &&
+        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq
+        python3 nodejs npm
+      changed_when: false

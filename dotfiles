@@ -1,0 +1,152 @@
+#!/usr/bin/env bash
+set -e
+
+# Define log function
+log() {
+  if [ -z "$1" ]; then
+    echo "" >/dev/stderr
+    return
+  fi
+  echo "[dotfiles] $1" >/dev/stderr
+}
+
+# Fast path for shell completion - skip expensive setup
+if [ -n "${_DOTFILES_COMPLETE}" ]; then
+  DOTFILES_DIR="$(cd -- "$(dirname "$(realpath "$0")")" >/dev/null 2>&1; pwd -P)"
+  cd "${DOTFILES_DIR}" || exit 1
+  VENV_PYTHON="${DOTFILES_DIR}/.venv/bin/python"
+  if [ -x "${VENV_PYTHON}" ]; then
+    exec "${VENV_PYTHON}" "${DOTFILES_DIR}/bin/dotfiles-cli.py" "$@"
+  else
+    exec env -u VIRTUAL_ENV mise x -- uv run --managed-python --directory="${DOTFILES_DIR}" ./bin/dotfiles-cli.py "$@"
+  fi
+fi
+
+# Deactivate any active virtual environment
+if command -v deactivate 1>/dev/null 2>&1; then
+  deactivate
+fi
+
+# Unset VIRTUAL_ENV if it exists
+if [ -n "${VIRTUAL_ENV}" ]; then
+  unset VIRTUAL_ENV
+fi
+
+# Get full directory path of this wrapper
+DOTFILES_DIR="$(
+  cd -- "$(dirname "$(realpath "$0")")" >/dev/null 2>&1
+  pwd -P
+)"
+
+# Update PATH to include the repo's bin directory
+export PATH="${DOTFILES_DIR}/bin:$PATH"
+
+# Change to the dotfiles directory
+cd "${DOTFILES_DIR}" || exit 1
+
+# Staleness check: skip preparation if nothing has changed since last run
+PREP_STAMP="${DOTFILES_DIR}/.cache/.prep_stamp"
+PREP_WATCHED_FILES=(
+  "${DOTFILES_DIR}/uv.lock"
+  "${DOTFILES_DIR}/mise.toml"
+  "${DOTFILES_DIR}/.pre-commit-config.yaml"
+  "${DOTFILES_DIR}/pyproject.toml"
+)
+
+needs_preparation() {
+  # Always prepare if stamp doesn't exist
+  [ ! -f "${PREP_STAMP}" ] && return 0
+  # Always prepare if --force-prep is passed
+  # shellcheck disable=SC2154
+  [ "${DOTFILES_FORCE_PREP}" = "1" ] && return 0
+  # Check if any watched file is newer than the stamp
+  for f in "${PREP_WATCHED_FILES[@]}"; do
+    if [ -f "$f" ] && [ "$f" -nt "${PREP_STAMP}" ]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+touch_prep_stamp() {
+  mkdir -p "$(dirname "${PREP_STAMP}")"
+  touch "${PREP_STAMP}"
+}
+
+# Check for --force-prep flag and strip it from args
+args=()
+for arg in "$@"; do
+  if [ "$arg" = "--force-prep" ]; then
+    DOTFILES_FORCE_PREP=1
+  else
+    args+=("$arg")
+  fi
+done
+set -- "${args[@]}"
+
+if needs_preparation; then
+  # initialize empty output variable
+  DELAYED_OUTPUT=""
+
+  # shellcheck disable=SC2329
+  function print_output() {
+    # Print output only if it's not empty
+    # shellcheck disable=SC2317
+    if [ -n "$DELAYED_OUTPUT" ]; then
+      # shellcheck disable=SC2317
+      echo "$DELAYED_OUTPUT"
+    fi
+  }
+  # shellcheck disable=SC2329
+  function sigint_handler() {
+    # shellcheck disable=SC2317
+    exit 1
+  }
+
+  trap print_output EXIT
+  trap sigint_handler SIGINT
+
+  # Measure runtime of preparation steps to decide whether to print what happened
+  start="$(date +%s)"
+
+  # Execute preparation steps and capture output
+  DELAYED_OUTPUT="$({
+    log "Installing dependencies..."
+    MISE_EXPERIMENTAL=true mise upgrade
+    log
+
+    # Use "mise" to create Python Virtual Environment using UV
+    log "Setting up Python environment..."
+    env -u VIRTUAL_ENV mise x -- uv sync --managed-python --frozen --directory="${DOTFILES_DIR}"
+    log
+
+    log "Installing pre-commit hooks..."
+    env -u VIRTUAL_ENV mise x -- uv run --managed-python --directory="${DOTFILES_DIR}" pre-commit install --install-hooks
+  } 2>&1)"
+
+  end="$(date +%s)"
+
+  runtime="$((end - start))"
+
+  # If preparation took less than 2 seconds, ignore the output
+  if [ $runtime -lt 2 ]; then
+    DELAYED_OUTPUT=""
+  # Otherwise, print the captured output
+  else
+    echo "$DELAYED_OUTPUT"
+    log
+    DELAYED_OUTPUT=""
+  fi
+
+  # Mark preparation as done
+  touch_prep_stamp
+fi
+
+# Run the dotfiles CLI with passed arguments
+# Use venv python directly if available (faster), otherwise fall back to mise x -- uv run
+VENV_PYTHON="${DOTFILES_DIR}/.venv/bin/python"
+if [ -x "${VENV_PYTHON}" ]; then
+  exec "${VENV_PYTHON}" "${DOTFILES_DIR}/bin/dotfiles-cli.py" "$@"
+else
+  exec env -u VIRTUAL_ENV mise x -- uv run --managed-python --directory="${DOTFILES_DIR}" ./bin/dotfiles-cli.py "$@"
+fi

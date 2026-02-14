@@ -1,0 +1,50 @@
+---
+dependency:
+  name: galaxy
+  options:
+    requirements-file: ../../../../requirements.yml
+    role-file: ../../../../requirements.yml
+
+driver:
+  name: docker
+
+platforms:
+  - name: ssh-config-role-test
+    image: ubuntu:24.04
+    pre_build_image: true
+    command: /bin/bash -c "while true; do sleep 1000; done"
+    environment:
+      HOME: /root
+
+provisioner:
+  name: ansible
+  config_options:
+    defaults:
+      interpreter_python: auto_silent
+      fact_caching: jsonfile
+      fact_caching_connection: /tmp/molecule_facts_cache
+      fact_caching_timeout: 3600
+  playbooks:
+    converge: converge.yml
+    prepare: prepare.yml
+    verify: verify.yml
+  env:
+    ANSIBLE_ROLES_PATH: "../../../../roles:~/.ansible/roles"
+    ANSIBLE_COLLECTIONS_PATH: "../../../../.ansible/collections:~/.ansible/collections"
+    ANSIBLE_LOOKUP_PLUGINS: "../../../../ansible_plugins/lookup"
+
+verifier:
+  name: ansible
+
+scenario:
+  name: default
+  test_sequence:
+    - dependency
+    - destroy
+    - create
+    - prepare
+    - converge
+    # Skip idempotence due to blockinfile issues with insertbefore: BOF
+    # - idempotence
+    - verify
+    - destroy

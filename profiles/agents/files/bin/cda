@@ -1,0 +1,125 @@
+#!/usr/bin/env bash
+# cda - Quick jump to worktree (outputs path for cd)
+#
+# Usage:
+#   cd $(cda)              # Fuzzy search all worktrees
+#   cd $(cda main)         # Go to main repo
+#   cd $(cda feature-auth) # Go to feature-auth worktree
+#   cd $(cda 2)            # Legacy: go to agent-2 worktree
+#
+# In fish shell, a wrapper function handles the cd automatically.
+# In other shells, use: cd $(cda) or cd $(cda <worktree>)
+#
+# Note: This script outputs the path. Use with cd or a shell wrapper.
+
+set -euo pipefail
+
+# Check if current directory exists (may be deleted worktree)
+current_dir=$(pwd 2>/dev/null)
+if [[ ! -d "$current_dir" ]]; then
+    # Try to find a fallback directory from worktree path patterns
+    fallback_dir=""
+
+    # Pattern 1: Local mode - {main_repo}/.worktrees/{branch}
+    if [[ "$current_dir" == */.worktrees/* ]]; then
+        fallback_dir="${current_dir%%/.worktrees/*}"
+    # Pattern 2: Home mode - ~/.git-worktrees/{repo-name}-{branch}
+    elif [[ "$current_dir" == "$HOME/.git-worktrees/"* ]]; then
+        fallback_dir="$HOME/.git-worktrees"
+    fi
+
+    if [[ -n "$fallback_dir" && -d "$fallback_dir" ]]; then
+        echo "Current worktree deleted, switching to: $fallback_dir" >&2
+        cd "$fallback_dir" || exit 1
+        # Continue with normal cda flow
+    else
+        echo "Current directory no longer exists" >&2
+        echo "Run: cd ~ && cda" >&2
+        exit 1
+    fi
+fi
+
+# Check dependencies
+if ! command -v hive &>/dev/null; then
+    echo "hive not found (run 'dotfiles install' first)" >&2
+    exit 1
+fi
+
+target="${1:-}"
+
+# No argument - fuzzy search all worktrees
+if [[ -z "$target" ]]; then
+    if ! command -v fzf &>/dev/null; then
+        echo "fzf not installed, please specify worktree name" >&2
+        exit 1
+    fi
+
+    # Build list of worktrees for fzf
+    worktree_list=$(hive wt list 2>/dev/null) || {
+        echo "Failed to list worktrees" >&2
+        exit 1
+    }
+
+    # Find max name length for alignment
+    max_len=4
+    while IFS=: read -r name path; do
+        len=${#name}
+        ((len > max_len)) && max_len=$len
+    done <<< "$worktree_list"
+
+    # Format choices with alignment
+    choices=""
+    while IFS=: read -r name path; do
+        choices+=$(printf '%-'"$max_len"'s  %s\n' "$name" "$path")
+    done <<< "$worktree_list"
+
+    # Run fzf
+    selected=$(echo "$choices" | fzf \
+        --height=40% \
+        --reverse \
+        --border \
+        --header="Select worktree" \
+        --prompt="Branch> " \
+        2>/dev/tty) || exit 1
+
+    if [[ -z "$selected" ]]; then
+        exit 1
+    fi
+
+    # Extract name and find path
+    selected_name=$(echo "$selected" | awk '{print $1}')
+    while IFS=: read -r name path; do
+        if [[ "$name" == "$selected_name" ]]; then
+            echo "$path"
+            exit 0
+        fi
+    done <<< "$worktree_list"
+
+    exit 1
+fi
+
+# "1" or "main" - output main repo
+if [[ "$target" == "1" || "$target" == "main" ]]; then
+    hive wt parent
+    exit 0
+fi
+
+# Try to get worktree path
+worktree_path=$(hive wt path "$target" 2>/dev/null)
+if [[ -d "$worktree_path" ]]; then
+    echo "$worktree_path"
+    exit 0
+fi
+
+# Legacy support: try agent-N format
+if [[ "$target" =~ ^[0-9]+$ ]]; then
+    agent_path=$(hive wt path "agent-$target" 2>/dev/null)
+    if [[ -d "$agent_path" ]]; then
+        echo "$agent_path"
+        exit 0
+    fi
+fi
+
+echo "Worktree '$target' not found" >&2
+echo "Create it with: hive wt ensure <agent-num>" >&2
+exit 1

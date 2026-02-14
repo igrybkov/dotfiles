@@ -1,0 +1,133 @@
+---
+# MCP Servers Role - Main Tasks
+# Can run per-profile or aggregated from playbook
+# Input validation is handled by argument_specs in meta/argument_specs.yml
+# Supports two types of servers:
+#   - Command-based (stdio): uses 'command' field, requires command availability check
+#   - URL-based (http/sse): uses 'url' field, no command check needed
+
+- name: "[🤖 MCP] Configure MCP servers"
+  when: mcp_servers | default([]) | length > 0
+  block:
+    - name: "[🤖 MCP] Clone/update git repositories"
+      ansible.builtin.include_tasks: git_repos.yml
+
+    # Separate servers into command-based and URL-based
+    - name: "[🤖 MCP] Identify command-based servers"
+      ansible.builtin.set_fact:
+        mcp_command_servers: "{{ mcp_servers | selectattr('command', 'defined') | list }}"
+        mcp_url_servers: "{{ mcp_servers | selectattr('url', 'defined') | list }}"
+
+    - name: "[🤖 MCP] Check command availability for command-based servers"
+      ansible.builtin.shell:
+        # Check if it's a path (contains /) or a command name
+        cmd: >-
+          if [[ {{ item.command | expanduser | quote }} == */* ]]; then
+            [[ -x {{ item.command | expanduser | quote }} ]]
+          else
+            command -v {{ item.command | expanduser | quote }} >/dev/null 2>&1
+          fi
+        executable: /bin/bash
+      register: mcp_command_checks
+      loop: "{{ mcp_command_servers }}"
+      loop_control:
+        label: "{{ item.name }}: {{ item.command }}"
+      changed_when: false
+      failed_when: false
+      when: mcp_command_servers | length > 0
+
+    - name: "[🤖 MCP] Build list of available command-based servers"
+      ansible.builtin.set_fact:
+        mcp_servers_available: >-
+          {{ mcp_servers_available | default([]) + [item.item] }}
+      loop: "{{ mcp_command_checks.results | default([]) }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+      when:
+        - mcp_command_checks.results is defined
+        - item.rc == 0
+
+    - name: "[🤖 MCP] Warn about command-based servers with missing commands"
+      ansible.builtin.debug:
+        msg: "WARNING: Skipping MCP server '{{ item.item.name }}' - command '{{ item.item.command }}' not found"
+      loop: "{{ mcp_command_checks.results | default([]) }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+      when:
+        - mcp_command_checks.results is defined
+        - item.rc != 0
+
+    # URL-based servers don't need command checks - add them directly
+    - name: "[🤖 MCP] Add URL-based servers to available list"
+      ansible.builtin.set_fact:
+        mcp_servers_available: >-
+          {{ mcp_servers_available | default([]) + [item] }}
+      loop: "{{ mcp_url_servers }}"
+      loop_control:
+        label: "{{ item.name }}: {{ item.url }}"
+      when: mcp_url_servers | length > 0
+
+    - name: "[🤖 MCP] Set empty list if no servers available"
+      ansible.builtin.set_fact:
+        mcp_servers_available: []
+      when: mcp_servers_available is not defined
+
+    - name: "[🤖 MCP] Initialize config files dictionary"
+      ansible.builtin.set_fact:
+        mcp_config_files_dict: {}
+      when: mcp_servers_available | length > 0
+
+    - name: "[🤖 MCP] Add config files list to each server"
+      ansible.builtin.set_fact:
+        mcp_servers_with_config_files: >-
+          {%- set result = mcp_servers_with_config_files | default([]) -%}
+          {%- set config_files_normalized = [] -%}
+          {%- if item.config_files is defined -%}
+            {%- if item.config_files | first is mapping -%}
+              {# Already in {path: ..., state: ...} format #}
+              {%- set config_files_normalized = item.config_files -%}
+            {%- else -%}
+              {# List of strings - convert to mapping format #}
+              {%- for cf in item.config_files -%}
+                {%- set _ = config_files_normalized.append({'path': cf}) -%}
+              {%- endfor -%}
+            {%- endif -%}
+          {%- else -%}
+            {# Use defaults - convert to mapping format #}
+            {%- for cf in mcp_default_config_files -%}
+              {%- set _ = config_files_normalized.append({'path': cf}) -%}
+            {%- endfor -%}
+          {%- endif -%}
+          {{ result + [item | combine({'_config_files': config_files_normalized})] }}
+      loop: "{{ mcp_servers_available }}"
+      loop_control:
+        label: "{{ item.name }}"
+      when: mcp_servers_available | length > 0
+
+    - name: "[🤖 MCP] Build config files structure"
+      ansible.builtin.set_fact:
+        mcp_config_files_dict: >-
+          {{
+            mcp_config_files_dict | combine({
+              item.1.path: (mcp_config_files_dict.get(item.1.path, []) + [{
+                'name': item.0.name,
+                'server': item.0,
+                'state': item.1.state | default('present')
+              }])
+            })
+          }}
+      loop: "{{ mcp_servers_with_config_files | subelements('_config_files', skip_missing=True) }}"
+      loop_control:
+        label: "{{ item.0.name }} -> {{ item.1.path }}"
+      when: mcp_servers_available | length > 0
+
+    - name: "[🤖 MCP] Update MCP configuration files"
+      ansible.builtin.include_tasks: config_file.yml
+      loop: "{{ mcp_config_files_dict | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+      vars:
+        config_file:
+          key: "{{ item.key }}"
+          value: "{{ item.value }}"
+      when: mcp_servers_available | length > 0

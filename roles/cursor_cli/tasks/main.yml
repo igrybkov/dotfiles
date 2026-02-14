@@ -1,0 +1,31 @@
+---
+# Cursor CLI installation
+# Variables are passed from the playbook (pre-aggregated from all profiles)
+# Input validation is handled by argument_specs in meta/argument_specs.yml
+
+- name: "[🖥️ cursor] Check if cursor CLI (agent) is in PATH"
+  tags: [cursor-cli]
+  ansible.builtin.command: which agent
+  register: cursor_cli_check
+  changed_when: false
+  failed_when: false
+  when: install_cursor_cli | default(false)
+
+- name: "[🖥️ cursor] Install cursor CLI via install script"
+  tags: [cursor-cli]
+  ansible.builtin.shell: |
+    set -o pipefail
+    curl https://cursor.com/install -fsS | bash
+  changed_when: true
+  when:
+    - install_cursor_cli | default(false)
+    - cursor_cli_check.rc != 0
+
+- name: "[🖥️ cursor] Upgrade cursor CLI"
+  tags: [cursor-cli]
+  ansible.builtin.command: agent upgrade
+  register: cursor_upgrade_result
+  when:
+    - install_cursor_cli | default(false)
+    - cursor_cli_check.rc == 0
+  changed_when: "'Already up to date' not in cursor_upgrade_result.stderr"

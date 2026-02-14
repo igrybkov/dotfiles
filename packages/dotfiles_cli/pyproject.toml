@@ -1,0 +1,41 @@
+[build-system]
+build-backend = "hatchling.build"
+requires = [ "hatchling" ]
+
+[project]
+name = "dotfiles-cli"
+version = "0.1.0"
+description = "CLI for managing dotfiles with Ansible"
+requires-python = "~=3.14.0"
+classifiers = [
+  "Private :: Do Not Upload",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+]
+dependencies = [
+  "ansible-runner~=2.4.2",
+  "click~=8.3.1",
+  "click-aliases~=1.0.1",
+  "dotfiles-profile-discovery",
+  "prompt-toolkit>=3.0.52",
+  "pydantic-settings~=2.12.0",
+  "python-dotenv~=1.2.1",
+  "pyyaml>=6",
+  "rich~=14.3.1",
+  "ruamel-yaml>=0.18",
+]
+
+scripts.dotfiles-cli = "dotfiles_cli:cli"
+
+[tool.hatch.build.targets.wheel]
+packages = [ "src/dotfiles_cli" ]
+
+[tool.hatch.build.targets.sdist]
+include = [ "src/**/*.py" ]
+
+[tool.uv.sources]
+dotfiles-profile-discovery = { workspace = true }

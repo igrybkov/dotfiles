@@ -1,0 +1,73 @@
+---
+# Clean up dead symlinks that point to our dotfiles repo
+# Only checks symlinks pointing to playbook_dir - much faster than scanning everything
+#
+# Parameters:
+#   cleanup_dir: Directory to clean (required)
+#   max_depth: Maximum depth for cleanup (default: 10)
+#
+# Optional:
+#   _dotfiles_cleanup_match_path: Override path to match symlinks against
+#                                 (defaults to playbook_dir, used for testing)
+
+- name: "[🔗 dotfiles] Set cleanup match path"
+  ansible.builtin.set_fact:
+    _cleanup_match_path: "{{ _dotfiles_cleanup_match_path | default(playbook_dir) }}"
+
+- name: "[🔗 dotfiles] Check if cleanup directory exists"
+  ansible.builtin.stat:
+    path: "{{ cleanup_dir }}"
+  register: cleanup_dir_check
+
+- name: "[🔗 dotfiles] Clean up dead symlinks pointing to dotfiles repo"
+  when: cleanup_dir_check.stat.exists and cleanup_dir_check.stat.isdir
+  block:
+    # Only find symlinks that point to our dotfiles repo
+    # For home dir: also filter to dotfiles only (paths starting with .)
+    # This is much faster than scanning everything
+    - name: "[🔗 dotfiles] Find dead symlinks pointing to dotfiles repo"
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          {% if cleanup_dir == _home_dir %}
+          find . -maxdepth {{ max_depth | default(10) }} -path './.*' -type l -lname '{{ _cleanup_match_path }}/*' 2>/dev/null | while read -r link; do [ ! -e "$link" ] && echo "$link"; done | head -500
+          {% else %}
+          find . -maxdepth {{ max_depth | default(10) }} -type l -lname '{{ _cleanup_match_path }}/*' 2>/dev/null | while read -r link; do [ ! -e "$link" ] && echo "$link"; done | head -500
+          {% endif %}
+        chdir: "{{ cleanup_dir }}"
+        executable: /bin/bash
+      register: dead_symlinks
+      changed_when: false
+      failed_when: false
+
+    - name: "[🔗 dotfiles] Delete dead symlinks"
+      ansible.builtin.file:
+        path: "{{ cleanup_dir }}/{{ item }}"
+        state: absent
+      loop: "{{ dead_symlinks.stdout_lines | default([]) }}"
+      when: dead_symlinks.stdout_lines | default([]) | length > 0
+
+    # Only clean empty directories inside paths we manage (not the entire home dir)
+    # Exclude 'projects' directory which contains Claude Code's tool-results (auto-created UUIDs)
+    - name: "[🔗 dotfiles] Find empty directories that were created by dotfiles"
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          find . -maxdepth {{ max_depth | default(10) }} -mindepth 1 -type d -empty \
+            -not -path './projects/*' \
+            -not -path './session-env/*' 2>/dev/null | head -100
+        chdir: "{{ cleanup_dir }}"
+        executable: /bin/bash
+      register: empty_dirs
+      changed_when: false
+      failed_when: false
+      when: cleanup_dir != _home_dir  # Skip empty dir cleanup for home root
+
+    - name: "[🔗 dotfiles] Delete empty directories"
+      ansible.builtin.file:
+        path: "{{ cleanup_dir }}/{{ item }}"
+        state: absent
+      loop: "{{ empty_dirs.stdout_lines | default([]) }}"
+      when:
+        - cleanup_dir != _home_dir
+        - empty_dirs.stdout_lines | default([]) | length > 0

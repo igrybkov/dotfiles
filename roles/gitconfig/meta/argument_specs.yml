@@ -1,0 +1,23 @@
+---
+argument_specs:
+  main:
+    short_description: Manage git configuration fragments
+    description:
+      - Manages git config using a conf.d pattern
+      - Symlinks gitconfig fragments from profiles to ~/.config/git/conf.d/
+      - Aggregates gitignore files from all profiles
+    options:
+      gitconfig_conf_d:
+        description: Path to the git conf.d directory for config fragments
+        type: path
+        default: ~/.config/git/conf.d
+
+      gitconfig_includes_file:
+        description: Path to the generated includes.gitconfig file
+        type: path
+        default: ~/.config/git/conf.d/includes.gitconfig
+
+      gitignore_file:
+        description: Path to the global gitignore file
+        type: path
+        default: ~/.config/git/gitignore

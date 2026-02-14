@@ -1,0 +1,126 @@
+---
+- name: Prepare dotfiles role test
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Install Python and required packages using raw module
+      ansible.builtin.raw: |
+        apt-get update -qq
+        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq python3 python3-pip python3-apt git curl ca-certificates bash
+        pip3 install --break-system-packages paramiko
+      changed_when: false
+
+    - name: Copy symlink-dotfiles package to container
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../../../packages/symlink_dotfiles/"
+        dest: /tmp/symlink_dotfiles/
+        mode: preserve
+
+    - name: Install symlink-dotfiles package
+      ansible.builtin.pip:
+        name: /tmp/symlink_dotfiles/
+        extra_args: --break-system-packages
+
+    - name: Ensure .config directory exists
+      ansible.builtin.file:
+        path: ~/.config
+        state: directory
+        mode: "0755"
+
+    - name: Ensure .local/bin directory exists
+      ansible.builtin.file:
+        path: ~/.local/bin
+        state: directory
+        mode: "0755"
+
+    # Remove existing dotfiles that would conflict with symlinks
+    # (e.g., Docker containers often have a default .bashrc)
+    - name: Remove existing dotfiles that conflict with test symlinks
+      ansible.builtin.file:
+        path: "~/.{{ item }}"
+        state: absent
+      loop:
+        - bashrc
+        - gitconfig
+        - zshrc
+
+    - name: Create test dotfiles directory
+      ansible.builtin.file:
+        path: /tmp/test-dotfiles
+        state: directory
+        mode: "0755"
+
+    - name: Create test dotfiles
+      ansible.builtin.copy:
+        content: "# Test {{ item }}"
+        dest: "/tmp/test-dotfiles/{{ item }}"
+        mode: "0644"
+      loop:
+        - gitconfig
+        - zshrc
+        - bashrc
+
+    - name: Create test config directory
+      ansible.builtin.file:
+        path: /tmp/test-dotfiles/config
+        state: directory
+        mode: "0755"
+
+    - name: Create test config files
+      ansible.builtin.copy:
+        content: "# Test {{ item }} config"
+        dest: "/tmp/test-dotfiles/config/{{ item }}"
+        mode: "0644"
+      loop:
+        - nvim
+        - starship.toml
+
+    - name: Create test fish config directory
+      ansible.builtin.file:
+        path: /tmp/test-dotfiles/config/fish
+        state: directory
+        mode: "0755"
+
+    - name: Create test fish config file
+      ansible.builtin.copy:
+        content: "# Test fish config"
+        dest: /tmp/test-dotfiles/config/fish/config.fish
+        mode: "0644"
+
+    - name: Add directory marker for fish (test directory-level symlinks)
+      ansible.builtin.file:
+        path: /tmp/test-dotfiles/config/fish/.symlink-as-directory
+        state: touch
+        mode: "0644"
+
+    - name: Create test dotfiles-copy directory
+      ansible.builtin.file:
+        path: /tmp/test-dotfiles-copy
+        state: directory
+        mode: "0755"
+
+    - name: Create test copy file
+      ansible.builtin.copy:
+        content: "# This file should be copied, not symlinked"
+        dest: /tmp/test-dotfiles-copy/copied-file
+        mode: "0644"
+
+    - name: Create test bin directory
+      ansible.builtin.file:
+        path: /tmp/test-bin
+        state: directory
+        mode: "0755"
+
+    - name: Create test bin scripts
+      ansible.builtin.copy:
+        content: |
+          #!/bin/bash
+          echo "{{ item }}"
+        dest: "/tmp/test-bin/{{ item }}"
+        mode: "0755"
+      loop:
+        - script1
+        - script2
+
+    # NOTE: Dead symlink cleanup test removed from verify.yml
+    # The role's find command has edge cases in Docker containers

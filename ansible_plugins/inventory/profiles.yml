@@ -1,0 +1,5 @@
+---
+# Dynamic inventory configuration for profiles
+# This file activates the dotfiles_profiles inventory plugin
+plugin: dotfiles_profiles
+profiles_dir: ../../profiles

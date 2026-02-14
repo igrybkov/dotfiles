@@ -1,0 +1,57 @@
+---
+- name: Prepare - Set up mock mas command
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Install Python using raw module
+      ansible.builtin.raw: |
+        apt-get update -qq
+        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq python3 bash
+      changed_when: false
+
+    - name: Create mock bin directory
+      ansible.builtin.file:
+        path: /usr/local/bin
+        state: directory
+        mode: "0755"
+
+    - name: Create playbook cache directory
+      ansible.builtin.file:
+        path: "{{ playbook_dir }}/.cache"
+        state: directory
+        mode: "0755"
+
+    - name: Create mock mas command that simulates timeout on upgrade
+      ansible.builtin.copy:
+        content: |
+          #!/bin/bash
+          # Mock mas command for testing error handling
+
+          case "$1" in
+            list)
+              # Simulate successful list with some installed apps
+              echo "1569813296 TestApp (1.0)"
+              exit 0
+              ;;
+            install)
+              # Simulate successful install
+              echo "Installed $2"
+              exit 0
+              ;;
+            upgrade)
+              # Simulate timeout error like the real issue
+              echo "Error: Error Domain=NSURLErrorDomain Code=-1001 \"The request timed out.\"" >&2
+              exit 1
+              ;;
+            uninstall)
+              # Simulate successful uninstall
+              echo "Uninstalled $2"
+              exit 0
+              ;;
+            *)
+              echo "Unknown command: $1" >&2
+              exit 1
+              ;;
+          esac
+        dest: /usr/local/bin/mas
+        mode: "0755"

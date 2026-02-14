@@ -1,0 +1,8 @@
+---
+# yaml-language-server: $schema=../../schemas/config.schema.json
+# macOS profile configuration
+# Configures macOS system settings via the macos role
+
+profile:
+  name: macos
+  priority: 50  # Run before other profiles since these are system-level settings

@@ -1,0 +1,16 @@
+---
+# JSON Config role - manages JSON configuration files by merging settings
+#
+# Variables:
+#   json_configs: List of config items with:
+#     - file: Path to JSON file (required)
+#     - content: Dictionary of settings to merge (required)
+#     - create_file: Create file if missing (default: false)
+
+- name: "[📋 json_config] Apply JSON configurations"
+  ansible.builtin.include_tasks:
+    file: apply_config.yml
+  loop: "{{ json_configs | default([]) }}"
+  loop_control:
+    loop_var: config_item
+  when: json_configs | default([]) | length > 0

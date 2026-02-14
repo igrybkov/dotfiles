@@ -1,0 +1,16 @@
+---
+# YAML Config role - manages YAML configuration files by merging settings
+#
+# Variables:
+#   yaml_configs: List of config items with:
+#     - file: Path to YAML file (required)
+#     - content: Dictionary of settings to merge (required)
+#     - create_file: Create file if missing (default: false)
+
+- name: "[📋 yaml_config] Apply YAML configurations"
+  ansible.builtin.include_tasks:
+    file: apply_config.yml
+  loop: "{{ yaml_configs | default([]) }}"
+  loop_control:
+    loop_var: config_item
+  when: yaml_configs | default([]) | length > 0

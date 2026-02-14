@@ -1,0 +1,100 @@
+---
+argument_specs:
+  main:
+    short_description: Configure SSH client
+    description:
+      - Manages SSH client configuration
+      - Expects pre-aggregated data from playbook
+    options:
+      ssh_client_config:
+        description: List of SSH host configurations
+        type: list
+        elements: dict
+        default: []
+        options:
+          host:
+            description: SSH host pattern
+            type: str
+            required: true
+          hostname:
+            description: Real hostname or IP
+            type: str
+            required: false
+          port:
+            description: SSH port
+            type: int
+            required: false
+          remote_user:
+            description: SSH username
+            type: str
+            required: false
+          identity_file:
+            description: Path to identity file
+            type: path
+            required: false
+          identities_only:
+            description: Only use specified identity files
+            type: bool
+            required: false
+          proxycommand:
+            description: Proxy command
+            type: str
+            required: false
+          proxyjump:
+            description: Proxy jump host
+            type: str
+            required: false
+          forward_agent:
+            description: Enable agent forwarding
+            type: bool
+            required: false
+          dynamicforward:
+            description: Dynamic port forwarding (SOCKS proxy)
+            type: str
+            required: false
+          strict_host_key_checking:
+            description: StrictHostKeyChecking option
+            type: str
+            required: false
+          user_known_hosts_file:
+            description: Path to known hosts file
+            type: path
+            required: false
+          add_keys_to_agent:
+            description: AddKeysToAgent option
+            type: str
+            required: false
+          other_options:
+            description: Additional SSH options as key-value pairs
+            type: dict
+            required: false
+          state:
+            description: Host entry state
+            type: str
+            choices:
+              - present
+              - absent
+            default: present
+
+      ssh_client_config_block:
+        description: SSH config text blocks
+        type: list
+        elements: dict
+        default: []
+        options:
+          content:
+            description: Block content
+            type: str
+            required: true
+          position:
+            description: Block position in config file
+            type: str
+            choices:
+              - top
+              - bottom
+            required: true
+
+      ssh_config_file:
+        description: Path to SSH config file
+        type: path
+        default: ~/.ssh/config

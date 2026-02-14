@@ -1,0 +1,11 @@
+# Macos git configuration block
+# This file is read by the gitconfig role and inserted into ~/.config/git/local.gitconfig
+# Uncomment and customize as needed:
+
+# [user]
+# name = Your Name
+# email = your.email@example.com
+# signingkey = ssh-ed25519 AAAA...
+
+# [includeIf "hasconfig:remote.*.url:git@github.com:your-org/**"]
+# path = ~/.config/git/macos.gitconfig

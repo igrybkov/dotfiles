@@ -1,0 +1,273 @@
+---
+- name: Enable Touch ID for sudo
+  become: true
+  ansible.builtin.copy:
+    content: auth sufficient pam_tid.so
+    dest: /etc/pam.d/sudo_local
+    owner: root
+    group: wheel
+    mode: "0644"
+
+- name: '[ macOS] Disable "Are you sure to open this application?" dialog'
+  community.general.osx_defaults:
+    domain: com.apple.LaunchServices
+    key: LSQuarantine
+    type: bool
+    value: false
+    state: present
+
+- name: "[ macOS] Check for software updates daily, not just once per week"
+  community.general.osx_defaults:
+    domain: com.apple.SoftwareUpdate
+    key: ScheduleFrequency
+    type: integer
+    value: 1
+    state: present
+
+- name: "[ macOS] Download newly available updates in background"
+  community.general.osx_defaults:
+    domain: com.apple.SoftwareUpdate
+    key: AutomaticDownload
+    type: bool
+    value: true
+    state: present
+
+- name: "[ macOS] Install System data files & security updates"
+  community.general.osx_defaults:
+    domain: com.apple.SoftwareUpdate
+    key: CriticalUpdateInstall
+    type: bool
+    value: true
+    state: present
+
+- name: "[ macOS] Turn on app auto-update"
+  community.general.osx_defaults:
+    domain: com.apple.commerce
+    key: AutoUpdate
+    type: bool
+    value: true
+    state: present
+
+- name: "[ macOS] Configure Trackpad"
+  block:
+    - name: "[ macOS] Trackpad - Increase speed of trackpad cursor movement"
+      community.general.osx_defaults:
+        domain: NSGlobalDomain
+        key: com.apple.trackpad.scaling
+        type: float
+        value: 3
+        state: present
+
+    - name: "[ macOS] Trackpad - Enable force click and haptic feedback"
+      community.general.osx_defaults:
+        domain: com.apple.driver.AppleBluetoothMultitouch.trackpad
+        key: ActuateDetents
+        type: integer
+        value: 1
+        state: present
+
+    - name: "[ macOS] Trackpad - Swipe between pages with two fingers"
+      community.general.osx_defaults:
+        domain: com.apple.driver.AppleBluetoothMultitouch.trackpad
+        key: TrackpadThreeFingerHorizSwipeGesture
+        type: integer
+        value: 2
+        state: present
+
+    - name: "[ macOS] Trackpad - Swipe three fingers up to show Mission Control"
+      community.general.osx_defaults:
+        domain: com.apple.driver.AppleBluetoothMultitouch.trackpad
+        key: TrackpadThreeFingerVertSwipeGesture
+        type: integer
+        value: 2
+        state: present
+
+- name: "[ macOS] Configure Keyboard"
+  block:
+    - name: "[ macOS] Disable smart quotes as they're annoying when typing code"
+      community.general.osx_defaults:
+        domain: NSGlobalDomain
+        key: NSAutomaticQuoteSubstitutionEnabled
+        type: bool
+        value: false
+        state: present
+
+    - name: "[ macOS] Disable smart dashes as they're annoying when typing code"
+      community.general.osx_defaults:
+        domain: NSGlobalDomain
+        key: NSAutomaticDashSubstitutionEnabled
+        type: bool
+        value: false
+        state: present
+
+    # - name: "[ macOS] Disable press-and-hold for keys in favor of key repeat"
+    #   community.general.osx_defaults:
+    #     domain: NSGlobalDomain
+    #     key: ApplePressAndHoldEnabled
+    #     type: bool
+    #     value: false
+    #     state: present
+
+    # - name: "[ macOS] Set a blazingly fast keyboard repeat rate"
+    #   community.general.osx_defaults:
+    #     domain: NSGlobalDomain
+    #     key: KeyRepeat
+    #     type: integer
+    #     value: 2
+    #     state: present
+
+    # - name: "[ macOS] Set a short keyboard repeat rate delay"
+    #   community.general.osx_defaults:
+    #     domain: NSGlobalDomain
+    #     key: InitialKeyRepeat
+    #     type: integer
+    #     value: 15
+    #     state: present
+
+    - name: "[ macOS] Keyboard - Automatically illuminate built-in keyboard in low light"
+      community.general.osx_defaults:
+        domain: com.apple.BezelServices
+        key: kDim
+        type: bool
+        value: true
+        state: present
+
+    - name: "[ macOS] Keyboard - Turn off keyboard illumination when computer is not used for 5 minutes"
+      community.general.osx_defaults:
+        domain: com.apple.BezelServices
+        key: kDimTime
+        type: integer
+        value: 300
+        state: present
+
+    # - name: "[ macOS] Keyboard - Disable auto-correct"
+    #   community.general.osx_defaults:
+    #     domain: NSGlobalDomain
+    #     key: NSAutomaticSpellingCorrectionEnabled
+    #     type: bool
+    #     value: false
+    #     state: present
+
+    - name: "[ macOS] Keyboard - Enable function keys"
+      community.general.osx_defaults:
+        domain: NSGlobalDomain
+        key: com.apple.keyboard.fnState
+        type: integer
+        value: 1
+        state: present
+
+# - name: "[ macOS] Finder - Show the ~/Library folder"
+#   community.general.osx_defaults:
+#     domain: com.apple.finder
+#     key: ShowLibraryFolder
+#     type: bool
+#     value: true
+#     state: present
+#   notify: Restart Dock
+
+- name: "[ macOS] Configure Dock"
+  block:
+    - name: "[ macOS] Dock - Show on all displays"
+      community.general.osx_defaults:
+        domain: com.apple.dock
+        key: appswitcher-all-displays
+        type: bool
+        value: true
+        state: present
+      notify: Restart Dock
+
+    - name: "[ macOS] Dock - Show on the left"
+      community.general.osx_defaults:
+        domain: com.apple.dock
+        key: orientation
+        type: string
+        value: bottom
+        state: present
+      notify: Restart Dock
+
+    - name: "[ macOS] Dock - Set auto-hide delay"
+      community.general.osx_defaults:
+        domain: com.apple.dock
+        key: autohide-delay
+        type: float
+        value: 0
+        state: present
+      notify: Restart Dock
+
+    - name: "[ macOS] Dock - Automatically hide and show"
+      community.general.osx_defaults:
+        domain: com.apple.dock
+        key: autohide
+        type: bool
+        value: true
+        state: present
+      notify: Restart Dock
+
+    - name: "[ macOS] Dock - Set icon size"
+      community.general.osx_defaults:
+        domain: com.apple.dock
+        key: tilesize
+        type: float
+        value: 48
+        state: present
+      notify: Restart Dock
+
+    - name: "[ macOS] Dock - Enable magnification"
+      community.general.osx_defaults:
+        domain: com.apple.dock
+        key: magnification
+        type: bool
+        value: true
+        state: present
+      notify: Restart Dock
+
+    - name: "[ macOS] Dock - Set magnification size"
+      community.general.osx_defaults:
+        domain: com.apple.dock
+        key: largesize
+        type: float
+        value: 112
+        state: present
+      notify: Restart Dock
+
+    - name: "[ macOS] Dock - Minimize windows into application icon"
+      community.general.osx_defaults:
+        domain: com.apple.dock
+        key: minimize-to-application
+        type: bool
+        value: true
+        state: present
+      notify: Restart Dock
+
+    - name: "[ macOS] Dock - Don’t show recent applications in Dock"
+      community.general.osx_defaults:
+        domain: com.apple.dock
+        key: show-recents
+        type: bool
+        value: false
+        state: present
+      notify: Restart Dock
+
+- name: "[ macOS] Configure Finder"
+  block:
+    - name: "[ macOS] Finder - Show the ~/Library folder"
+      community.general.osx_defaults:
+        domain: com.apple.finder
+        key: ShowLibraryFolder
+        type: bool
+        value: true
+        state: present
+      notify: Restart Finder
+
+    - name: "[ macOS] Finder - Set default sort order to 'Name'"
+      community.general.osx_defaults:
+        domain: com.apple.finder
+        key: "{{ item }}"
+        type: string
+        value: name
+        state: present
+      loop:
+        - FK_DefaultIconViewSettings:arrangeBy
+        - FK_StandardViewSettings:IconViewSettings:arrangeBy
+        - StandardViewSettings:IconViewSettings:arrangeBy
+      notify: Restart Finder

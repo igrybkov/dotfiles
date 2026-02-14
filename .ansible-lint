@@ -1,0 +1,12 @@
+---
+# Exclude directories
+exclude_paths:
+  - .worktrees/  # Multi-agent collaboration worktrees
+  - .ansible/  # Downloaded collections and roles
+  - profiles/common/files/dotfiles/vim/plugged/  # Vim plugins
+
+# Skip these rules entirely (pre-existing issues)
+skip_list:
+  - var-naming[no-role-prefix]  # Role variable naming convention
+  - name[casing]  # Task name casing
+  - role-name[path]  # Profile-specific roles use {{ profile_roles_dir }} paths

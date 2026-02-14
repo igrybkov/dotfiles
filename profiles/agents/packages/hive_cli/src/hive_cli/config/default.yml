@@ -1,0 +1,81 @@
+---
+# Hive CLI Default Configuration
+# This file ships with the package and provides all default values.
+# User configs (.hive.yml, .hive.local.yml) override these settings.
+
+agents:
+  order:
+    - claude
+    - gemini
+    - codex
+    - agent
+    - copilot
+
+  configs:
+    # Claude uses --continue flag
+    claude:
+      resume_args: ["--continue"]
+
+    # Copilot uses --continue flag
+    copilot:
+      resume_args: ["--continue"]
+
+    # Codex uses resume subcommand with --last
+    codex:
+      resume_args: ["resume", "--last"]
+
+    # Gemini uses --resume with latest argument
+    gemini:
+      resume_args: ["--resume", "latest"]
+
+    # Cursor agent CLI uses resume subcommand
+    agent:
+      resume_args: ["resume"]
+
+    # Cursor agent alternative name
+    cursor-agent:
+      resume_args: ["resume"]
+
+resume:
+  enabled: false
+
+worktrees:
+  enabled: true
+  parent_dir: ".worktrees"
+  use_home: false
+  resume: true   # Enable resume for worktree runs (config-driven, not explicit flag)
+  copy_files: []
+  symlink_files: []
+
+  # Auto-select: show picker but auto-proceed after timeout. Any key cancels.
+  auto_select:
+    enabled: false
+    branch: "-"    # Branch to auto-select. Use "-" for repo's default branch.
+    timeout: 3.0   # Seconds before auto-selection
+
+  post_create:
+    - command: "mise trust"
+      if_exists: "mise.toml"
+
+    - command: "mise install"
+      if_exists: "mise.toml"
+
+    - command: "pnpm install --frozen-lockfile"
+      if_exists: "pnpm-lock.yaml"
+
+    - command: "yarn install --frozen-lockfile"
+      if_exists: "yarn.lock"
+
+    - command: "npm install"
+      if_exists: "package-lock.json"
+
+    - command: "uv sync"
+      if_exists: "pyproject.toml"
+
+zellij:
+  # layout: "agent"  # Optional: set to use a custom layout, omit for default
+  session_name: "{repo}-{agent}"
+
+github:
+  fetch_issues: true
+  issue_limit: 20

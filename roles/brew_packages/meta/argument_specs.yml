@@ -1,0 +1,76 @@
+---
+argument_specs:
+  main:
+    short_description: Install Homebrew packages
+    description:
+      - Installs Homebrew taps, formulae, and casks
+      - Expects pre-aggregated data from playbook
+    options:
+      brew_taps:
+        description: List of Homebrew taps to configure
+        type: list
+        elements: dict
+        default: []
+        options:
+          name:
+            description: Tap name (e.g., "homebrew/cask-fonts")
+            type: str
+            required: true
+          state:
+            description: Whether the tap should be present or absent
+            type: str
+            choices:
+              - present
+              - absent
+            default: present
+
+      brew_packages:
+        description: List of Homebrew formulae to install
+        type: list
+        elements: dict
+        default: []
+        options:
+          name:
+            description: Package name
+            type: str
+            required: true
+          state:
+            description: Package state
+            type: str
+            choices:
+              - present
+              - absent
+              - latest
+            default: present
+          version:
+            description: Specific version to install
+            type: str
+            required: false
+
+      cask_packages:
+        description: List of Homebrew casks to install
+        type: list
+        elements: dict
+        default: []
+        options:
+          name:
+            description: Cask name
+            type: str
+            required: true
+          state:
+            description: Cask state
+            type: str
+            choices:
+              - present
+              - absent
+              - latest
+            default: present
+          version:
+            description: Specific version to install
+            type: str
+            required: false
+
+      brew_upgrade_all:
+        description: Whether to run brew upgrade after installation
+        type: bool
+        default: false

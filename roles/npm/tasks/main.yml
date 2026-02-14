@@ -1,0 +1,34 @@
+---
+# NPM Role - Main Tasks
+# Variables are passed from the playbook (pre-aggregated from all profiles)
+# Input validation is handled by argument_specs in meta/argument_specs.yml
+
+- name: "[📦 npm] Skip if no npm packages configured"
+  ansible.builtin.meta: end_host
+  when: npm_packages | default([]) | length == 0
+
+- name: "[📦 npm] Check if npm is available"
+  ansible.builtin.command: which npm
+  register: npm_check
+  changed_when: false
+  failed_when: false
+
+- name: "[📦 npm] npm not found - skipping"  # noqa: ignore-errors
+  ansible.builtin.fail:
+    msg: |
+      npm not found in PATH.
+      Add 'node' to brew_packages in your profile config.
+      Skipping npm packages: {{ npm_packages | map(attribute='name') | join(', ') }}
+  when: npm_check.rc != 0
+  ignore_errors: true
+
+- name: "[📦 npm] End role if npm not found"
+  ansible.builtin.meta: end_host
+  when: npm_check.rc != 0
+
+- name: "[📦 npm] Install global npm packages"
+  community.general.npm:
+    name: "{{ item.name }}"
+    state: "{{ item.state | default('present') }}"
+    global: true
+  loop: "{{ npm_packages }}"

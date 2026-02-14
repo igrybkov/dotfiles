@@ -1,0 +1,6 @@
+/plugins.zsh
+*.zwc
+.antidote
+.zsh_history*
+.zsh_sessions
+.zcomp*

@@ -1,0 +1,26 @@
+---
+argument_specs:
+  main:
+    short_description: Install global npm packages
+    description:
+      - Installs npm packages globally
+      - Expects pre-aggregated data from playbook
+    options:
+      npm_packages:
+        description: List of npm packages to install globally
+        type: list
+        elements: dict
+        default: []
+        options:
+          name:
+            description: Package name
+            type: str
+            required: true
+          state:
+            description: Package state
+            type: str
+            choices:
+              - present
+              - absent
+              - latest
+            default: present

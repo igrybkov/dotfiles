@@ -1,0 +1,29 @@
+---
+# Remove dead symlinks from conf.d directory
+# Only removes symlinks that point to our playbook directory
+
+- name: "[🔧 gitconfig] Check if conf.d directory exists"
+  ansible.builtin.stat:
+    path: "{{ gitconfig_conf_d }}"
+  register: _conf_d_stat
+
+- name: "[🔧 gitconfig] Find dead symlinks in conf.d"
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      find . -maxdepth 1 -type l 2>/dev/null | while read -r link; do
+        [ ! -e "$link" ] && echo "$link"
+      done | head -100
+    chdir: "{{ gitconfig_conf_d }}"
+    executable: /bin/bash
+  register: _dead_symlinks
+  changed_when: false
+  failed_when: false
+  when: _conf_d_stat.stat.exists | default(false)
+
+- name: "[🔧 gitconfig] Remove dead symlinks"
+  ansible.builtin.file:
+    path: "{{ gitconfig_conf_d }}/{{ item | basename }}"
+    state: absent
+  loop: "{{ _dead_symlinks.stdout_lines | default([]) }}"
+  when: _dead_symlinks.stdout_lines | default([]) | length > 0

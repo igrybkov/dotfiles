@@ -1,0 +1,50 @@
+---
+argument_specs:
+  main:
+    short_description: Install Python packages via pipx
+    description:
+      - Installs Python packages in isolated environments using pipx
+      - Supports local packages (from profile's packages/ directory) via uv or pipx
+      - Supports build dependencies with automatic CFLAGS/LDFLAGS from brew prefixes
+    options:
+      pipx_packages:
+        description: |
+          List of pipx packages to install.
+          Simple string entries install from PyPI.
+          Dict entries support additional options.
+        type: list
+        elements: dict
+        default: []
+        options:
+          name:
+            description: Package name
+            type: str
+            required: true
+          state:
+            description: Package state
+            type: str
+            choices:
+              - present
+              - absent
+            default: present
+          path:
+            description: >
+              Local package path. Paths starting with "packages/" are
+              relative to the profile directory.
+            type: path
+            required: false
+          editable:
+            description: Install in editable mode (default true for local packages)
+            type: bool
+            required: false
+          env:
+            description: Environment variables for the build
+            type: dict
+            required: false
+          build_deps:
+            description: >
+              List of Homebrew packages whose prefixes will be used to set
+              CFLAGS (-I) and LDFLAGS (-L) during installation
+            type: list
+            elements: str
+            required: false

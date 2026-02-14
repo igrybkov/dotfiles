@@ -1,0 +1,10 @@
+---
+# Symlink a single gitconfig fragment to conf.d
+# Variables: _fragment (dict with source, target_name, priority, profile)
+
+- name: "[🔧 gitconfig] Symlink {{ _fragment.target_name }}"
+  ansible.builtin.file:
+    src: "{{ _fragment.source }}"
+    dest: "{{ gitconfig_conf_d }}/{{ _fragment.target_name }}"
+    state: link
+    force: true

@@ -1,0 +1,26 @@
+---
+argument_specs:
+  main:
+    short_description: Merge settings into JSON config files
+    description:
+      - Recursively merges settings into existing JSON configuration files
+      - Optionally creates the file if it does not exist
+    options:
+      json_configs:
+        description: List of JSON configuration items to apply
+        type: list
+        elements: dict
+        default: []
+        options:
+          file:
+            description: Path to JSON file
+            type: path
+            required: true
+          content:
+            description: Dictionary of settings to merge into the file
+            type: dict
+            required: true
+          create_file:
+            description: Create the file if it does not exist
+            type: bool
+            default: false

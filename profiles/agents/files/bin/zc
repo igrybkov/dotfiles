@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+#
+# zc - Shortcut for hive zellij
+#
+# Usage:
+#   zc              # Auto-detect agent
+#   AGENT=claude zc # Use specific agent
+#
+# For direct usage, prefer: hive zellij
+
+exec hive zellij "$@"

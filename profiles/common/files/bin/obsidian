@@ -1,0 +1,36 @@
+#!/bin/bash
+
+# Open Obsidian vault or file in Obsidian
+
+VAULT="$1"
+FILE="$2"
+
+if [[ -z "$VAULT" ]]; then
+  echo "Usage: obsidian <vault> [file]" >/dev/stderr
+  exit 1
+fi
+
+if [[ -d "$VAULT" ]]; then
+  VAULT="$(basename "$VAULT")"
+fi
+
+function urlencode() {
+  local INPUT="$1"
+  if command -v jq &>/dev/null; then
+    printf %s "$1" | jq -s -R -r @uri
+  elif command -v python3 &>/dev/null; then
+    python3 -c 'import urllib, sys; print urllib.quote(sys.argv[1])' "$INPUT"
+  else
+    echo "No urlencode function available" >/dev/stderr
+    exit 1
+  fi
+}
+
+VAULT="$(urlencode "$VAULT")"
+
+if [[ -z "$FILE" ]]; then
+  open "obsidian://open?vault=$VAULT"
+  exit
+fi
+
+open "obsidian://open?vault=$VAULT&file=$(urlencode "$FILE")"

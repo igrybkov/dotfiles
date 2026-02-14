@@ -1,0 +1,37 @@
+---
+# Symlink skills from current profile to multiple agent destinations
+# Processes skills_dir from current profile and symlinks to all destinations in skill_folders
+#
+# Parameters:
+#   skills_dir: Source directory containing skills (auto-set per profile by inventory plugin)
+#   skill_folders: List of destination directories (aggregated from all profiles)
+
+- name: "[🔗 dotfiles] Check if skills directory exists"
+  ansible.builtin.stat:
+    path: "{{ skills_dir }}"
+  register: skills_dir_stat
+
+- name: "[🔗 dotfiles] Symlink skills to agent folders"
+  when: |
+    skills_dir_stat.stat.exists | default(false) and
+    skills_dir_stat.stat.isdir | default(false) and
+    skill_folders | length > 0
+  block:
+    - name: "[🔗 dotfiles] Ensure skill destination directories exist"
+      ansible.builtin.file:
+        path: "{{ item | expanduser }}"
+        state: directory
+        mode: "0755"
+      loop: "{{ skill_folders }}"
+      loop_control:
+        label: "{{ item }}"
+
+    - name: "[🔗 dotfiles] Symlink skills to {{ item }}"
+      ansible.builtin.include_tasks: symlink_recursive.yml
+      loop: "{{ skill_folders }}"
+      loop_control:
+        label: "{{ item }}"
+      vars:
+        source_dir: "{{ skills_dir }}"
+        target_dir: "{{ item | expanduser }}"
+        prefix: ""

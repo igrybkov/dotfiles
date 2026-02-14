@@ -1,0 +1,68 @@
+---
+- name: Converge - Test macOS-specific roles
+  hosts: all
+  gather_facts: true
+  vars:
+    # Minimal test configuration
+    brew_upgrade_all: false
+    brew_packages:
+      - name: bat
+        state: present
+      - name: jq
+        state: present
+    cask_packages: []
+    brew_taps: []
+
+    # Test dotfiles (create mock files)
+    dotfiles_dir: /tmp/test-dotfiles
+    dotfiles_copy_dir: /tmp/test-dotfiles-copy
+    bin_dir: /tmp/test-bin
+
+  pre_tasks:
+    - name: Create test dotfiles directory
+      ansible.builtin.file:
+        path: /tmp/test-dotfiles
+        state: directory
+        mode: "0755"
+
+    - name: Create test dotfiles
+      ansible.builtin.copy:
+        content: "# Test {{ item }}"
+        dest: "/tmp/test-dotfiles/{{ item }}"
+        mode: "0644"
+      loop:
+        - gitconfig
+        - zshrc
+
+    - name: Create test config directory
+      ansible.builtin.file:
+        path: /tmp/test-dotfiles/config
+        state: directory
+        mode: "0755"
+
+    - name: Create test config files
+      ansible.builtin.copy:
+        content: "# Test config"
+        dest: /tmp/test-dotfiles/config/test-config
+        mode: "0644"
+
+    - name: Create empty directories for copy/bin
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - /tmp/test-dotfiles-copy
+        - /tmp/test-bin
+
+  roles:
+    # Homebrew (via external role)
+    - role: geerlingguy.mac.homebrew
+      when: ansible_facts['distribution'] == 'MacOSX'
+
+    # Our brew_packages role for package management
+    - role: brew_packages
+      when: ansible_facts['distribution'] == 'MacOSX'
+
+    # Cross-platform roles
+    - role: dotfiles

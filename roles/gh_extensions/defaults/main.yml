@@ -1,0 +1,13 @@
+---
+# GitHub CLI Extensions Role Defaults
+
+# List of GitHub CLI extensions to manage
+# Example:
+#   gh_extensions:
+#     - name: seachicken/gh-poi
+#       state: present
+#     - name: github/gh-copilot
+#       state: absent
+#     - name: cli/gh-extension-template
+#       state: latest
+gh_extensions: []

@@ -1,0 +1,11 @@
+#shellcheck disable=SC1107,SC1091,SC2148
+compdef _symfony_complete symfony
+compdef _symfony_complete composer
+compdef _symfony_complete console
+compdef _symfony_complete artisan
+compdef _symfony_complete phpstan
+compdef _symfony_complete php-cs-fixer
+compdef _symfony_complete phpspec
+compdef _symfony_complete magento
+compdef _symfony_complete mage2dev
+compdef _symfony_complete magerun

@@ -1,0 +1,30 @@
+# Get editor completions based on the config schema
+"$schema" = 'https://starship.rs/config-schema.json'
+
+# Inserts a blank line between shell prompts
+add_newline = true
+
+# Replace the '❯' symbol in the prompt with '➜'
+#[character] # The name of the module we are configuring is 'character'
+#success_symbol = '[➜](bold green)' # The 'success_symbol' segment is being set to '➜' with the color 'bold green'
+
+# Disable the package module, hiding it from the prompt completely
+[package]
+disabled = true
+
+[aws]
+format = 'on [$symbol($profile )(\($region\) )]($style)'
+style = 'bold blue'
+
+[aws.region_aliases]
+us-east-1 = 'va'
+
+[python]
+format = 'via [${symbol}${pyenv_prefix}($virtualenv )]($style)'
+
+#[custom.git_email]
+#description = 'Shows prompt from gitconfig emailprompt section for current user.email'
+#command = "git config --get \"emailprompt.$(git config user.email).prompt\" 2>/dev/null"
+#when = "git config --get \"emailprompt.$(git config user.email).prompt\" 2>/dev/null"
+#format = '[$output]($style) '
+#style = 'dimmed'

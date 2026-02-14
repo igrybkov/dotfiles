@@ -1,0 +1,45 @@
+---
+- name: "[🐚 chsh] Set current user env variables"
+  ansible.builtin.set_fact:
+    the_user: "{{ ansible_facts[\"user_id\"] }}"
+    paths_to_search: ["/usr/bin", "/usr/local/bin", "/opt/homebrew/bin"]
+
+- name: "[🐚 chsh] Find path to fish shell"
+  ansible.builtin.find:
+    paths: "{{ paths_to_search }}"
+    patterns:
+      - fish
+    file_type: any
+  register: fish_path
+
+- name: "[🐚 chsh] Find path to zsh shell"
+  ansible.builtin.find:
+    paths: "{{ paths_to_search }}"
+    patterns:
+      - zsh
+    file_type: any
+  register: zsh_path
+
+- name: "[🐚 chsh] Make sure fish shell is present in /etc/shells"
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/shells
+    line: "{{ item.path }}"
+    state: present
+  with_items: "{{ fish_path.files }}"
+
+- name: "[🐚 chsh] Change user shell to fish"
+  become: true
+  ansible.builtin.user:
+    name: "{{ the_user }}"
+    shell: "{{ fish_path.files[0].path }}"
+  when: (fish_path.files | length > 0)
+  register: user_shell_changed
+
+- name: "[🐚 chsh] Change user shell to zsh"
+  become: true
+  ansible.builtin.user:
+    name: "{{ the_user }}"
+    shell: "{{ zsh_path.files[0].path }}"
+  when: (user_shell_changed is not defined) and (zsh_path.files | length > 0)
+  register: user_shell_changed

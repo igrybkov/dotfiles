@@ -1,0 +1,35 @@
+---
+- name: Prepare macOS VM for testing
+  hosts: all
+  gather_facts: true
+  tasks:
+    - name: Verify we're on macOS
+      ansible.builtin.assert:
+        that:
+          - ansible_facts['distribution'] == 'MacOSX'
+        fail_msg: "This playbook is only for macOS"
+
+    - name: Accept Xcode license (if needed)
+      ansible.builtin.command:
+        cmd: sudo xcodebuild -license accept
+      become: true
+      failed_when: false
+      changed_when: false
+
+    - name: Ensure .config directory exists
+      ansible.builtin.file:
+        path: ~/.config
+        state: directory
+        mode: "0755"
+
+    - name: Ensure .ssh directory exists
+      ansible.builtin.file:
+        path: ~/.ssh
+        state: directory
+        mode: "0700"
+
+    - name: Ensure .local/bin directory exists
+      ansible.builtin.file:
+        path: ~/.local/bin
+        state: directory
+        mode: "0755"

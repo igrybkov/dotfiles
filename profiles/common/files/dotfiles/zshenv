@@ -1,0 +1,45 @@
+# This files is invoked by all invocations of Zsh, so we should keep it small
+# and only initialize necessary variables.
+
+ZDOTDIR=$HOME/.config/zsh
+
+if [[ -o login ]]; then
+  export SHELL_OPT_LOGIN=1
+else
+  export SHELL_OPT_LOGIN=0
+fi
+if [[ -o interactive ]]; then
+  export SHELL_OPT_INTERACTIVE=1
+else
+  export SHELL_OPT_INTERACTIVE=0
+fi
+
+skip_global_compinit=1
+
+# Add local node binaries to path
+export PATH="$PATH:node_modules/.bin"
+
+# Added by serverless binary installer
+export PATH="$HOME/.serverless/bin:$PATH"
+
+# Add brew curl to path
+export PATH="/usr/local/opt/curl/bin:$PATH"
+
+# Add Rust to path
+export PATH="$HOME/.cargo/bin:$PATH"
+
+# Add GOPATH and GOBIN to PATH
+export GOPATH="$HOME/.go"
+export PATH="$GOPATH/bin:$PATH"
+
+# Add Homebrew to path
+export PATH="/opt/homebrew/bin:$PATH"
+
+# Add RVM to PATH for scripting. Make sure this is the last PATH variable change.
+export PATH="$PATH:$HOME/.rvm/bin"
+
+# https://github.com/sorin-ionescu/prezto/blob/master/runcoms/zshenv
+# Ensure that a non-login, non-interactive shell has a defined environment.
+if [[ ("$SHELL_OPT_LOGIN" -eq 0 && "$SHELL_OPT_INTERACTIVE" -eq 0) && -s "${ZDOTDIR:-$HOME}/.zprofile" ]]; then
+  source "${ZDOTDIR:-$HOME}/.zprofile"
+fi

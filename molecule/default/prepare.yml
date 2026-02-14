@@ -1,0 +1,48 @@
+---
+- name: Prepare test environment
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Install Python and required packages using raw module
+      ansible.builtin.raw: |
+        apt-get update -qq
+        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq python3 python3-pip python3-apt git curl ca-certificates bash
+        pip3 install --break-system-packages paramiko
+      changed_when: false
+
+    - name: Copy symlink-dotfiles package to container
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../packages/symlink_dotfiles/"
+        dest: /tmp/symlink_dotfiles/
+        mode: preserve
+
+    - name: Install symlink-dotfiles package
+      ansible.builtin.pip:
+        name: /tmp/symlink_dotfiles/
+        extra_args: --break-system-packages
+
+    - name: Ensure .config directory exists
+      ansible.builtin.file:
+        path: ~/.config
+        state: directory
+        mode: "0755"
+
+    - name: Ensure .ssh directory exists
+      ansible.builtin.file:
+        path: ~/.ssh
+        state: directory
+        mode: "0700"
+
+    - name: Create existing SSH config
+      ansible.builtin.copy:
+        content: |
+          # Existing SSH configuration
+          # This file is intentionally non-empty for blockinfile idempotence
+        dest: ~/.ssh/config
+        mode: "0600"
+
+    - name: Ensure .local/bin directory exists
+      ansible.builtin.file:
+        path: ~/.local/bin
+        state: directory
+        mode: "0755"

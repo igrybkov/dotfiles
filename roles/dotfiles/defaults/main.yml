@@ -1,0 +1,19 @@
+---
+# These defaults are overridden by the inventory plugin with profile-specific paths
+# e.g., profiles/common/files/dotfiles, profiles/work/files/dotfiles, etc.
+dotfiles_dir: "{{ playbook_dir }}/profiles/common/files/dotfiles"
+dotfiles_copy_dir: "{{ playbook_dir }}/profiles/common/files/dotfiles-copy"
+bin_dir: "{{ playbook_dir }}/profiles/common/files/bin"
+additional_dotfiles_dirs: []  # List of extra dotfiles directories from custom inventories
+skill_folders: []  # List of destination directories for skills (e.g., ["~/.claude/skills", "~/.cursor/skills"])
+agent_folders: []  # List of destination directories for agents (e.g., ["~/.claude/agents", "~/.cursor/agents"])
+
+# Command to run symlink-dotfiles (installed from packages/symlink_dotfiles via uv)
+dotfiles_symlink_command: symlink-dotfiles
+
+# Marker file for directory-level symlinks (opt-in)
+# Directories containing this file will be symlinked as directories instead of recursively symlinking files
+dotfiles_directory_marker: ".symlink-as-directory"
+
+# Maximum depth for recursive dead symlink cleanup (3 covers most cases like ~/.config/app/subdir/)
+dotfiles_cleanup_depth: 3

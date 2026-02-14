@@ -1,0 +1,55 @@
+---
+# Apply a single YAML config item using Ansible's combine filter
+# Required variables (from loop_var: config_item):
+#   - config_item.file: Path to YAML file
+#   - config_item.content: Dictionary of settings to merge
+#   - config_item.create_file: Create file if missing (default: false)
+
+- name: "[📋 yaml_config] Check if file exists - {{ config_item.file }}"
+  ansible.builtin.stat:
+    path: "{{ config_item.file | expanduser }}"
+  register: _yaml_config_stat
+
+- name: "[📋 yaml_config] Skip - file doesn't exist and create_file is false"
+  ansible.builtin.debug:
+    msg: "Skipping {{ config_item.file }} - file doesn't exist and create_file is false"
+  when:
+    - not _yaml_config_stat.stat.exists
+    - not (config_item.create_file | default(false))
+
+- name: "[📋 yaml_config] Apply configuration to {{ config_item.file }}"
+  when: _yaml_config_stat.stat.exists or (config_item.create_file | default(false))
+  block:
+    - name: "[📋 yaml_config] Ensure parent directory exists - {{ config_item.file }}"
+      ansible.builtin.file:
+        path: "{{ (config_item.file | expanduser) | dirname }}"
+        state: directory
+        mode: "0755"
+      when:
+        - not _yaml_config_stat.stat.exists
+        - config_item.create_file | default(false)
+
+    - name: "[📋 yaml_config] Read current content - {{ config_item.file }}"
+      ansible.builtin.slurp:
+        src: "{{ config_item.file | expanduser }}"
+      register: _yaml_current_content
+      when: _yaml_config_stat.stat.exists
+
+    - name: "[📋 yaml_config] Set base content"
+      ansible.builtin.set_fact:
+        _yaml_base: "{{ (_yaml_current_content.content | b64decode | from_yaml) if _yaml_config_stat.stat.exists else {} }}"
+
+    - name: "[📋 yaml_config] Merge settings"
+      ansible.builtin.set_fact:
+        _yaml_merged: "{{ _yaml_base | combine(config_item.content | default({}), recursive=true) }}"
+
+    - name: "[📋 yaml_config] Check if content changed"
+      ansible.builtin.set_fact:
+        _yaml_content_changed: "{{ _yaml_base != _yaml_merged }}"
+
+    - name: "[📋 yaml_config] Write updated content - {{ config_item.file }}"
+      ansible.builtin.copy:
+        content: "{{ _yaml_merged | to_nice_yaml }}"
+        dest: "{{ config_item.file | expanduser }}"
+        mode: "0644"
+      when: (not _yaml_config_stat.stat.exists) or _yaml_content_changed

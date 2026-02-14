@@ -1,0 +1,59 @@
+---
+argument_specs:
+  main:
+    short_description: Symlink dotfiles to home directory
+    description:
+      - Symlinks dotfiles from profile directories to home directory
+      - Handles ~/.config, ~/.local/bin, skills, and agents folders
+      - Cleans up dead symlinks before symlinking
+    options:
+      dotfiles_dir:
+        description: Path to profile's dotfiles directory
+        type: path
+        default: "{{ playbook_dir }}/profiles/common/files/dotfiles"
+
+      dotfiles_copy_dir:
+        description: Path to profile's dotfiles-copy directory (files copied instead of symlinked)
+        type: path
+        default: "{{ playbook_dir }}/profiles/common/files/dotfiles-copy"
+
+      bin_dir:
+        description: Path to profile's bin scripts directory
+        type: path
+        default: "{{ playbook_dir }}/profiles/common/files/bin"
+
+      additional_dotfiles_dirs:
+        description: List of extra dotfiles directories from custom inventories
+        type: list
+        elements: str
+        default: []
+
+      skill_folders:
+        description: List of destination directories for skills (e.g., ~/.claude/skills)
+        type: list
+        elements: str
+        default: []
+
+      agent_folders:
+        description: List of destination directories for agents (e.g., ~/.claude/agents)
+        type: list
+        elements: str
+        default: []
+
+      dotfiles_symlink_command:
+        description: Command to run symlink-dotfiles (installed from packages/symlink_dotfiles via uv)
+        type: str
+        default: symlink-dotfiles
+
+      dotfiles_directory_marker:
+        description: >
+          Marker file for directory-level symlinks.
+          Directories containing this file will be symlinked as directories
+          instead of recursively symlinking files.
+        type: str
+        default: ".symlink-as-directory"
+
+      dotfiles_cleanup_depth:
+        description: Maximum depth for recursive dead symlink cleanup
+        type: int
+        default: 3

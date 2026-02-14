@@ -1,0 +1,26 @@
+---
+argument_specs:
+  main:
+    short_description: Install PHP composer packages
+    description:
+      - Installs PHP packages globally via composer
+      - Expects pre-aggregated data from playbook
+    options:
+      composer_packages:
+        description: List of composer packages to install
+        type: list
+        elements: dict
+        default: []
+        options:
+          name:
+            description: Package name (vendor/package format)
+            type: str
+            required: true
+          global_command:
+            description: Whether to install globally
+            type: bool
+            default: true
+          working_dir:
+            description: Working directory for installation
+            type: path
+            required: false

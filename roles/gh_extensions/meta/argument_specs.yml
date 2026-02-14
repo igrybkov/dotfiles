@@ -1,0 +1,26 @@
+---
+argument_specs:
+  main:
+    short_description: Install GitHub CLI extensions
+    description:
+      - Installs GitHub CLI extensions
+      - Expects pre-aggregated data from playbook
+    options:
+      gh_extensions:
+        description: List of GitHub CLI extensions to install
+        type: list
+        elements: dict
+        default: []
+        options:
+          name:
+            description: Extension name (owner/repo format)
+            type: str
+            required: true
+          state:
+            description: Extension state
+            type: str
+            choices:
+              - present
+              - absent
+              - latest
+            default: present

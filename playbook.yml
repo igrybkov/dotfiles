@@ -1,0 +1,306 @@
+---
+# Playbook structure:
+# 1. Gather facts (hosts: all) - collect facts from all profile hosts for hostvars
+# 2. Bootstrap (hosts: localhost) - one-time setup before per-profile tasks
+# 3. Per-profile (hosts: all) - profile-specific tasks, runs once per profile
+# 4. Finalize (hosts: localhost) - aggregation from profiles + run-once tasks
+#
+# Using localhost for run-once tasks avoids confusion about "current host" variables
+# and makes the intent explicit: these tasks either aggregate from hostvars or
+# simply need to run once regardless of profiles.
+
+# Gather minimal facts in a dedicated play for performance optimization:
+# - strategy: linear bypasses Mitogen which takes ~16s for fact gathering (~16s -> ~2s)
+# - gather_subset further reduces collection to only needed facts (~2s -> ~0.8s)
+# - Subsequent plays use gather_facts: false and rely on these cached facts
+- name: Gather facts
+  hosts: all:localhost
+  serial: 1
+  strategy: linear
+  gather_subset:
+    - "!all"
+    - "!min"
+    - distribution
+    - env
+    - user_dir
+    - platform
+
+# Bootstrap: one-time setup that must run before per-profile tasks
+# Runs on localhost since these tasks don't need profile-specific data
+- name: Bootstrap
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  environment:
+    PIP_BREAK_SYSTEM_PACKAGES: "1"
+  pre_tasks:
+    - name: "[﬒ dotfiles] Include config.yml overrides"
+      ansible.builtin.include_vars:
+        file: "{{ item }}"
+      with_first_found:
+        - files:
+            - "{{ playbook_dir }}/config.yml"
+          skip: true
+      tags: [always]
+      failed_when: false
+    - name: Link current directory to ~/.dotfiles
+      tags: [always]
+      ansible.builtin.file:
+        src: "{{ playbook_dir }}"
+        path: ~/.dotfiles
+        state: link
+      when: playbook_dir != lookup('env', 'HOME') + '/.dotfiles'
+    - name: Create .cache directory in playbook_dir
+      tags: [always]
+      ansible.builtin.file:
+        path: "{{ playbook_dir }}/.cache"
+        mode: "0755"
+        state: directory
+    - name: Copy fonts
+      tags: [fonts]
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/profiles/common/files/fonts/"
+        dest: ~/Library/Fonts
+        owner: "{{ lookup('env', 'USER') }}"
+        group: staff
+        mode: "0644"
+    - name: Check if Homebrew is already installed
+      tags: [brew]
+      ansible.builtin.stat:
+        path: "{{ '/opt/homebrew/bin/brew' if ansible_facts['machine'] == 'arm64' else '/usr/local/bin/brew' }}"
+      register: homebrew_binary_check
+      when: hostvars[groups['all'] | first]['ansible_facts']['distribution'] | default('') == 'MacOSX'
+    - name: Check for skip-homebrew marker
+      tags: [brew]
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/.cache/skip-homebrew"
+      register: skip_homebrew_marker
+  roles:
+    - name: Install Homebrew
+      role: geerlingguy.mac.homebrew
+      vars:
+        homebrew_taps: []
+      tags: [brew]
+      when:
+        - hostvars[groups['all'] | first]['ansible_facts']['distribution'] | default('') == 'MacOSX'
+        - not ((homebrew_binary_check.stat.exists | default(false)) and (skip_homebrew_marker.stat.exists | default(false)))
+
+    - name: Install Homebrew packages (aggregated from all profiles)
+      role: brew_packages
+      tags: [brew]
+      vars:
+        brew_taps: "{{ lookup('aggregated_profile_var', 'brew_taps') | community.general.lists_mergeby('name') }}"
+        brew_packages: "{{ lookup('aggregated_profile_var', 'brew_packages') | community.general.lists_mergeby('name') }}"
+        cask_packages: "{{ lookup('aggregated_profile_var', 'cask_packages') | community.general.lists_mergeby('name') }}"
+        brew_upgrade_all: "{{ lookup('aggregated_profile_var', 'brew_upgrade_all', merge='any', default=false) }}"
+      when: hostvars[groups['all'] | first]['ansible_facts']['distribution'] | default('') == 'MacOSX'
+
+  post_tasks:
+    - name: Create skip-homebrew marker after successful run
+      tags: [brew]
+      ansible.builtin.file:
+        path: "{{ playbook_dir }}/.cache/skip-homebrew"
+        state: touch
+        mode: "0644"
+      when:
+        - hostvars[groups['all'] | first]['ansible_facts']['distribution'] | default('') == 'MacOSX'
+        - homebrew_binary_check.stat.exists | default(false)
+        - not (skip_homebrew_marker.stat.exists | default(false))
+
+# Per-profile: tasks that run once for each profile with profile-specific data
+- name: Setup dependencies per profile
+  hosts: all
+  serial: 1
+  gather_facts: false
+  pre_tasks:
+    - name: "[ MCP] Load profile secrets.yml if available"
+      tags: [mcp-servers]
+      ansible.builtin.include_vars:
+        file: "{{ item }}"
+      with_first_found:
+        - files:
+            - "{{ profile_dir }}/secrets.yml"
+          skip: true
+      when: profile_dir is defined
+      failed_when: false
+
+    - name: "[ MCP] Load profile secrets (all *.yml files from secrets/)"
+      tags: [mcp-servers]
+      ansible.builtin.include_vars:
+        file: "{{ item }}"
+      with_fileglob:
+        - "{{ profile_dir }}/secrets/*.yml"
+      when: profile_dir is defined
+      failed_when: false
+
+    - name: "[ MCP] Load main secrets if available"
+      tags: [mcp-servers]
+      ansible.builtin.include_vars:
+        file: "{{ item }}"
+      with_first_found:
+        - files:
+            - "{{ playbook_dir }}/secrets/{{ inventory_hostname }}.yml"
+            - "{{ playbook_dir }}/secrets/common.yml"
+          skip: true
+      failed_when: false
+  roles:
+    - name: Including role dotfiles
+      role: dotfiles
+      tags: [dotfiles]
+
+    - name: Including role pipx
+      role: pipx
+      tags: [python, pipx]
+
+    - name: Configure MCP servers (per-profile)
+      role: mcp_servers
+      tags: [mcp-servers]
+
+  post_tasks:
+    - name: "[󰚩 Profile] Check if profile tasks file exists"
+      tags: [always]
+      ansible.builtin.stat:
+        path: "{{ profile_tasks_file }}"
+      register: _profile_tasks_stat
+      when: profile_tasks_file is defined
+
+    - name: "[󰚩 Profile] Include profile-specific tasks"
+      tags: [always]
+      ansible.builtin.include_tasks:
+        file: "{{ profile_tasks_file }}"
+      when:
+        - profile_tasks_file is defined
+        - _profile_tasks_stat.stat.exists | default(false)
+
+# Finalize: aggregation tasks + run-once tasks
+# Runs on localhost to:
+# 1. Aggregate data from all profiles via hostvars (brew_packages, mas, ssh_config, gitconfig, gh_extensions)
+# 2. Run tasks that only need to execute once (chsh, docker, mise)
+- name: Finalize
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  roles:
+    - name: Install Mac App Store packages (aggregated from all profiles)
+      role: mas
+      tags: [mas]
+      vars:
+        mas_packages: "{{ lookup('aggregated_profile_var', 'mas_packages') | community.general.lists_mergeby('id') }}"
+        mas_upgrade_all: "{{ lookup('aggregated_profile_var', 'mas_upgrade_all', merge='any', default=false) }}"
+      when: hostvars[groups['all'] | first]['ansible_facts']['distribution'] | default('') == 'MacOSX'
+
+    - name: Set up ssh config (aggregated from all profiles)
+      role: ssh_config
+      tags: [ssh]
+      vars:
+        ssh_client_config: "{{ lookup('aggregated_profile_var', 'ssh_client_config') | community.general.lists_mergeby('host') }}"
+        ssh_client_config_block: "{{ lookup('aggregated_profile_var', 'ssh_client_config_block') }}"
+
+    - name: Set up gitconfig (aggregated from all profiles)
+      role: gitconfig
+      tags: [gitconfig]
+
+    - name: Including role chsh
+      role: chsh
+      tags: [chsh]
+
+    - name: Including role docker
+      role: docker
+      tags: [docker]
+
+    - name: Including role gh_extensions (aggregated from all profiles)
+      role: gh_extensions
+      tags: [gh-extensions]
+      vars:
+        gh_extensions: "{{ lookup('aggregated_profile_var', 'gh_extensions') | community.general.lists_mergeby('name') }}"
+
+    - name: Install pip packages (aggregated from all profiles)
+      role: pip
+      tags: [python, pip]
+      vars:
+        pip_packages: "{{ lookup('aggregated_profile_var', 'pip_packages') | community.general.lists_mergeby('name') }}"
+
+    - name: Install gem packages (aggregated from all profiles)
+      role: gem
+      tags: [gem]
+      vars:
+        gem_packages: "{{ lookup('aggregated_profile_var', 'gem_packages') | community.general.lists_mergeby('name') }}"
+
+    - name: Install composer packages (aggregated from all profiles)
+      role: composer
+      tags: [composer]
+      vars:
+        composer_packages: "{{ lookup('aggregated_profile_var', 'composer_packages') | community.general.lists_mergeby('name') }}"
+
+    - name: Clone GitHub repositories (aggregated from all profiles)
+      role: gh_repos
+      tags: [gh-repos]
+      vars:
+        gh_repos: "{{ lookup('aggregated_profile_var', 'gh_repos') | community.general.lists_mergeby('repo') }}"
+        gh_repos_default_dest: "{{ lookup('aggregated_profile_var', 'gh_repos_default_dest', merge='last', default='~/Projects') }}"
+
+    - name: Install Cursor CLI (aggregated from all profiles)
+      role: cursor_cli
+      tags: [cursor-cli]
+      vars:
+        install_cursor_cli: "{{ lookup('aggregated_profile_var', 'install_cursor_cli', merge='any', default=false) }}"
+
+    - name: Apply JSON config settings (aggregated from all profiles)
+      role: json_config
+      tags: [json-config, coding-agents]
+      vars:
+        json_configs: "{{ lookup('aggregated_profile_var', 'json_configs') | flatten }}"
+
+    - name: Apply YAML config settings (aggregated from all profiles)
+      role: yaml_config
+      tags: [yaml-config]
+      vars:
+        yaml_configs: "{{ lookup('aggregated_profile_var', 'yaml_configs') | flatten }}"
+
+  tasks:
+    - name: Install mise tools if mise cli is installed
+      tags: [mise]
+      block:
+        - name: Check if mise binary exists
+          ansible.builtin.command: which mise
+          register: mise
+          ignore_errors: true
+          changed_when: false
+
+        - name: Run mise install
+          ansible.builtin.command: "mise install"
+          register: mise_install_result
+          when: mise.rc == 0
+          changed_when: "'mise all tools are installed' not in mise_install_result.stderr"
+
+    - name: Install npm packages (aggregated from all profiles)
+      tags: [npm]
+      ansible.builtin.include_role:
+        name: npm
+      vars:
+        npm_packages: "{{ lookup('aggregated_profile_var', 'npm_packages') | community.general.lists_mergeby('name') }}"
+
+    - name: "[ Summary] Check for Mac App Store errors file"
+      tags: [always]
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/.cache/mas_errors.json"
+      register: mas_errors_file
+
+    - name: "[ Summary] Read Mac App Store errors"
+      tags: [always]
+      ansible.builtin.set_fact:
+        all_mas_errors: "{{ lookup('file', playbook_dir + '/.cache/mas_errors.json') | from_json }}"
+      when: mas_errors_file.stat.exists
+
+    - name: "[ Summary] Report Mac App Store errors"
+      tags: [always]
+      ansible.builtin.fail:
+        msg: |
+          Provisioning completed, but Mac App Store operations had errors:
+          {% for error in all_mas_errors %}
+            - {{ error }}
+          {% endfor %}
+
+          These errors are typically caused by network timeouts or App Store service issues.
+          You can retry by running: ./dotfiles install mas
+      when: mas_errors_file.stat.exists and (all_mas_errors | default([]) | length > 0)

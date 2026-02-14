@@ -1,0 +1,26 @@
+---
+# List of GitHub repositories to clone
+# Each item can be:
+#   - A string: "owner/repo" (clones to ~/Projects/repo)
+#   - A dict with options:
+#       repo: "owner/repo" (required)
+#       dest: "/path/to/destination" (optional, defaults to ~/Projects/{repo_name})
+#       state: "present" or "latest" (optional, defaults to "present")
+#       branch: "branch-name" (optional)
+#       tag: "tag-name" (optional, takes precedence over branch)
+#
+# Example:
+# gh_repos:
+#   - owner/repo
+#   - repo: owner/another-repo
+#     dest: ~/Projects/another-repo
+#     state: latest
+#   - repo: owner/versioned-repo
+#     tag: v1.0.0
+#   - repo: owner/feature-repo
+#     branch: develop
+gh_repos: []
+
+# Default destination directory for repos (repo name will be appended)
+# Paths can use ~/ for home directory (expanded by the role)
+gh_repos_default_dest: ~/Projects

@@ -1,0 +1,50 @@
+# load zsh-async first in case it's a dependency of another plugin
+mafredri/zsh-async
+
+# This first block is slowest plugins in the set. Still, they worth it.
+robbyrussell/oh-my-zsh path:plugins/ssh-agent kind:defer
+robbyrussell/oh-my-zsh path:plugins/gpg-agent kind:defer
+zdharma/fast-syntax-highlighting kind:defer
+
+yous/vanilli.sh # A lightweight start point of shell configuration
+#zpm-zsh/ssh # Zsh plugin for ssh
+djui/alias-tips
+chrissicool/zsh-256color
+horosgrisa/mysql-colorize.bash
+marzocchi/zsh-notify
+mdumitru/fancy-ctrl-z # fancy way to pause and resume execution by ctrl-z
+zsh-users/zsh-autosuggestions # adds guesses on command completion based on the history
+
+# caching of eval expressions
+# see docs for usage: https://github.com/mroth/evalcache
+#mroth/evalcache
+
+# autocompletion
+zsh-users/zsh-completions # Additional completion definitions
+zchee/zsh-completions
+lukechilds/zsh-better-npm-completion # npm
+voronkovich/symfony-complete.plugin.zsh
+
+# git(hub) improvements
+mroth/git-prompt-useremail
+caarlos0/open-pr kind:path
+paulirish/git-open
+mollifier/cd-gitroot
+
+robbyrussell/oh-my-zsh path:plugins/pj
+robbyrussell/oh-my-zsh path:plugins/sudo
+robbyrussell/oh-my-zsh path:plugins/docker-compose
+
+#robbyrussell/oh-my-zsh path:lib/history.zsh
+#robbyrussell/oh-my-zsh path:lib/git.zsh
+#robbyrussell/oh-my-zsh path:plugins/history
+joshskidmore/zsh-fzf-history-search
+
+allanjamesvestal/fast-zsh-nvm # NVM
+reegnz/jq-zsh-plugin
+
+# kubetail
+johanhaleby/kubetail
+
+# vim mode
+jeffreytse/zsh-vi-mode

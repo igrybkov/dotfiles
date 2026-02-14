@@ -1,0 +1,39 @@
+# Theme (migrated from wezterm OneDark base16)
+theme = Atom One Dark
+
+# Font (migrated from wezterm)
+font-family = JetBrains Mono
+font-style = Bold Italic
+font-size = 14
+
+# Treat Option key as Alt/Meta (sends escape sequences for terminal keybindings)
+macos-option-as-alt = true
+keybind = shift+enter=text:\x1b\r
+
+# Shell Integration (Fish)
+shell-integration = fish
+shell-integration-features = cursor,sudo,title
+keybind = ctrl+shift+up=jump_to_prompt:-1
+keybind = ctrl+shift+down=jump_to_prompt:1
+
+# Quick terminal (IDE-style)
+keybind = global:alt+shift+f12=toggle_quick_terminal
+quick-terminal-position = top
+quick-terminal-size = 50%
+
+# Window management
+window-save-state = always
+window-inherit-working-directory = true
+window-padding-x = 8
+window-padding-y = 8
+macos-titlebar-style = transparent
+
+# Performance (larger scrollback for Claude Code sessions)
+scrollback-limit = 100000000
+mouse-scroll-multiplier = 0.5
+
+# Safety - warn before pasting multiline content
+clipboard-paste-protection = true
+
+# Links - clickable with Cmd+click (default behavior)
+link-url = true

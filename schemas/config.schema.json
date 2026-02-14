@@ -1,0 +1,769 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Dotfiles Profile Configuration",
+  "description": "Configuration schema for dotfiles profile config.yml files",
+  "type": "object",
+  "properties": {
+    "additional_dotfiles_dirs": {
+      "description": "List of extra dotfiles directories from custom inventories",
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "agent_folders": {
+      "description": "List of destination directories for agents (e.g., ~/.claude/agents)",
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "bin_dir": {
+      "description": "Path to profile's bin scripts directory",
+      "type": "string"
+    },
+    "brew_packages": {
+      "description": "List of Homebrew formulae to install",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "description": "Package name",
+            "type": "string"
+          },
+          "state": {
+            "description": "Package state",
+            "type": "string",
+            "enum": [
+              "present",
+              "absent",
+              "latest"
+            ],
+            "default": "present"
+          },
+          "version": {
+            "description": "Specific version to install",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "default": []
+    },
+    "brew_taps": {
+      "description": "List of Homebrew taps to configure",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "description": "Tap name (e.g., \"homebrew/cask-fonts\")",
+            "type": "string"
+          },
+          "state": {
+            "description": "Whether the tap should be present or absent",
+            "type": "string",
+            "enum": [
+              "present",
+              "absent"
+            ],
+            "default": "present"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "default": []
+    },
+    "brew_upgrade_all": {
+      "description": "Whether to run brew upgrade after installation",
+      "type": "boolean",
+      "default": false
+    },
+    "cask_packages": {
+      "description": "List of Homebrew casks to install",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "description": "Cask name",
+            "type": "string"
+          },
+          "state": {
+            "description": "Cask state",
+            "type": "string",
+            "enum": [
+              "present",
+              "absent",
+              "latest"
+            ],
+            "default": "present"
+          },
+          "version": {
+            "description": "Specific version to install",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "default": []
+    },
+    "composer_packages": {
+      "description": "List of composer packages to install",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "global_command": {
+            "description": "Whether to install globally",
+            "type": "boolean",
+            "default": true
+          },
+          "name": {
+            "description": "Package name (vendor/package format)",
+            "type": "string"
+          },
+          "working_dir": {
+            "description": "Working directory for installation",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "default": []
+    },
+    "dotfiles_cleanup_depth": {
+      "description": "Maximum depth for recursive dead symlink cleanup",
+      "type": "integer",
+      "default": 3
+    },
+    "dotfiles_copy_dir": {
+      "description": "Path to profile's dotfiles-copy directory (files copied instead of symlinked)",
+      "type": "string"
+    },
+    "dotfiles_dir": {
+      "description": "Path to profile's dotfiles directory",
+      "type": "string"
+    },
+    "dotfiles_directory_marker": {
+      "description": "Marker file for directory-level symlinks. Directories containing this file will be symlinked as directories instead of recursively symlinking files.",
+      "type": "string",
+      "default": ".symlink-as-directory"
+    },
+    "dotfiles_symlink_command": {
+      "description": "Command to run symlink-dotfiles (installed from packages/symlink_dotfiles via uv)",
+      "type": "string",
+      "default": "symlink-dotfiles"
+    },
+    "gem_packages": {
+      "description": "List of Ruby gems to install",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "description": "Gem name",
+            "type": "string"
+          },
+          "state": {
+            "description": "Gem state",
+            "type": "string",
+            "enum": [
+              "present",
+              "absent",
+              "latest"
+            ],
+            "default": "present"
+          },
+          "version": {
+            "description": "Specific version to install",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "default": []
+    },
+    "gh_extensions": {
+      "description": "List of GitHub CLI extensions to install",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "description": "Extension name (owner/repo format)",
+            "type": "string"
+          },
+          "state": {
+            "description": "Extension state",
+            "type": "string",
+            "enum": [
+              "present",
+              "absent",
+              "latest"
+            ],
+            "default": "present"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "default": []
+    },
+    "gh_repos": {
+      "description": "List of GitHub repositories to clone",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "branch": {
+            "description": "Branch to checkout",
+            "type": "string"
+          },
+          "dest": {
+            "description": "Destination path (defaults to ~/Projects/{repo_name})",
+            "type": "string"
+          },
+          "repo": {
+            "description": "Repository in owner/repo format",
+            "type": "string"
+          },
+          "state": {
+            "description": "Repository state",
+            "type": "string",
+            "enum": [
+              "present",
+              "latest"
+            ],
+            "default": "present"
+          },
+          "tag": {
+            "description": "Tag to checkout (takes precedence over branch)",
+            "type": "string"
+          }
+        },
+        "required": [
+          "repo"
+        ],
+        "additionalProperties": false
+      },
+      "default": []
+    },
+    "gh_repos_default_dest": {
+      "description": "Default destination directory for repositories",
+      "type": "string",
+      "default": "~/Projects"
+    },
+    "gitconfig_conf_d": {
+      "description": "Path to the git conf.d directory for config fragments",
+      "type": "string",
+      "default": "~/.config/git/conf.d"
+    },
+    "gitconfig_includes_file": {
+      "description": "Path to the generated includes.gitconfig file",
+      "type": "string",
+      "default": "~/.config/git/conf.d/includes.gitconfig"
+    },
+    "gitignore_file": {
+      "description": "Path to the global gitignore file",
+      "type": "string",
+      "default": "~/.config/git/gitignore"
+    },
+    "install_cursor_cli": {
+      "description": "Whether to install Cursor CLI",
+      "type": "boolean",
+      "default": false
+    },
+    "json_configs": {
+      "description": "List of JSON configuration items to apply",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "description": "Dictionary of settings to merge into the file",
+            "type": "object"
+          },
+          "create_file": {
+            "description": "Create the file if it does not exist",
+            "type": "boolean",
+            "default": false
+          },
+          "file": {
+            "description": "Path to JSON file",
+            "type": "string"
+          }
+        },
+        "required": [
+          "content",
+          "file"
+        ],
+        "additionalProperties": false
+      },
+      "default": []
+    },
+    "mas_packages": {
+      "description": "List of Mac App Store packages to install",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "description": "Mac App Store application ID",
+            "type": "integer"
+          },
+          "name": {
+            "description": "Application name (for display)",
+            "type": "string"
+          },
+          "state": {
+            "description": "Package state",
+            "type": "string",
+            "enum": [
+              "present",
+              "absent"
+            ],
+            "default": "present"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "default": []
+    },
+    "mas_upgrade_all": {
+      "description": "Whether to upgrade all Mac App Store packages",
+      "type": "boolean",
+      "default": false
+    },
+    "mcp_default_config_files": {
+      "description": "Default config files to update when config_files is not specified per server",
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [
+        "~/.mcp.json",
+        "~/Library/Application Support/Claude/claude_desktop_config.json"
+      ]
+    },
+    "mcp_servers": {
+      "description": "List of MCP server configurations.\nEach server must have a name and either a command or url.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "args": {
+            "description": "Arguments to pass to the command",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "command": {
+            "description": "Command to run the server (stdio transport)",
+            "type": "string"
+          },
+          "config_files": {
+            "description": "List of config files to update for this server",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "description": "Path to the config file",
+                  "type": "string"
+                },
+                "state": {
+                  "description": "Whether to add or remove the server from this config file",
+                  "type": "string",
+                  "enum": [
+                    "present",
+                    "absent"
+                  ],
+                  "default": "present"
+                }
+              },
+              "required": [
+                "path"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "env": {
+            "description": "Environment variables (supports vault and 1Password secrets)",
+            "type": "object"
+          },
+          "git_dest": {
+            "description": "Destination path for the cloned repository",
+            "type": "string"
+          },
+          "git_force": {
+            "description": "Force git clone/checkout even if destination exists",
+            "type": "boolean"
+          },
+          "git_force_reset": {
+            "description": "Allow destructive operations when local changes (uncommitted/unpushed) exist in the repo",
+            "type": "boolean"
+          },
+          "git_repo": {
+            "description": "Git repository URL to clone for the server",
+            "type": "string"
+          },
+          "git_version": {
+            "description": "Git version (branch, tag, or commit) to checkout",
+            "type": "string"
+          },
+          "headers": {
+            "description": "HTTP headers for URL-based servers (supports vault and 1Password secrets)",
+            "type": "object"
+          },
+          "name": {
+            "description": "Unique identifier for the server",
+            "type": "string"
+          },
+          "post_clone": {
+            "description": "Shell command to run after cloning the repository",
+            "type": "string"
+          },
+          "state": {
+            "description": "Whether the server should be present or absent",
+            "type": "string",
+            "enum": [
+              "present",
+              "absent"
+            ],
+            "default": "present"
+          },
+          "transport": {
+            "description": "Transport type for URL-based servers (e.g., sse, streamable-http)",
+            "type": "string"
+          },
+          "url": {
+            "description": "HTTP endpoint URL for the MCP server (HTTP/SSE transport)",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "default": []
+    },
+    "mcp_servers_git_base": {
+      "description": "Base directory for git-cloned MCP servers",
+      "type": "string",
+      "default": "~/.local/share/mcp-servers"
+    },
+    "npm_packages": {
+      "description": "List of npm packages to install globally",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "description": "Package name",
+            "type": "string"
+          },
+          "state": {
+            "description": "Package state",
+            "type": "string",
+            "enum": [
+              "present",
+              "absent",
+              "latest"
+            ],
+            "default": "present"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "default": []
+    },
+    "pip_executable": {
+      "description": "Path to pip executable",
+      "type": "string"
+    },
+    "pip_miniconda_path": {
+      "description": "Path to miniconda installation",
+      "type": "string",
+      "default": "/opt/homebrew/Caskroom/miniconda/base"
+    },
+    "pip_packages": {
+      "description": "List of pip packages to install",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "description": "Package name or git URL",
+            "type": "string"
+          },
+          "state": {
+            "description": "Package state",
+            "type": "string",
+            "enum": [
+              "present",
+              "absent",
+              "latest"
+            ],
+            "default": "latest"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "default": []
+    },
+    "pip_system_pip_path": {
+      "description": "Path to system pip",
+      "type": "string",
+      "default": "/usr/local/bin/pip3"
+    },
+    "pipx_packages": {
+      "description": "List of pipx packages to install.\nSimple string entries install from PyPI.\nDict entries support additional options.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "build_deps": {
+            "description": "List of Homebrew packages whose prefixes will be used to set CFLAGS (-I) and LDFLAGS (-L) during installation",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "editable": {
+            "description": "Install in editable mode (default true for local packages)",
+            "type": "boolean"
+          },
+          "env": {
+            "description": "Environment variables for the build",
+            "type": "object"
+          },
+          "name": {
+            "description": "Package name",
+            "type": "string"
+          },
+          "path": {
+            "description": "Local package path. Paths starting with \"packages/\" are relative to the profile directory.",
+            "type": "string"
+          },
+          "state": {
+            "description": "Package state",
+            "type": "string",
+            "enum": [
+              "present",
+              "absent"
+            ],
+            "default": "present"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "default": []
+    },
+    "profile": {
+      "description": "Profile configuration for the dynamic inventory plugin",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "Profile name (must match directory name)",
+          "type": "string"
+        },
+        "priority": {
+          "description": "Profile priority (lower runs first)",
+          "type": "integer"
+        },
+        "host": {
+          "description": "Ansible host name (defaults to profile name)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "skill_folders": {
+      "description": "List of destination directories for skills (e.g., ~/.claude/skills)",
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "ssh_client_config": {
+      "description": "List of SSH host configurations",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "add_keys_to_agent": {
+            "description": "AddKeysToAgent option",
+            "type": "string"
+          },
+          "dynamicforward": {
+            "description": "Dynamic port forwarding (SOCKS proxy)",
+            "type": "string"
+          },
+          "forward_agent": {
+            "description": "Enable agent forwarding",
+            "type": "boolean"
+          },
+          "host": {
+            "description": "SSH host pattern",
+            "type": "string"
+          },
+          "hostname": {
+            "description": "Real hostname or IP",
+            "type": "string"
+          },
+          "identities_only": {
+            "description": "Only use specified identity files",
+            "type": "boolean"
+          },
+          "identity_file": {
+            "description": "Path to identity file",
+            "type": "string"
+          },
+          "other_options": {
+            "description": "Additional SSH options as key-value pairs",
+            "type": "object"
+          },
+          "port": {
+            "description": "SSH port",
+            "type": "integer"
+          },
+          "proxycommand": {
+            "description": "Proxy command",
+            "type": "string"
+          },
+          "proxyjump": {
+            "description": "Proxy jump host",
+            "type": "string"
+          },
+          "remote_user": {
+            "description": "SSH username",
+            "type": "string"
+          },
+          "state": {
+            "description": "Host entry state",
+            "type": "string",
+            "enum": [
+              "present",
+              "absent"
+            ],
+            "default": "present"
+          },
+          "strict_host_key_checking": {
+            "description": "StrictHostKeyChecking option",
+            "type": "string"
+          },
+          "user_known_hosts_file": {
+            "description": "Path to known hosts file",
+            "type": "string"
+          }
+        },
+        "required": [
+          "host"
+        ],
+        "additionalProperties": false
+      },
+      "default": []
+    },
+    "ssh_client_config_block": {
+      "description": "SSH config text blocks",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "description": "Block content",
+            "type": "string"
+          },
+          "position": {
+            "description": "Block position in config file",
+            "type": "string",
+            "enum": [
+              "top",
+              "bottom"
+            ]
+          }
+        },
+        "required": [
+          "content",
+          "position"
+        ],
+        "additionalProperties": false
+      },
+      "default": []
+    },
+    "ssh_config_file": {
+      "description": "Path to SSH config file",
+      "type": "string",
+      "default": "~/.ssh/config"
+    },
+    "yaml_configs": {
+      "description": "List of YAML configuration items to apply",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "description": "Dictionary of settings to merge into the file",
+            "type": "object"
+          },
+          "create_file": {
+            "description": "Create the file if it does not exist",
+            "type": "boolean",
+            "default": false
+          },
+          "file": {
+            "description": "Path to YAML file",
+            "type": "string"
+          }
+        },
+        "required": [
+          "content",
+          "file"
+        ],
+        "additionalProperties": false
+      },
+      "default": []
+    }
+  },
+  "additionalProperties": true
+}

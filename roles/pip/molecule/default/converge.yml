@@ -1,0 +1,11 @@
+---
+- name: Converge - Test pip role
+  hosts: all
+  gather_facts: true
+  roles:
+    - role: pip
+      vars:
+        # Use the virtual environment pip to avoid Debian pip upgrade issues
+        pip_system_pip_path: /opt/test-venv/bin/pip
+        # pip_packages is set as cacheable fact in prepare.yml
+        # so it's available in hostvars for aggregated_profile_var lookup

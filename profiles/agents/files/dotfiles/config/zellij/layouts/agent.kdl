@@ -1,0 +1,198 @@
+ƒ// Generic AI agent development layout
+// Uses $AGENT environment variable to determine which agent to run
+// Multiple agent sessions + Neovim for real-time code watching
+
+layout {
+    default_tab_template {
+        pane size=1 borderless=true {
+            plugin location="tab-bar"
+        }
+        children
+        pane size=2 borderless=true {
+            plugin location="status-bar"
+        }
+    }
+
+    // Main development tab - Eight agent sessions with status board
+    tab name="1. Chats 1-8" focus=true {
+        pane split_direction="vertical" {
+            // Left: Agents 1-4 stacked
+            pane stacked=true {
+                pane name="chat-1" expanded=true {
+                    command "fish"
+                    args "-c" "env HIVE_PANE_ID=1 hive run --restart"
+                }
+                pane name="chat-2" start_suspended=true {
+                    command "fish"
+                    args "-c" "env HIVE_PANE_ID=2 hive run --restart"
+                }
+                pane name="chat-3" start_suspended=true {
+                    command "fish"
+                    args "-c" "env HIVE_PANE_ID=3 hive run --restart"
+                }
+                pane name="chat-4" start_suspended=true {
+                    command "fish"
+                    args "-c" "env HIVE_PANE_ID=4 hive run --restart"
+                }
+            }
+            // Right: Agents 5-8 stacked + status board
+            pane split_direction="horizontal" {
+                pane size="75%" stacked=true {
+                    pane name="chat-5" expanded=true start_suspended=true {
+                        command "fish"
+                        args "-c" "env HIVE_PANE_ID=5 hive run --restart"
+                    }
+                    pane name="chat-6" start_suspended=true {
+                        command "fish"
+                        args "-c" "env HIVE_PANE_ID=6 hive run --restart"
+                    }
+                    pane name="chat-7" start_suspended=true {
+                        command "fish"
+                        args "-c" "env HIVE_PANE_ID=7 hive run --restart"
+                    }
+                    pane name="chat-8" start_suspended=true {
+                        command "fish"
+                        args "-c" "env HIVE_PANE_ID=8 hive run --restart"
+                    }
+                }
+                pane name="status" {
+                    command "fish"
+                    args "-c" "cd (hive wt parent) && exec hive status --watch --compact"
+                }
+            }
+        }
+    }
+
+    // Additional agent sessions tab - Eight more agents
+    tab name="2. Chats 9-16" {
+        pane split_direction="vertical" {
+            // Left: Agents 9-12 stacked
+            pane stacked=true {
+                pane name="chat-9" expanded=true start_suspended=true {
+                    command "fish"
+                    args "-c" "env HIVE_PANE_ID=9 hive run --restart"
+                }
+                pane name="chat-10" start_suspended=true {
+                    command "fish"
+                    args "-c" "env HIVE_PANE_ID=10 hive run --restart"
+                }
+                pane name="chat-11" start_suspended=true {
+                    command "fish"
+                    args "-c" "env HIVE_PANE_ID=11 hive run --restart"
+                }
+                pane name="chat-12" start_suspended=true {
+                    command "fish"
+                    args "-c" "env HIVE_PANE_ID=12 hive run --restart"
+                }
+            }
+            // Right: Agents 13-16 stacked
+            pane stacked=true {
+                pane name="chat-13" expanded=true start_suspended=true {
+                    command "fish"
+                    args "-c" "env HIVE_PANE_ID=13 hive run --restart"
+                }
+                pane name="chat-14" start_suspended=true {
+                    command "fish"
+                    args "-c" "env HIVE_PANE_ID=14 hive run --restart"
+                }
+                pane name="chat-15" start_suspended=true {
+                    command "fish"
+                    args "-c" "env HIVE_PANE_ID=15 hive run --restart"
+                }
+                pane name="chat-16" start_suspended=true {
+                    command "fish"
+                    args "-c" "env HIVE_PANE_ID=16 hive run --restart"
+                }
+            }
+        }
+    }
+
+    // Shell + Logs tab
+    tab name="3. Shell" {
+        pane split_direction="vertical" {
+            // Left: Shells stacked
+            pane size="50%" split_direction="horizontal" {
+                pane size="70%" name="shell" {
+                    command "fish"
+                    args "-c" "cd (hive wt parent) && exec fish"
+                }
+                pane name="shell-2" {
+                    command "fish"
+                    args "-c" "cd (hive wt parent) && exec fish"
+                }
+            }
+            // Right: Logs stacked
+            pane split_direction="horizontal" {
+                // Log watcher (Enter to start)
+                pane size="50%" name="watch-logs" start_suspended=true {
+                    command "fish"
+                    args "-c" "hive wt exec -c 'watch-logs' --restart -w=-"
+                }
+                // Lazydocker (Enter to start)
+                pane name="lazydocker" start_suspended=true {
+                    command "lazydocker"
+                }
+            }
+        }
+    }
+
+    // Multi-agent workflow tools tab
+    tab name="4. Workflow" {
+        pane split_direction="horizontal" {
+            // Top: Diff and merge preview side by side
+            pane size="60%" split_direction="vertical" {
+                pane name="diff" start_suspended=true {
+                    command "fish"
+                    args "-c" "cd (hive wt parent) && hive diff --stat && echo '' && echo 'Press Enter to see full diff...' && read && hive diff"
+                }
+                pane name="merge-preview" start_suspended=true {
+                    command "fish"
+                    args "-c" "cd (hive wt parent) && exec watch -n 5 -c hive merge-preview"
+                }
+            }
+            // Bottom: Rebase check and tasks
+            pane split_direction="vertical" {
+                pane name="rebase-check" start_suspended=true {
+                    command "fish"
+                    args "-c" "cd (hive wt parent) && exec hive rebase-check --fetch"
+                }
+                pane name="tasks" start_suspended=true {
+                    command "fish"
+                    args "-c" "cd (hive wt parent) && exec watch -n 5 -c hive task"
+                }
+            }
+        }
+    }
+
+    // Git operations tab
+    tab name="5. Git" {
+        pane split_direction="horizontal" {
+            // Top: lazygit (70%)
+            pane size="70%" name="lazygit" {
+                command "fish"
+                args "-c" "cd (hive wt parent) && exec lazygit"
+            }
+            // Bottom: Git command shell (30%)
+            pane name="git-shell" {
+                command "fish"
+                args "-c" "cd (hive wt parent) && exec fish"
+            }
+        }
+    }
+
+    // Tests tab
+    tab name="6. Tests" {
+        pane name="watch-tests" start_suspended=true {
+            command "fish"
+            args "-c" "hive wt exec -c 'watch-tests' --restart --restart-confirmation -w=-"
+        }
+    }
+
+    // Neovim tab - focused editing
+    tab name="7. Neovim" {
+        pane name="neovim" {
+            command "fish"
+            args "-c" "hive wt exec -c 'nvim' --restart -w=-"
+        }
+    }
+}

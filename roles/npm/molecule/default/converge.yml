@@ -1,0 +1,11 @@
+---
+- name: Converge - Test npm role
+  hosts: all
+  gather_facts: true
+  roles:
+    - role: npm
+      vars:
+        npm_packages:
+          - name: cowsay
+          - name: is-odd
+            state: present

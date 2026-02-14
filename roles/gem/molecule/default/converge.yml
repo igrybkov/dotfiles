@@ -1,0 +1,8 @@
+---
+- name: Converge - Test gem role
+  hosts: all
+  gather_facts: true
+  roles:
+    - role: gem
+      # Variables are set as cacheable facts in prepare.yml
+      # so they're available in hostvars for aggregated_profile_var lookup

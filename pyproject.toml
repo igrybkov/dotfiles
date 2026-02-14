@@ -1,0 +1,75 @@
+[project]
+name = "dotfiles"
+version = "0.1.0"
+description = "Ansible managed dotfiles"
+readme = "README.md"
+requires-python = "~=3.14.0"
+classifiers = [
+  # Prevent accidental upload to PyPI
+  "Private :: Do Not Upload",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+]
+dependencies = [
+  # Ansible core
+  "ansible~=13.3.0",
+  "ansible-runner~=2.4.2",
+  # Cloud providers
+  "boto3~=1.42.21",
+  # Security
+  "certifi~=2026.1.4",
+  # Workspace packages
+  "dotfiles-cli",
+  "dotfiles-profile-discovery",
+  "mitogen~=0.3.36",
+  "paramiko~=4.0.0",
+  "symlink-dotfiles",
+]
+
+[dependency-groups]
+dev = [
+  "ansible-lint~=26.1.0",
+  "cyclopts~=4.5.0",
+  "docopt~=0.6.2",
+  "molecule~=25.12.0",
+  "molecule-plugins[docker]>=23.5",
+  "pip>=25",
+  "pre-commit~=4.5.1",
+  "pytest~=9.0.2",
+  "pytest-cov~=7.0.0",
+  "pytest-testinfra>=9",
+  "pytest-watcher~=0.6.1",
+  "ruff~=0.15.0",
+]
+
+[tool.uv.workspace]
+members = [ "packages/*" ]
+
+[tool.uv.sources]
+dotfiles-cli = { workspace = true }
+dotfiles-profile-discovery = { workspace = true }
+symlink-dotfiles = { workspace = true }
+
+[tool.pytest.ini_options]
+testpaths = [
+  "packages/dotfiles_cli/tests",
+  "packages/dotfiles_profile_discovery/tests",
+  "packages/symlink_dotfiles/tests",
+  "profiles/agents/packages/hive_cli/tests",
+]
+norecursedirs = [ ".git", ".venv", "node_modules", "__pycache__" ]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+addopts = "-v --tb=short"
+filterwarnings = [
+  "ignore:The '__version__' attribute is deprecated:DeprecationWarning:click_aliases",
+]
+markers = [
+  "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+  "cli: marks tests for CLI functionality",
+]

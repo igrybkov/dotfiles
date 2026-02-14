@@ -1,0 +1,100 @@
+---
+- name: Verify macOS integration
+  hosts: all
+  gather_facts: true
+  tasks:
+    - name: Verify running on macOS
+      ansible.builtin.assert:
+        that:
+          - ansible_facts['distribution'] == 'MacOSX'
+        fail_msg: "This verification should only run on macOS"
+
+    # Verify Homebrew installation
+    - name: Check Homebrew is installed
+      ansible.builtin.stat:
+        path: /opt/homebrew/bin/brew
+      register: brew_binary
+
+    - name: Assert Homebrew exists
+      ansible.builtin.assert:
+        that:
+          - brew_binary.stat.exists
+        fail_msg: "Homebrew should be installed at /opt/homebrew/bin/brew"
+
+    # Verify brew packages
+    - name: Check bat is installed
+      ansible.builtin.command:
+        cmd: /opt/homebrew/bin/brew list bat
+      register: bat_check
+      changed_when: false
+      failed_when: false
+
+    - name: Assert bat is installed
+      ansible.builtin.assert:
+        that:
+          - bat_check.rc == 0
+        fail_msg: "bat should be installed via Homebrew"
+
+    - name: Check jq is installed
+      ansible.builtin.command:
+        cmd: /opt/homebrew/bin/brew list jq
+      register: jq_check
+      changed_when: false
+      failed_when: false
+
+    - name: Assert jq is installed
+      ansible.builtin.assert:
+        that:
+          - jq_check.rc == 0
+        fail_msg: "jq should be installed via Homebrew"
+
+    # Verify macOS settings (sample checks)
+    - name: Check Dock autohide setting
+      ansible.builtin.command:
+        cmd: defaults read com.apple.dock autohide
+      register: dock_autohide
+      changed_when: false
+      failed_when: false
+
+    - name: Check Finder show extensions setting
+      ansible.builtin.command:
+        cmd: defaults read NSGlobalDomain AppleShowAllExtensions
+      register: show_extensions
+      changed_when: false
+      failed_when: false
+
+    - name: Display macOS settings
+      ansible.builtin.debug:
+        msg: |
+          Dock autohide: {{ dock_autohide.stdout | default('not set') }}
+          Show all extensions: {{ show_extensions.stdout | default('not set') }}
+
+    # Verify dotfiles symlinks
+    - name: Check dotfile symlinks exist
+      ansible.builtin.stat:
+        path: "~/.{{ item }}"
+      loop:
+        - gitconfig
+        - zshrc
+      register: dotfile_stats
+
+    - name: Assert dotfiles are symlinks
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+          - item.stat.islnk
+        fail_msg: "~/.{{ item.item }} should be a symlink"
+      loop: "{{ dotfile_stats.results }}"
+
+    # Verify config directory symlinks
+    - name: Check config symlink exists
+      ansible.builtin.stat:
+        path: ~/.config/test-config
+      register: config_stat
+
+    - name: Assert config is a symlink
+      ansible.builtin.assert:
+        that:
+          - config_stat.stat.exists
+          - config_stat.stat.islnk
+        fail_msg: "~/.config/test-config should be a symlink"

@@ -1,0 +1,78 @@
+---
+- name: Verify ssh_config role
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Check SSH config file exists
+      ansible.builtin.stat:
+        path: ~/.ssh/config
+      register: ssh_config_stat
+
+    - name: Assert SSH config exists with correct permissions
+      ansible.builtin.assert:
+        that:
+          - ssh_config_stat.stat.exists
+          - ssh_config_stat.stat.mode == '0600'
+        fail_msg: "~/.ssh/config should exist with 0600 permissions"
+
+    - name: Read SSH config content
+      ansible.builtin.slurp:
+        src: ~/.ssh/config
+      register: ssh_config_content
+
+    - name: Decode SSH config
+      ansible.builtin.set_fact:
+        ssh_config: "{{ ssh_config_content.content | b64decode }}"
+
+    # Verify hosts are configured
+    # NOTE: Only checking host and hostname as the module output format may vary
+    - name: Assert server1 is configured
+      ansible.builtin.assert:
+        that:
+          - "'Host server1' in ssh_config"
+          - "'hostname server1.example.com' in ssh_config"
+        fail_msg: "server1 configuration is missing or incorrect"
+
+    - name: Assert server2 is configured
+      ansible.builtin.assert:
+        that:
+          - "'Host server2' in ssh_config"
+          - "'hostname server2.example.com' in ssh_config"
+          - "'port 2222' in ssh_config"
+        fail_msg: "server2 configuration is missing or incorrect"
+
+    # Verify blocks are present
+    - name: Assert top block is present
+      ansible.builtin.assert:
+        that:
+          - "'identityagent' in ssh_config"
+        fail_msg: "Top block should be present in the config"
+
+    - name: Assert bottom block is present
+      ansible.builtin.assert:
+        that:
+          - "'serveraliveinterval' in ssh_config"
+        fail_msg: "Bottom block should be present in the config"
+
+    # Verify block ordering: top block should appear before server entries
+    - name: Find position of top block marker
+      ansible.builtin.set_fact:
+        top_block_pos: "{{ ssh_config.find('identityagent') }}"
+
+    - name: Find position of server1 config
+      ansible.builtin.set_fact:
+        server1_pos: "{{ ssh_config.find('Host server1') }}"
+
+    - name: Assert top block is before server config
+      ansible.builtin.assert:
+        that:
+          - top_block_pos | int < server1_pos | int
+        fail_msg: "Top block should appear before server configurations"
+
+    # Verify existing config is preserved
+    - name: Assert existing host is still present
+      ansible.builtin.assert:
+        that:
+          - "'Host existing-host' in ssh_config"
+          - "'hostname existing.example.com' in ssh_config"
+        fail_msg: "Existing SSH configuration should be preserved"

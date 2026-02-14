@@ -1,0 +1,5 @@
+abbr -a "~config" --position anywhere "$XDG_CONFIG_HOME"
+abbr -a "~data" --position anywhere "$XDG_DATA_HOME"
+abbr -a "~cache" --position anywhere "$XDG_CACHE_HOME"
+abbr -a "~projects" --position anywhere "$HOME/Projects"
+abbr -a "~icloud" --position anywhere "$HOME/Library/Mobile\ Documents/"

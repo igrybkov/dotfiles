@@ -1,0 +1,53 @@
+---
+dependency:
+  name: galaxy
+  options:
+    requirements-file: ../../../../requirements.yml
+    role-file: ../../../../requirements.yml
+
+driver:
+  name: docker
+
+platforms:
+  - name: dotfiles-role-test
+    image: ubuntu:24.04
+    pre_build_image: true
+    command: /bin/bash -c "while true; do sleep 1000; done"
+    environment:
+      HOME: /root
+
+provisioner:
+  name: ansible
+  config_options:
+    defaults:
+      interpreter_python: auto_silent
+  inventory:
+    host_vars:
+      dotfiles-role-test:
+        dotfiles_dir: /tmp/test-dotfiles
+        dotfiles_copy_dir: /tmp/test-dotfiles-copy
+        bin_dir: /tmp/test-bin
+        dotfiles_symlink_command: symlink-dotfiles
+  playbooks:
+    converge: converge.yml
+    prepare: prepare.yml
+    verify: verify.yml
+  env:
+    ANSIBLE_ROLES_PATH: "../../../../roles:~/.ansible/roles"
+    ANSIBLE_COLLECTIONS_PATH: "../../../../.ansible/collections:~/.ansible/collections"
+    ANSIBLE_LOOKUP_PLUGINS: "../../../../ansible_plugins/lookup"
+
+verifier:
+  name: ansible
+
+scenario:
+  name: default
+  test_sequence:
+    - dependency
+    - destroy
+    - create
+    - prepare
+    - converge
+    - idempotence
+    - verify
+    - destroy

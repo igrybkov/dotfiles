@@ -1,0 +1,3 @@
+---
+pip_miniconda_path: /opt/homebrew/Caskroom/miniconda/base
+pip_system_pip_path: /usr/local/bin/pip3

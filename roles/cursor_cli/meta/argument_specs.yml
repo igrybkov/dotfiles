@@ -1,0 +1,12 @@
+---
+argument_specs:
+  main:
+    short_description: Install Cursor CLI
+    description:
+      - Installs Cursor CLI (agent command)
+      - Expects pre-aggregated data from playbook
+    options:
+      install_cursor_cli:
+        description: Whether to install Cursor CLI
+        type: bool
+        default: false
