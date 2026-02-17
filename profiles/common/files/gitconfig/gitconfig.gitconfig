@@ -118,6 +118,7 @@ helper = osxkeychain
 
 [core]
 excludesfile = ~/.config/git/gitignore
+hooksPath = ~/.config/git/hooks
 autocrlf = input
 
 [init]

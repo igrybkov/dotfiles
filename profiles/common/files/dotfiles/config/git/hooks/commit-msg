@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Remove Co-authored-by trailers added by Cursor
+sed -i '' '/^Co-authored-by: Cursor <cursoragent@cursor\.com>$/d' "$1"
+
+# Remove trailing blank lines left behind
+sed -i '' -e :a -e '/^\n*$/{$d;N;ba' -e '}' "$1"
