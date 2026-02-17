@@ -798,8 +798,9 @@ def _interactive_ensure(
     # Get current worktree branch for marking
     current_worktree_branch = get_current_worktree_branch()
 
-    # Detect current agent (lazy - only checks for first available)
-    detected = detect_agent()
+    # Detect current agent, respecting HIVE_AGENT env var if set
+    env_agent = os.environ.get("HIVE_AGENT")
+    detected = detect_agent(preferred=env_agent)
     if not detected:
         agent_list = ", ".join(get_agent_order())
         error(f"Can't find installed agent that matches configuration: {agent_list}")
