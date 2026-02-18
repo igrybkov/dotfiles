@@ -1,200 +1,179 @@
 ---
-# Set home directory once for use throughout
-# Use ~ which Ansible expands to the remote user's home directory
-- name: "[🔗 dotfiles] Get remote home directory"
-  tags: [always, dotfiles]
+# This role runs once on localhost (not per-profile) using aggregated variables.
+# All profile source directories are collected via aggregated_profile_var lookups
+# and passed to symlink-dotfiles in a single batch per target.
+
+# Set home directory for use throughout
+- name: "[🔗 dotfiles] Get home directory"
   ansible.builtin.command:
     cmd: echo ~
   register: _home_dir_result
   changed_when: false
 
 - name: "[🔗 dotfiles] Set home directory fact"
-  tags: [always, dotfiles]
   ansible.builtin.set_fact:
     _home_dir: "{{ _home_dir_result.stdout }}"
 
-# Clean up dead symlinks recursively (run once across all profiles)
-- name: "[🔗 dotfiles] Run cleanup once"
-  when: _dotfiles_cleanup_done is not defined
-  tags: [always, dotfiles]
-  block:
-    - name: "[🔗 dotfiles] Ensure ~/.config directory exists"
-      ansible.builtin.file:
-        path: "{{ _home_dir }}/.config"
-        state: directory
-        mode: "0755"
+# Aggregate all source directories from all profiles upfront
+- name: "[🔗 dotfiles] Aggregate source directories from all profiles"
+  ansible.builtin.set_fact:
+    _all_dotfiles_dirs: "{{ lookup('aggregated_profile_var', 'dotfiles_dir') }}"
+    _all_bin_dirs: "{{ lookup('aggregated_profile_var', 'bin_dir') }}"
+    _all_skills_dirs: "{{ lookup('aggregated_profile_var', 'skills_dir') }}"
+    _all_agents_dirs: "{{ lookup('aggregated_profile_var', 'agents_dir') }}"
+    _all_additional_dirs: "{{ lookup('aggregated_profile_var', 'additional_dotfiles_dirs') | flatten | unique }}"
+    _all_skill_folders: "{{ lookup('aggregated_profile_var', 'skill_folders') | flatten | unique }}"
+    _all_agent_folders: "{{ lookup('aggregated_profile_var', 'agent_folders') | flatten | unique }}"
+    _all_copy_dirs: "{{ lookup('aggregated_profile_var', 'dotfiles_copy_dir') }}"
 
-    - name: "[🔗 dotfiles] Ensure ~/.local/bin exists"
-      ansible.builtin.file:
-        path: "{{ _home_dir }}/.local/bin"
-        state: directory
-        mode: "0755"
+# --- Cleanup dead symlinks ---
 
-    - name: "[🔗 dotfiles] Clean dead symlinks in home directory (depth 1)"
-      ansible.builtin.include_tasks: cleanup_recursive.yml
-      vars:
-        cleanup_dir: "{{ _home_dir }}"
-        max_depth: 1
+- name: "[🔗 dotfiles] Ensure ~/.config directory exists"
+  ansible.builtin.file:
+    path: "{{ _home_dir }}/.config"
+    state: directory
+    mode: "0755"
 
-    # Discover nested dotfiles directories (like claude/, vim/) from all profiles
-    # and clean them with configurable depth. Excludes 'config' (handled separately).
-    - name: "[🔗 dotfiles] Discover nested dotfiles directories from all profiles"
-      ansible.builtin.shell:
-        cmd: |
-          set -o pipefail
-          find {{ playbook_dir }}/profiles/*/files/dotfiles -mindepth 1 -maxdepth 1 -type d 2>/dev/null \
-            | xargs -I{} basename {} \
-            | sort -u \
-            | grep -v '^config$'
-        executable: /bin/bash
-      register: _nested_dotfiles_dirs
-      changed_when: false
-      failed_when: false
+- name: "[🔗 dotfiles] Ensure ~/.local/bin exists"
+  ansible.builtin.file:
+    path: "{{ _home_dir }}/.local/bin"
+    state: directory
+    mode: "0755"
 
-    - name: "[🔗 dotfiles] Clean dead symlinks in nested dotfiles directories"
-      ansible.builtin.include_tasks: cleanup_recursive.yml
-      loop: "{{ _nested_dotfiles_dirs.stdout_lines | default([]) }}"
-      loop_control:
-        loop_var: _nested_dir
-      vars:
-        cleanup_dir: "{{ _home_dir }}/.{{ _nested_dir }}"
-        max_depth: "{{ dotfiles_cleanup_depth }}"
+- name: "[🔗 dotfiles] Clean dead symlinks in home directory (depth 1)"
+  ansible.builtin.include_tasks: cleanup_recursive.yml
+  vars:
+    cleanup_dir: "{{ _home_dir }}"
+    max_depth: 1
 
-    - name: "[🔗 dotfiles] Clean dead symlinks in ~/.config"
-      ansible.builtin.include_tasks: cleanup_recursive.yml
-      vars:
-        cleanup_dir: "{{ _home_dir }}/.config"
-        max_depth: "{{ dotfiles_cleanup_depth }}"
+# Discover nested dotfiles directories (like claude/, vim/) from all profiles
+# and clean them with configurable depth. Excludes 'config' (handled separately).
+- name: "[🔗 dotfiles] Discover nested dotfiles directories from all profiles"
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      find {{ playbook_dir }}/profiles/*/files/dotfiles -mindepth 1 -maxdepth 1 -type d 2>/dev/null \
+        | xargs -I{} basename {} \
+        | sort -u \
+        | grep -v '^config$'
+    executable: /bin/bash
+  register: _nested_dotfiles_dirs
+  changed_when: false
+  failed_when: false
 
-    - name: "[🔗 dotfiles] Clean dead symlinks in ~/.local/bin"
-      ansible.builtin.include_tasks: cleanup_recursive.yml
-      vars:
-        cleanup_dir: "{{ _home_dir }}/.local/bin"
-        max_depth: 1
+- name: "[🔗 dotfiles] Clean dead symlinks in nested dotfiles directories"
+  ansible.builtin.include_tasks: cleanup_recursive.yml
+  loop: "{{ _nested_dotfiles_dirs.stdout_lines | default([]) }}"
+  loop_control:
+    loop_var: _nested_dir
+  vars:
+    cleanup_dir: "{{ _home_dir }}/.{{ _nested_dir }}"
+    max_depth: "{{ dotfiles_cleanup_depth }}"
 
-    # Clean up dead symlinks in skill and agent folders (if configured)
-    - name: "[🔗 dotfiles] Aggregate skill_folders for cleanup"
-      ansible.builtin.set_fact:
-        _cleanup_skill_folders: "{{ lookup('aggregated_profile_var', 'skill_folders') | flatten | unique | list }}"
-      when: _dotfiles_cleanup_done is not defined
+- name: "[🔗 dotfiles] Clean dead symlinks in ~/.config"
+  ansible.builtin.include_tasks: cleanup_recursive.yml
+  vars:
+    cleanup_dir: "{{ _home_dir }}/.config"
+    max_depth: "{{ dotfiles_cleanup_depth }}"
 
-    - name: "[🔗 dotfiles] Aggregate agent_folders for cleanup"
-      ansible.builtin.set_fact:
-        _cleanup_agent_folders: "{{ lookup('aggregated_profile_var', 'agent_folders') | flatten | unique | list }}"
-      when: _dotfiles_cleanup_done is not defined
+- name: "[🔗 dotfiles] Clean dead symlinks in ~/.local/bin"
+  ansible.builtin.include_tasks: cleanup_recursive.yml
+  vars:
+    cleanup_dir: "{{ _home_dir }}/.local/bin"
+    max_depth: 1
 
-    - name: "[🔗 dotfiles] Clean dead symlinks in skill folders"
-      ansible.builtin.include_tasks: cleanup_recursive.yml
-      loop: "{{ _cleanup_skill_folders | default([]) }}"
-      loop_control:
-        label: "{{ item }}"
-      vars:
-        cleanup_dir: "{{ item | expanduser }}"
-        max_depth: "{{ dotfiles_cleanup_depth }}"
-      when: _cleanup_skill_folders | default([]) | length > 0
+- name: "[🔗 dotfiles] Clean dead symlinks in skill folders"
+  ansible.builtin.include_tasks: cleanup_recursive.yml
+  loop: "{{ _all_skill_folders }}"
+  loop_control:
+    label: "{{ item }}"
+  vars:
+    cleanup_dir: "{{ item | expanduser }}"
+    max_depth: "{{ dotfiles_cleanup_depth }}"
+  when: _all_skill_folders | length > 0
 
-    - name: "[🔗 dotfiles] Clean dead symlinks in agent folders"
-      ansible.builtin.include_tasks: cleanup_recursive.yml
-      loop: "{{ _cleanup_agent_folders | default([]) }}"
-      loop_control:
-        label: "{{ item }}"
-      vars:
-        cleanup_dir: "{{ item | expanduser }}"
-        max_depth: "{{ dotfiles_cleanup_depth }}"
-      when: _cleanup_agent_folders | default([]) | length > 0
+- name: "[🔗 dotfiles] Clean dead symlinks in agent folders"
+  ansible.builtin.include_tasks: cleanup_recursive.yml
+  loop: "{{ _all_agent_folders }}"
+  loop_control:
+    label: "{{ item }}"
+  vars:
+    cleanup_dir: "{{ item | expanduser }}"
+    max_depth: "{{ dotfiles_cleanup_depth }}"
+  when: _all_agent_folders | length > 0
 
-    - name: "[🔗 dotfiles] Mark cleanup as done"
-      ansible.builtin.set_fact:
-        _dotfiles_cleanup_done: true
+# --- Symlink dotfiles ---
 
-# Symlink dotfiles recursively (file-level by default, directory-level with marker)
+# Symlink dotfiles → home (all profiles at once)
 - name: "[🔗 dotfiles] Symlink dotfiles to home directory"
   ansible.builtin.include_tasks: symlink_recursive.yml
   vars:
-    source_dir: "{{ dotfiles_dir }}"
+    source_dirs: "{{ _all_dotfiles_dirs + _all_additional_dirs }}"
     target_dir: "{{ _home_dir }}"
     prefix: "."
     exclude_dirs:
       - config
 
+# Symlink config → ~/.config (all profiles at once)
 - name: "[🔗 dotfiles] Symlink config dotfiles to ~/.config"
   ansible.builtin.include_tasks: symlink_recursive.yml
   vars:
-    source_dir: "{{ dotfiles_dir }}/config"
+    source_dirs: "{{ (_all_dotfiles_dirs + _all_additional_dirs) | map('regex_replace', '$', '/config') | list }}"
     target_dir: "{{ _home_dir }}/.config"
     prefix: ""
 
-- name: "[🔗 dotfiles] Check if dotfiles-to-copy directory exists"
-  ansible.builtin.stat:
-    path: "{{ dotfiles_copy_dir }}"
-  register: dotfiles_copy_dir_check
-
-- name: "[🔗 dotfiles] Copy dotfiles"
-  when: |
-    dotfiles_copy_dir_check.stat.exists and dotfiles_copy_dir_check.stat.isdir
-    and not ansible_check_mode
-  block:
-    - name: "[🔗 dotfiles] Get list of files to copy"
-      ansible.builtin.find:
-        paths: "{{ dotfiles_copy_dir }}"
-        file_type: any
-        recurse: false
-        hidden: true
-      register: dotfiles_to_copy
-
-    # For directories, add trailing slash to src so Ansible copies contents
-    # instead of the directory itself (which would nest it inside dest)
-    - name: "[🔗 dotfiles] Copy files and directories"
-      ansible.builtin.copy:
-        src: "{{ item.path }}{{ '/' if item.isdir else '' }}"
-        dest: "{{ _home_dir }}/.{{ item.path | basename }}"
-        remote_src: true
-        force: false
-        mode: preserve
-      loop: "{{ dotfiles_to_copy.files }}"
-      loop_control:
-        label: "{{ item.path | basename }}"
-
+# Symlink bin → ~/.local/bin (all profiles at once)
 - name: "[🔗 dotfiles] Symlink bin scripts to ~/.local/bin"
   ansible.builtin.include_tasks: symlink_recursive.yml
   vars:
-    source_dir: "{{ bin_dir }}"
+    source_dirs: "{{ _all_bin_dirs }}"
     target_dir: "{{ _home_dir }}/.local/bin"
     prefix: ""
 
-# Aggregate skill_folders and agent_folders from all profiles
-- name: "[🔗 dotfiles] Aggregate skill_folders from all profiles"
-  ansible.builtin.set_fact:
-    _aggregated_skill_folders: "{{ lookup('aggregated_profile_var', 'skill_folders') | flatten | unique | list }}"
-  tags: [always, dotfiles]
+# Symlink skills to each skill folder (all profile sources at once)
+- name: "[🔗 dotfiles] Ensure skill destination directories exist"
+  ansible.builtin.file:
+    path: "{{ item | expanduser }}"
+    state: directory
+    mode: "0755"
+  loop: "{{ _all_skill_folders }}"
+  loop_control:
+    label: "{{ item }}"
+  when: _all_skill_folders | length > 0
 
-- name: "[🔗 dotfiles] Aggregate agent_folders from all profiles"
-  ansible.builtin.set_fact:
-    _aggregated_agent_folders: "{{ lookup('aggregated_profile_var', 'agent_folders') | flatten | unique | list }}"
-  tags: [always, dotfiles]
-
-# Symlink skills from current profile to all configured destinations
-- name: "[🔗 dotfiles] Symlink skills to agent folders"
-  when: _aggregated_skill_folders | length > 0
-  ansible.builtin.include_tasks: symlink_skills.yml
+- name: "[🔗 dotfiles] Symlink skills to {{ item }}"
+  ansible.builtin.include_tasks: symlink_recursive.yml
+  loop: "{{ _all_skill_folders }}"
   vars:
-    skill_folders: "{{ _aggregated_skill_folders }}"
-  tags: [always, dotfiles]
+    source_dirs: "{{ _all_skills_dirs }}"
+    target_dir: "{{ item | expanduser }}"
+    prefix: ""
+  when: _all_skill_folders | length > 0
 
-# Symlink agents from current profile to all configured destinations
-- name: "[🔗 dotfiles] Symlink agents to agent folders"
-  when: _aggregated_agent_folders | length > 0
-  ansible.builtin.include_tasks: symlink_agents.yml
+# Symlink agents to each agent folder (all profile sources at once)
+- name: "[🔗 dotfiles] Ensure agent destination directories exist"
+  ansible.builtin.file:
+    path: "{{ item | expanduser }}"
+    state: directory
+    mode: "0755"
+  loop: "{{ _all_agent_folders }}"
+  loop_control:
+    label: "{{ item }}"
+  when: _all_agent_folders | length > 0
+
+- name: "[🔗 dotfiles] Symlink agents to {{ item }}"
+  ansible.builtin.include_tasks: symlink_recursive.yml
+  loop: "{{ _all_agent_folders }}"
   vars:
-    agent_folders: "{{ _aggregated_agent_folders }}"
-  tags: [always, dotfiles]
+    source_dirs: "{{ _all_agents_dirs }}"
+    target_dir: "{{ item | expanduser }}"
+    prefix: ""
+  when: _all_agent_folders | length > 0
 
-# Process additional dotfiles directories from custom inventories
-- name: "[🔗 dotfiles] Process additional dotfiles directories"
-  when: additional_dotfiles_dirs | length > 0
-  block:
-    - name: "[🔗 dotfiles] Process each additional dotfiles directory"
-      ansible.builtin.include_tasks: symlink_additional.yml
-      loop: "{{ additional_dotfiles_dirs }}"
-      loop_control:
-        loop_var: extra_dotfiles_dir
+# --- Copy dotfiles (non-symlink, aggregated from all profiles) ---
+
+- name: "[🔗 dotfiles] Copy dotfiles from each profile"
+  ansible.builtin.include_tasks: copy_dotfiles.yml
+  loop: "{{ _all_copy_dirs }}"
+  loop_control:
+    loop_var: _copy_dir

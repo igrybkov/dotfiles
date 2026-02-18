@@ -1,0 +1,37 @@
+---
+# Copy dotfiles from a single profile's dotfiles-copy directory
+#
+# Parameters:
+#   _copy_dir: Path to a profile's dotfiles-copy directory
+#   _home_dir: Target home directory
+
+- name: "[🔗 dotfiles] Check if dotfiles-to-copy directory exists ({{ _copy_dir }})"
+  ansible.builtin.stat:
+    path: "{{ _copy_dir }}"
+  register: _copy_dir_check
+
+- name: "[🔗 dotfiles] Copy dotfiles from {{ _copy_dir }}"
+  when: |
+    _copy_dir_check.stat.exists and _copy_dir_check.stat.isdir
+    and not ansible_check_mode
+  block:
+    - name: "[🔗 dotfiles] Get list of files to copy"
+      ansible.builtin.find:
+        paths: "{{ _copy_dir }}"
+        file_type: any
+        recurse: false
+        hidden: true
+      register: _files_to_copy
+
+    # For directories, add trailing slash to src so Ansible copies contents
+    # instead of the directory itself (which would nest it inside dest)
+    - name: "[🔗 dotfiles] Copy files and directories"
+      ansible.builtin.copy:
+        src: "{{ item.path }}{{ '/' if item.isdir else '' }}"
+        dest: "{{ _home_dir }}/.{{ item.path | basename }}"
+        remote_src: true
+        force: false
+        mode: preserve
+      loop: "{{ _files_to_copy.files }}"
+      loop_control:
+        label: "{{ item.path | basename }}"

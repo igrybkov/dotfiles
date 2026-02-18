@@ -107,6 +107,17 @@
         - homebrew_binary_check.stat.exists | default(false)
         - not (skip_homebrew_marker.stat.exists | default(false))
 
+# Dotfiles: symlink and copy once with aggregated data from all profiles
+# Runs on localhost before per-profile tasks to ensure dotfiles are available
+- name: Dotfiles
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  roles:
+    - name: Symlink and copy dotfiles (aggregated from all profiles)
+      role: dotfiles
+      tags: [dotfiles]
+
 # Per-profile: tasks that run once for each profile with profile-specific data
 - name: Setup dependencies per profile
   hosts: all
@@ -144,10 +155,6 @@
           skip: true
       failed_when: false
   roles:
-    - name: Including role dotfiles
-      role: dotfiles
-      tags: [dotfiles]
-
     - name: Including role pipx
       role: pipx
       tags: [python, pipx]

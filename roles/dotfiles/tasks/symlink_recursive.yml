@@ -1,49 +1,43 @@
 ---
-# Recursively symlink files from source directory to target directory
+# Recursively symlink files from source directories to target directory
 # Uses Python script for fast batch operations
 #
 # Parameters:
-#   source_dir: Source directory to process (required)
+#   source_dirs: List of source directories to process (required, later dirs override earlier)
 #   target_dir: Target directory for symlinks (required)
 #   prefix: Prefix for target filenames, e.g., "." for home dir dotfiles (default: "")
 #   exclude_dirs: List of top-level directory names to exclude (default: [])
 
-- name: "[🔗 dotfiles] Check if source directory exists"
-  ansible.builtin.stat:
-    path: "{{ source_dir }}"
-  register: source_dir_stat
+- name: "[🔗 dotfiles] Create symlinks using symlink-dotfiles"
+  ansible.builtin.command:
+    cmd: >
+      {{ dotfiles_symlink_command }}
+      {% for dir in source_dirs %}
+      --source "{{ dir }}"
+      {% endfor %}
+      --target "{{ target_dir }}"
+      --prefix "{{ prefix | default('') }}"
+      {% for dir in exclude_dirs | default([]) %}
+      --exclude "{{ dir }}"
+      {% endfor %}
+      --marker "{{ dotfiles_directory_marker }}"
+      --json
+  register: symlink_result
+  changed_when: (symlink_result.stdout | from_json).changed
+  failed_when: (symlink_result.stdout | from_json).failed
 
-- name: "[🔗 dotfiles] Create symlinks from {{ source_dir }}"
-  when: source_dir_stat.stat.exists | default(false) and source_dir_stat.stat.isdir | default(false)
-  block:
-    - name: "[🔗 dotfiles] Create symlinks using symlink-dotfiles"
-      ansible.builtin.command:
-        cmd: >
-          {{ dotfiles_symlink_command }}
-          --source "{{ source_dir }}"
-          --target "{{ target_dir }}"
-          --prefix "{{ prefix | default('') }}"
-          {% for dir in exclude_dirs | default([]) %}
-          --exclude "{{ dir }}"
-          {% endfor %}
-          --marker "{{ dotfiles_directory_marker }}"
-          --json
-      register: symlink_result
-      changed_when: (symlink_result.stdout | from_json).changed
-      failed_when: (symlink_result.stdout | from_json).failed
+- name: "[🔗 dotfiles] Report symlink results"
+  ansible.builtin.debug:
+    msg: >-
+      Created: {{ (symlink_result.stdout | from_json).created }},
+      Updated: {{ (symlink_result.stdout | from_json).updated }},
+      Skipped: {{ (symlink_result.stdout | from_json).skipped }}
+  when: symlink_result.stdout is defined and (symlink_result.stdout | trim | length > 0)
 
-    - name: "[🔗 dotfiles] Report symlink results"
-      ansible.builtin.debug:
-        msg: >-
-          Created: {{ (symlink_result.stdout | from_json).created }},
-          Updated: {{ (symlink_result.stdout | from_json).updated }},
-          Skipped: {{ (symlink_result.stdout | from_json).skipped }}
-      when: symlink_result.stdout is defined and (symlink_result.stdout | trim | length > 0)
-
-    - name: "[🔗 dotfiles] Report symlink conflicts"
-      ansible.builtin.fail:
-        msg: |
-          Cannot create symlinks - conflicts detected:
-          {{ (symlink_result.stdout | from_json).conflicts | join('\n') }}
-          Please remove or backup these files manually before running dotfiles install.
-      when: symlink_result.stdout is defined and (symlink_result.stdout | trim | length > 0) and ((symlink_result.stdout | from_json).conflicts | length > 0)
+- name: "[🔗 dotfiles] Report symlink conflicts"
+  ansible.builtin.fail:
+    msg: |
+      Cannot create symlinks - conflicts detected:
+      {{ (symlink_result.stdout | from_json).conflicts | join('\n') }}
+      Please remove or backup these files manually before running dotfiles install.
+  when: symlink_result.stdout is defined and (symlink_result.stdout | trim | length > 0) and ((symlink_result.stdout | from_json).conflicts | length > 0)
