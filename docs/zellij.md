@@ -16,14 +16,14 @@ Zellij operates in different modes. Press the mode key to enter, `Esc` or `Enter
 | Mode | Enter Key | Purpose |
 |------|-----------|---------|
 | Normal | (default) | Standard operation |
-| Locked | `Ctrl+g` | Pass all keys to terminal |
-| Pane | `Ctrl+p` | Pane management |
-| Tab | `Ctrl+t` | Tab management |
-| Resize | `Ctrl+n` | Resize panes |
-| Move | `Ctrl+h` | Move panes |
-| Scroll | `Ctrl+s` | Scroll/search buffer |
-| Session | `Ctrl+o` | Session management |
-| Tmux | `Ctrl+b` | Tmux-compatible bindings |
+| Locked | `Alt+g` | Pass all keys to terminal |
+| Pane | `Alt+p` | Pane management |
+| Tab | `Alt+Shift+t` or `Alt+w` | Tab management |
+| Resize | `Alt+Shift+n` | Resize panes |
+| Move | `Alt+Shift+h` | Move panes |
+| Scroll | `Alt+s` | Scroll/search buffer |
+| Session | `Alt+Shift+o` | Session management |
+| Tmux | `Alt+b` | Tmux-compatible bindings |
 
 ## Autolock Plugin
 
@@ -36,13 +36,14 @@ The autolock plugin automatically switches to **Locked** mode when running certa
 
 When you exit these applications, Zellij automatically returns to **Normal** mode.
 
+**Note:** Even in Locked mode, you can still use `Alt+1` through `Alt+9` to switch between tabs.
+
 ### Manual Override
 
 | Key | Action |
 |-----|--------|
-| `Alt+z` (in Normal) | Disable autolock and switch to Locked |
-| `Alt+z` (in Locked) | Enable autolock and switch to Normal |
-| `Alt+Shift+z` | Enable autolock |
+| `Alt+g` (in Normal) | Disable autolock and switch to Locked |
+| `Alt+g` (in Locked) | Enable autolock and switch to Normal |
 
 ## Global Keybindings (shared_except "locked")
 
@@ -54,15 +55,20 @@ These work in all modes except Locked:
 | `Alt+j` | Move focus down |
 | `Alt+k` | Move focus up |
 | `Alt+l` | Move focus right (or next tab) |
+| `Alt+1-9` | Go to tab 1-9 |
 | `Alt+n` | New pane |
 | `Alt+f` | Toggle floating panes |
+| `Alt+Shift+f` | New floating pane in worktree |
 | `Alt+[` | Previous swap layout |
 | `Alt+]` | Next swap layout |
-| `Alt+i` | Move tab left |
-| `Alt+o` | Move tab right |
-| `Ctrl+q` | Quit Zellij |
+| `Alt+Ctrl+p` | Toggle pane in group |
+| `Alt+Shift+p` | Toggle group marking |
+| `Alt+y` | Pane picker (fuzzy search) |
+| `Alt+/` | Show keybindings help |
+| `Alt+q` | Quit Zellij (with confirmation) |
+| `Super+c` | Copy |
 
-## Pane Mode (`Ctrl+p`)
+## Pane Mode (`Alt+p`)
 
 | Key | Action |
 |-----|--------|
@@ -76,16 +82,18 @@ These work in all modes except Locked:
 | `w` | Toggle floating |
 | `e` | Toggle embed/floating |
 | `z` | Toggle pane frames |
+| `i` | Toggle pane pinned |
 | `c` | Rename pane |
 | `p` | Switch focus |
 
-## Tab Mode (`Ctrl+t`)
+## Tab Mode (`Alt+Shift+t` or `Alt+w`)
 
 | Key | Action |
 |-----|--------|
-| `h/l` or arrows | Navigate tabs |
-| `n` | New tab |
-| `x` | Close tab |
+| `h/l` or `j/k` or arrows | Navigate tabs |
+| `c` | New tab |
+| `n` | Go to next tab |
+| `w` or `x` | Close tab |
 | `r` | Rename tab |
 | `1-9` | Go to tab N |
 | `b` | Break pane to new tab |
@@ -94,36 +102,41 @@ These work in all modes except Locked:
 | `s` | Toggle sync |
 | `Tab` | Toggle last tab |
 
-## Resize Mode (`Ctrl+n`)
+## Resize Mode (`Alt+Shift+n`)
 
 | Key | Action |
 |-----|--------|
-| `h/j/k/l` | Increase size in direction |
+| `h/j/k/l` or arrows | Increase size in direction |
 | `H/J/K/L` | Decrease size in direction |
 | `+/=` | Increase size |
 | `-` | Decrease size |
 
-## Scroll Mode (`Ctrl+s`)
+## Scroll Mode (`Alt+s`)
 
 | Key | Action |
 |-----|--------|
-| `j/k` | Scroll down/up |
-| `d/u` | Half page down/up |
-| `Ctrl+f/b` | Page down/up |
+| `j/k` or `up/down` | Scroll down/up |
+| `d` | Half page down |
+| `u` | Half page up |
+| `h/left` or `Alt+b` | Page up |
+| `l/right` or `Alt+Shift+f` | Page down |
+| `PageUp/PageDown` | Page up/down |
 | `s` | Enter search mode |
 | `e` | Edit scrollback in `$EDITOR` |
+| `Alt+c` | Scroll to bottom and return to normal |
 
-## Session Mode (`Ctrl+o`)
+## Session Mode (`Alt+Shift+o`)
 
 | Key | Action |
 |-----|--------|
 | `d` | Detach |
 | `w` | Session manager |
+| `s` | Share session |
 | `c` | Configuration |
 | `p` | Plugin manager |
 | `a` | About |
 
-## Tmux Mode (`Ctrl+b`)
+## Tmux Mode (`Alt+b`)
 
 For tmux muscle memory:
 
@@ -133,9 +146,30 @@ For tmux muscle memory:
 | `%` | Split vertical |
 | `c` | New tab |
 | `n/p` | Next/prev tab |
+| `h/j/k/l` or arrows | Move focus |
+| `x` | Close pane |
 | `z` | Toggle fullscreen |
+| `o` | Focus next pane |
 | `d` | Detach |
+| `,` | Rename tab |
 | `[` | Scroll mode |
+| `space` | Next swap layout |
+
+## Pane Picker Plugin
+
+The zellij-pane-picker plugin provides fuzzy search and starred panes:
+
+| Key | Action |
+|-----|--------|
+| `Alt+y` | Open pane picker (fuzzy search) |
+| ``Alt+` `` | Jump to previous pane |
+| `Alt+i` | Next starred pane |
+| `Alt+u` | Previous starred pane |
+| `Alt+Shift+l` | Star/unstar current pane |
+
+Inside the pane picker:
+- `Up/Down`: Navigate selection
+- `Esc`: Close picker
 
 ---
 
@@ -189,8 +223,12 @@ This plugin provides seamless navigation between Neovim windows and Zellij panes
 
 - **New pane**: `Alt+n`
 - **Toggle floating**: `Alt+f`
-- **Fullscreen pane**: `Ctrl+p` then `f`
-- **Close pane**: `Ctrl+p` then `x`
+- **New floating pane in worktree**: `Alt+Shift+f`
+- **Fullscreen pane**: `Alt+p` then `f`
+- **Close pane**: `Alt+p` then `x`
+- **Pane picker**: `Alt+y`
+- **Show keybindings help**: `Alt+/`
+- **Quit Zellij**: `Alt+q`
 
 ## Session Management
 
