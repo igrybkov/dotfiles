@@ -1,5 +1,0 @@
-# Python cache
-__pycache__/
-
-# Vault password file (never commit)
-.vault_password

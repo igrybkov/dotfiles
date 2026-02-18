@@ -2,8 +2,9 @@
 # Playbook structure:
 # 1. Gather facts (hosts: all) - collect facts from all profile hosts for hostvars
 # 2. Bootstrap (hosts: localhost) - one-time setup before per-profile tasks
-# 3. Per-profile (hosts: all) - profile-specific tasks, runs once per profile
-# 4. Finalize (hosts: localhost) - aggregation from profiles + run-once tasks
+# 3. Setup (hosts: localhost) - dotfiles, pipx, MCP servers (aggregated, run once)
+# 4. Per-profile custom tasks (hosts: all) - profile-specific tasks only
+# 5. Finalize (hosts: localhost) - aggregation from profiles + run-once tasks
 #
 # Using localhost for run-once tasks avoids confusion about "current host" variables
 # and makes the intent explicit: these tasks either aggregate from hostvars or
@@ -59,7 +60,7 @@
     - name: Copy fonts
       tags: [fonts]
       ansible.builtin.copy:
-        src: "{{ playbook_dir }}/profiles/common/files/fonts/"
+        src: "{{ playbook_dir }}/profiles/macos-desktop/files/fonts/"
         dest: ~/Library/Fonts
         owner: "{{ lookup('env', 'USER') }}"
         group: staff
@@ -107,63 +108,58 @@
         - homebrew_binary_check.stat.exists | default(false)
         - not (skip_homebrew_marker.stat.exists | default(false))
 
-# Dotfiles: symlink and copy once with aggregated data from all profiles
-# Runs on localhost before per-profile tasks to ensure dotfiles are available
-- name: Dotfiles
+# Setup: symlink/copy dotfiles + install pipx/MCP (aggregated from all profiles)
+# Runs on localhost once with aggregated data to avoid per-profile overhead
+- name: Setup
   hosts: localhost
   connection: local
   gather_facts: false
+  pre_tasks:
+    - name: "[🐍 pipx] Aggregate pipx packages with resolved local paths"
+      ansible.builtin.set_fact:
+        _all_pipx_packages: >-
+          {{ _all_pipx_packages | default([]) +
+             (hostvars[item]['pipx_packages'] | default([])
+              | resolve_local_paths(hostvars[item]['profile_dir'])) }}
+      loop: "{{ lookup('aggregated_profile_var', '_hosts') }}"
+      loop_control:
+        label: "{{ item }}"
+      tags: [python, pipx]
+
+    - name: "[🤖 MCP] Aggregate MCP servers with profile tags"
+      ansible.builtin.set_fact:
+        _all_mcp_servers: >-
+          {{ _all_mcp_servers | default([]) +
+             (hostvars[item]['mcp_servers'] | default([])
+              | map('combine', {'_profile': item | replace('-profile', '')})
+              | list) }}
+      loop: "{{ lookup('aggregated_profile_var', '_hosts') }}"
+      loop_control:
+        label: "{{ item }}"
+      tags: [mcp-servers]
   roles:
     - name: Symlink and copy dotfiles (aggregated from all profiles)
       role: dotfiles
       tags: [dotfiles]
 
-# Per-profile: tasks that run once for each profile with profile-specific data
-- name: Setup dependencies per profile
+    - name: Install pipx packages (aggregated from all profiles)
+      role: pipx
+      tags: [python, pipx]
+      vars:
+        pipx_packages: "{{ _all_pipx_packages | default([]) | community.general.lists_mergeby('name') }}"
+
+    - name: Configure MCP servers (aggregated from all profiles)
+      role: mcp_servers
+      tags: [mcp-servers]
+      vars:
+        mcp_servers: "{{ _all_mcp_servers | default([]) | community.general.lists_mergeby('name') }}"
+
+# Per-profile: custom tasks that need profile-specific context
+- name: Per-profile custom tasks
   hosts: all
   serial: 1
   gather_facts: false
-  pre_tasks:
-    - name: "[ MCP] Load profile secrets.yml if available"
-      tags: [mcp-servers]
-      ansible.builtin.include_vars:
-        file: "{{ item }}"
-      with_first_found:
-        - files:
-            - "{{ profile_dir }}/secrets.yml"
-          skip: true
-      when: profile_dir is defined
-      failed_when: false
-
-    - name: "[ MCP] Load profile secrets (all *.yml files from secrets/)"
-      tags: [mcp-servers]
-      ansible.builtin.include_vars:
-        file: "{{ item }}"
-      with_fileglob:
-        - "{{ profile_dir }}/secrets/*.yml"
-      when: profile_dir is defined
-      failed_when: false
-
-    - name: "[ MCP] Load main secrets if available"
-      tags: [mcp-servers]
-      ansible.builtin.include_vars:
-        file: "{{ item }}"
-      with_first_found:
-        - files:
-            - "{{ playbook_dir }}/secrets/{{ inventory_hostname }}.yml"
-            - "{{ playbook_dir }}/secrets/common.yml"
-          skip: true
-      failed_when: false
-  roles:
-    - name: Including role pipx
-      role: pipx
-      tags: [python, pipx]
-
-    - name: Configure MCP servers (per-profile)
-      role: mcp_servers
-      tags: [mcp-servers]
-
-  post_tasks:
+  tasks:
     - name: "[󰚩 Profile] Check if profile tasks file exists"
       tags: [always]
       ansible.builtin.stat:

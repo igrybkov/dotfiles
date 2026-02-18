@@ -73,18 +73,13 @@
 
 # =============================================================================
 # Local packages (path specified)
-# Paths starting with "packages/" are relative to profile_dir
+# Paths are pre-resolved to absolute during aggregation (resolve_local_paths filter)
 # Uses uv if available (faster), falls back to pipx
 # =============================================================================
 
 - name: "[🐍] Check local package directories exist"
   ansible.builtin.stat:
-    path: >-
-      {{
-        (profile_dir ~ '/' ~ item.path)
-        if item.path.startswith('packages/')
-        else item.path
-      }}
+    path: "{{ item.path }}"
   loop: "{{ pipx_packages | selectattr('path', 'defined') | list }}"
   register: _pipx_local_paths
   when: pipx_packages is defined and pipx_packages | length > 0
@@ -92,8 +87,7 @@
 - name: "[🐍] Fail if local package directory does not exist"
   ansible.builtin.fail:
     msg: >-
-      Local package directory does not exist:
-      {{ (profile_dir ~ '/' ~ item.item.path) if item.item.path.startswith('packages/') else item.item.path }}
+      Local package directory does not exist: {{ item.item.path }}
   loop: "{{ _pipx_local_paths.results | default([]) }}"
   when:
     - item.stat is defined
@@ -108,12 +102,7 @@
       --force
   environment: "{{ _pkg_env if (_pkg_env | length > 0) else omit }}"
   vars:
-    _full_path: >-
-      {{
-        (profile_dir ~ '/' ~ item.path)
-        if item.path.startswith('packages/')
-        else item.path
-      }}
+    _full_path: "{{ item.path }}"
     # Get prefixes for this package's build_deps (filter to strings to skip unresolved deps)
     _resolved_prefixes: >-
       {{ item.build_deps | default([])
@@ -138,12 +127,7 @@
 - name: "[🐍 pipx] Install local packages (editable) - fallback"
   community.general.pipx:
     name: "{{ item.name }}"
-    source: >-
-      {{
-        (profile_dir ~ '/' ~ item.path)
-        if item.path.startswith('packages/')
-        else item.path
-      }}
+    source: "{{ item.path }}"
     state: "{{ item.state | default('present') }}"
     editable: "{{ item.editable | default(true) }}"
     # Force reinstall for local packages to pick up dependency changes

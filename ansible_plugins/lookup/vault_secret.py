@@ -61,19 +61,26 @@ class LookupModule(LookupBase):
             variables.get("inventory_hostname", "common") if variables else "common"
         )
 
+        # Support _vault_profile override for aggregated runs where secrets
+        # need to be resolved from a specific profile rather than current host
+        vault_profile = variables.get("_vault_profile") if variables else None
+
         # Build list of potential vault files to check
         # Priority: profile-specific secrets, then common secrets
+        if vault_profile:
+            current_profile = vault_profile
+        else:
+            current_profile = inventory_hostname.replace("-profile", "")
+
         vault_files = [
             secrets_dir / f"{inventory_hostname}.yml",
             secrets_dir / "common.yml",
         ]
 
         # Also check profile secrets (both secrets.yml in profile root and secrets/*.yml)
-        # Only check current host's profile and common - no cross-profile secret sharing
         # Uses shared discovery for multi-level profile support (e.g., 'myrepo-work' -> 'profiles/myrepo/work/')
         profiles_dir = Path(playbook_dir) / "profiles"
         if profiles_dir.exists():
-            current_profile = inventory_hostname.replace("-profile", "")
             for profile_name in [current_profile, "common"]:
                 # Use shared discovery to get actual profile path (supports multi-level profiles)
                 profile_info = get_profile_by_name(profiles_dir, profile_name)
@@ -96,7 +103,6 @@ class LookupModule(LookupBase):
 
         # Try to use Ansible's loader to decrypt vault files (uses --vault-password-file automatically)
         # This is the preferred method as it integrates with Ansible's vault password mechanism
-        secrets = None
         loader = None
 
         # Try to get loader from self (if available from Ansible context)
@@ -110,31 +116,34 @@ class LookupModule(LookupBase):
             if vault_password:
                 loader.set_vault_secrets([(None, VaultSecret(vault_password))])
 
-        # Load secrets from first available vault file using loader
+        # Load all available vault files
+        all_secrets = []
         for vault_file in vault_files:
             if vault_file.exists():
                 try:
-                    # Use loader to load the file (handles vault decryption automatically)
-                    secrets = loader.load_from_file(str(vault_file))
-                    if secrets:
-                        break
+                    data = loader.load_from_file(str(vault_file))
+                    if data:
+                        all_secrets.append(data)
                 except Exception:
-                    # If loader fails, fall back to manual decryption
                     vault_password = self._get_vault_password(playbook_dir)
-                    secrets = self._load_vault_file(vault_file, vault_password)
-                    if secrets:
-                        break
+                    data = self._load_vault_file(vault_file, vault_password)
+                    if data:
+                        all_secrets.append(data)
 
-        if secrets is None:
+        if not all_secrets:
             checked_locations = [str(f) for f in vault_files if f.parent.exists()]
             raise AnsibleError(
                 "No vault secrets file found. Checked locations:\n"
                 + "\n".join(f"  - {loc}" for loc in checked_locations)
             )
 
-        # Resolve each term (path)
+        # Resolve each term by searching across all loaded vault files
         for term in terms:
-            value = self._resolve_path(secrets, term)
+            value = None
+            for secrets in all_secrets:
+                value = self._resolve_path(secrets, term)
+                if value is not None:
+                    break
             if value is None:
                 raise AnsibleError(f"Secret not found: {term}")
             results.append(value)

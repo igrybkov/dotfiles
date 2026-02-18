@@ -57,7 +57,7 @@
             {%- endif -%}
             {# Process headers: resolve Jinja2 templates (vault_secret), then op:// references #}
             {%- if server.headers is defined -%}
-              {%- set resolved_headers = server.headers | resolve_templates(hostvars[inventory_hostname]) | resolve_op_secrets -%}
+              {%- set resolved_headers = server.headers | resolve_templates(hostvars[inventory_hostname] | combine({'_vault_profile': server._profile | default('')})) | resolve_op_secrets -%}
               {%- set _ = server_config.update({'headers': resolved_headers}) -%}
             {%- endif -%}
           {%- else -%}
@@ -77,7 +77,7 @@
             {%- endif -%}
             {# Process env vars: first resolve Jinja2 templates (vault_secret), then op:// references, then expand ~ #}
             {%- if server.env is defined -%}
-              {%- set resolved_env = server.env | resolve_templates(hostvars[inventory_hostname]) | resolve_op_secrets -%}
+              {%- set resolved_env = server.env | resolve_templates(hostvars[inventory_hostname] | combine({'_vault_profile': server._profile | default('')})) | resolve_op_secrets -%}
               {# Expand ~ in env values #}
               {%- set expanded_env = {} -%}
               {%- for key, value in resolved_env.items() -%}
