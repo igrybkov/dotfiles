@@ -14,7 +14,7 @@ Ansible-based macOS environment setup with profile-based configuration managemen
 
 Automated macOS development environment setup powered by Ansible. One command installs Homebrew packages, symlinks dotfiles, configures SSH and Git per profile, manages secrets with Ansible Vault, and applies macOS system settings. The profile system lets you separate work, personal, and private configurations — and keep private profiles in their own git repos.
 
-This repo ships with an opinionated set of packages and tools in the `common` profile. **Fork it and make it yours** — swap in your own packages, dotfiles, and profiles.
+This repo ships with an opinionated set of packages and tools across four topical profiles (`shell`, `neovim`, `development`, `macos-desktop`). **Fork it and make it yours** — swap in your own packages, dotfiles, and profiles.
 
 ## Features
 
@@ -91,11 +91,11 @@ After installation, `dotfiles` is available globally from any directory.
 
 ## Customization
 
-This repo is designed to be forked and customized. The `common` profile contains the author's preferred tools — replace them with your own.
+This repo is designed to be forked and customized. The built-in profiles (`shell`, `neovim`, `development`, `macos-desktop`) contain the author's preferred tools — replace them with your own.
 
 ### Adding packages
 
-Edit `profiles/common/config.yml` (shared) or `profiles/{profile}/config.yml` (profile-specific):
+Edit the appropriate profile's `config.yml` — e.g., `profiles/shell/config.yml` for CLI tools, `profiles/development/config.yml` for dev tools, or `profiles/{profile}/config.yml` for profile-specific packages:
 
 ```yaml
 brew_packages:
@@ -150,7 +150,7 @@ Create `config.yml` in the repository root to override any profile variables. Th
 ```bash
 dotfiles install --all                       # Everything
 dotfiles install dotfiles brew               # Specific tags
-dotfiles install --profile common,work brew   # Specific profiles + tags
+dotfiles install --profile shell,work brew    # Specific profiles + tags
 dotfiles install --sync --all                # Sync before installing
 dotfiles install -v                          # Verbose (-vv, -vvv for more)
 dotfiles install --dry-run                   # Preview changes without applying
@@ -170,7 +170,16 @@ Run `dotfiles <command> --help` for full options on any command.
 
 ```
 profiles/
-├── common/                    # Base packages and settings
+├── shell/                     # Core CLI tools (priority 100)
+│   ├── config.yml
+│   └── files/dotfiles/
+├── neovim/                    # Editor configuration (priority 110)
+│   ├── config.yml
+│   └── files/dotfiles/
+├── development/               # Dev tools (priority 120)
+│   ├── config.yml
+│   └── files/bin/
+├── macos-desktop/             # GUI apps, fonts (priority 130)
 │   ├── config.yml
 │   └── files/dotfiles/
 ├── work/                      # Work-specific configuration
@@ -266,9 +275,9 @@ Run specific parts of the setup using tags:
 
 ```bash
 dotfiles secret init                          # Create global vault password
-dotfiles secret init -p common                # Create profile-specific vault password
-dotfiles secret set -p common mcp.api_key     # Set a secret (prompts for value)
-dotfiles secret get -p common mcp.api_key     # Retrieve a secret
+dotfiles secret init -p shell                 # Create profile-specific vault password
+dotfiles secret set -p shell mcp.api_key      # Set a secret (prompts for value)
+dotfiles secret get -p shell mcp.api_key      # Retrieve a secret
 ```
 
 Secrets are encrypted with Ansible Vault. Each profile can have its own secrets file and vault password.
@@ -306,7 +315,10 @@ See [docs/architecture.md](docs/architecture.md) for detailed architecture docum
 │   ├── filter/               # Custom Jinja2 filters
 │   └── action/               # Custom action plugins
 ├── profiles/                 # Profile configurations
-│   ├── common/               # Base packages and settings
+│   ├── shell/                # Core CLI tools (priority 100)
+│   ├── neovim/               # Editor configuration (priority 110)
+│   ├── development/          # Dev tools (priority 120)
+│   ├── macos-desktop/        # GUI apps, fonts (priority 130)
 │   ├── work/                 # Work-specific configuration
 │   ├── personal/             # Personal configuration
 │   └── private/              # Private profiles (git-ignored, nested repos)

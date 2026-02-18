@@ -7,7 +7,7 @@ Profiles provide a way to manage different machine configurations (work vs perso
 Profiles support up to three levels of directory nesting:
 
 **Level 1:** `profiles/{profile}/config.yml`
-- Profile name matches directory name (e.g., `work`, `personal`, `common`)
+- Profile name matches directory name (e.g., `shell`, `neovim`, `development`, `macos-desktop`)
 - Example: `profiles/work/` -> profile name `work`
 
 **Level 2:** `profiles/{repo}/{profile}/config.yml`
@@ -26,9 +26,24 @@ Profiles support up to three levels of directory nesting:
 
 ```
 profiles/
-├── .gitignore              # Ignores private profiles, allows work/ and personal/
-├── common/                 # Level 1 profile
-│   └── config.yml          # Profile name: "common"
+├── .gitignore              # Ignores private profiles, allows built-in profiles
+├── shell/                  # Level 1 profile (priority 100)
+│   ├── config.yml          # Core CLI: fish, zsh, bash, git, fzf, ripgrep, etc.
+│   ├── files/dotfiles/     # Shell dotfiles (bash, zsh, fish, starship, etc.)
+│   ├── files/dotfiles-copy/ # Files copied to home (gitmessage, zenv, etc.)
+│   ├── files/bin/          # Shell scripts (tree, csv2tab, tsv2csv)
+│   └── files/gitconfig/    # Git config fragments and gitignore
+├── neovim/                 # Level 1 profile (priority 110)
+│   ├── config.yml          # Editor: neovim, stylua, shfmt
+│   └── files/dotfiles/     # vimrc, vim/, config/nvim/
+├── development/            # Level 1 profile (priority 120)
+│   ├── config.yml          # Dev tools: IDEs, languages, DBs, cloud/infra
+│   └── files/bin/          # Dev scripts (jupyter-notebook, watch-tests, etc.)
+├── macos-desktop/          # Level 1 profile (priority 130)
+│   ├── config.yml          # GUI: desktop apps, MAS, Alfred, fonts
+│   ├── files/dotfiles/     # wezterm.lua, config/ghostty/
+│   ├── files/bin/          # Alfred scripts, obsidian
+│   └── files/fonts/        # MesloLGS NF fonts
 ├── work/                   # Level 1 profile
 │   └── config.yml          # Profile name: "work"
 ├── {company}/              # Git repo containing Level 2 profiles
@@ -50,14 +65,6 @@ profiles/
     ├── roles/              # Custom Ansible roles (optional)
     ├── requirements.yml    # Custom Ansible Galaxy dependencies (optional)
     └── secrets.yml         # Profile-specific encrypted secrets (optional)
-
-profiles/common/files/
-├── bin/                    # Custom scripts (symlinked to ~/.local/bin/)
-├── claude/                 # Claude Code commands, agents, skills source
-├── dotfiles/               # Common dotfiles (symlinked for all profiles)
-│   └── config/             # XDG config files (symlinked to ~/.config/)
-├── dotfiles-copy/          # Files copied (not symlinked) to home
-└── fonts/                  # Fonts -> copied to ~/Library/Fonts
 
 profiles/work/files/
 ├── dotfiles/               # Work-specific dotfiles
@@ -201,20 +208,22 @@ This creates a complete profile structure with:
 If you have profiles using the old `host:` structure, migrate them using:
 ```bash
 ./dotfiles profile migrate --all           # Migrate all profiles
-./dotfiles profile migrate common personal # Migrate specific profiles
+./dotfiles profile migrate shell work      # Migrate specific profiles
 ./dotfiles profile migrate --all --dry-run # Preview changes
 ```
 
 ## Built-in vs Private Profiles
 
-- **Built-in profiles** (`work`, `personal`): Committed to repo, defined in `profiles/.gitignore` allowlist
+- **Built-in profiles** (`shell`, `neovim`, `development`, `macos-desktop`, `work`, `personal`): Committed to repo, defined in `profiles/.gitignore` allowlist
 - **Private profiles**: Any other directory in `profiles/` is git-ignored and can contain sensitive work-specific configuration
 
 ## Profile Priority
 
 Profiles are processed in priority order (lower number = processed first):
-- `default`: 100
-- `common`: 150
+- `default`, `shell`: 100
+- `neovim`: 110
+- `development`: 120
+- `macos-desktop`: 130
 - `work`, `personal`: 200
 - All others: 1000
 

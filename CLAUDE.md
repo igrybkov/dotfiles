@@ -27,13 +27,13 @@ See [docs/architecture.md](docs/architecture.md) for the full architecture docum
 ./dotfiles profile bootstrap myco           # Create a new profile
 ./dotfiles config                           # Interactive profile/settings configuration
 ./dotfiles secret init                      # Initialize vault password
-./dotfiles secret set -p common key.path    # Set a secret (prompts for value)
+./dotfiles secret set -p shell key.path     # Set a secret (prompts for value)
 ```
 
 ### Working with Ansible directly
 
 ```bash
-mise x -- ansible-playbook playbook.yml --tags dotfiles --limit common,work
+mise x -- ansible-playbook playbook.yml --tags dotfiles --limit shell,work
 mise x -- ansible-playbook playbook.yml --list-tags
 mise x -- ansible-playbook playbook.yml --syntax-check
 mise x -- ansible-inventory --list                   # View dynamic inventory
@@ -82,7 +82,7 @@ See [docs/architecture.md](docs/architecture.md) for details on dotfile symlinki
 
 ### Adding a new Homebrew package
 
-Edit `profiles/common/config.yml` or `profiles/{profile}/config.yml`:
+Edit the appropriate profile's `config.yml` (e.g., `profiles/shell/config.yml` for CLI tools, `profiles/development/config.yml` for dev tools) or `profiles/{profile}/config.yml`:
 - `brew_packages`: for formulae
 - `cask_packages`: for casks
 - `brew_taps`: for taps
@@ -92,7 +92,7 @@ Then run: `dotfiles install brew` (or `cask`, `mas`)
 
 ### Adding a new dotfile
 
-1. Place source file in `profiles/common/files/dotfiles/` (or `config/` for XDG config)
+1. Place source file in `profiles/shell/files/dotfiles/` (or `config/` for XDG config)
 2. Run: `dotfiles install dotfiles`
 3. Profile-specific dotfiles go in `profiles/{profile}/files/dotfiles/`
 
@@ -157,7 +157,7 @@ See [docs/architecture.md](docs/architecture.md#role-patterns) for the three pla
 
 ## Neovim Configuration
 
-Uses [NvChad](https://nvchad.com/) v2.5. Config at `profiles/common/files/dotfiles/config/nvim/`.
+Uses [NvChad](https://nvchad.com/) v2.5. Config at `profiles/neovim/files/dotfiles/config/nvim/`.
 - Override default plugins: edit `lua/plugins/init.lua`
 - Add new plugins: create new file in `lua/plugins/`
 - First-time setup: Run `:MasonInstallAll` after launch

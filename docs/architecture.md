@@ -27,7 +27,7 @@ In order of precedence:
 
 1. `config.yml`: Optional local overrides (git-ignored)
 2. `profiles/{profile}/config.yml`: Profile-specific configuration
-3. `profiles/common/config.yml`: Shared configuration (brew packages, casks, taps, mas apps, etc.)
+3. Built-in topical profiles: `shell` (CLI tools), `neovim` (editor), `development` (dev tools), `macos-desktop` (GUI apps)
 
 ## Playbook Structure
 
@@ -53,7 +53,7 @@ The playbook uses three patterns:
 The Finalize play uses the `aggregated_profile_var` lookup plugin to collect variables from all profile hosts:
 
 ```yaml
-# Aggregates brew_packages from all profiles (common, work, personal)
+# Aggregates brew_packages from all profiles (shell, development, work, etc.)
 brew_packages: "{{ lookup('aggregated_profile_var', 'brew_packages') | community.general.lists_mergeby('name') }}"
 ```
 
@@ -85,7 +85,10 @@ After installation, `dotfiles` is symlinked to `~/.local/bin/dotfiles` for easy 
 
 The system uses profiles to manage different machine configurations:
 
-- `common`: Base packages and settings shared across all machines
+- `shell` (priority 100): Core CLI tools — fish, zsh, bash, git, fzf, ripgrep, zellij, starship, mise
+- `neovim` (priority 110): Editor — neovim, NvChad config, vim legacy, stylua, shfmt
+- `development` (priority 120): Dev tools — IDEs, languages, DBs, cloud/infra, task runners, containers
+- `macos-desktop` (priority 130): GUI — desktop apps, MAS, Alfred, fonts, terminal emulators
 - `work`: Work-specific packages, SSH config, git settings
 - `personal`: Personal packages and configurations
 - Private profiles can be added to `profiles/private/` and are git-ignored by default
