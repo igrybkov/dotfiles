@@ -17,11 +17,11 @@ class TestInstallWorkflow:
             patch("dotfiles_cli.constants.DOTFILES_DIR", str(temp_dotfiles_dir)),
             patch(
                 "dotfiles_cli.commands.install.get_active_profiles",
-                return_value=Mock(resolve=lambda x: ["common"]),
+                return_value=Mock(resolve=lambda x: ["alpha"]),
             ),
             patch(
                 "dotfiles_cli.commands.install.get_all_profile_names",
-                return_value=["common"],
+                return_value=["alpha"],
             ),
             patch(
                 "dotfiles_cli.commands.install.get_profile_roles_paths", return_value=[]
@@ -54,11 +54,11 @@ class TestInstallWorkflow:
             patch("dotfiles_cli.constants.DOTFILES_DIR", str(temp_dotfiles_dir)),
             patch(
                 "dotfiles_cli.commands.install.get_active_profiles",
-                return_value=Mock(resolve=lambda x: ["common"]),
+                return_value=Mock(resolve=lambda x: ["alpha"]),
             ),
             patch(
                 "dotfiles_cli.commands.install.get_all_profile_names",
-                return_value=["common"],
+                return_value=["alpha"],
             ),
             patch(
                 "dotfiles_cli.commands.install.get_profile_roles_paths", return_value=[]
@@ -95,7 +95,7 @@ class TestInstallWorkflow:
             patch("dotfiles_cli.constants.DOTFILES_DIR", str(temp_dotfiles_dir)),
             patch(
                 "dotfiles_cli.commands.install.get_all_profile_names",
-                return_value=["common", "work", "personal"],
+                return_value=["alpha", "bravo", "charlie"],
             ),
             patch(
                 "dotfiles_cli.commands.install.get_profile_roles_paths", return_value=[]
@@ -115,14 +115,14 @@ class TestInstallWorkflow:
             patch("getpass.getpass", return_value="password"),
         ):
             result = cli_runner.invoke(
-                cli, ["install", "--profile", "common,work", "dotfiles"]
+                cli, ["install", "--profile", "alpha,bravo", "dotfiles"]
             )
 
         assert result.exit_code == 0
 
         # Verify ansible was called with correct profiles (localhost included for Bootstrap/Finalize)
         ansible_call = mock_ansible_runner["run"].call_args
-        assert ansible_call[1]["limit"] == "common,work,localhost"
+        assert ansible_call[1]["limit"] == "alpha,bravo,localhost"
 
     def test_install_with_sync_workflow(
         self, cli_runner, mock_ansible_runner, temp_dotfiles_dir, mock_subprocess
@@ -132,11 +132,11 @@ class TestInstallWorkflow:
             patch("dotfiles_cli.constants.DOTFILES_DIR", str(temp_dotfiles_dir)),
             patch(
                 "dotfiles_cli.commands.install.get_active_profiles",
-                return_value=Mock(resolve=lambda x: ["common"]),
+                return_value=Mock(resolve=lambda x: ["alpha"]),
             ),
             patch(
                 "dotfiles_cli.commands.install.get_all_profile_names",
-                return_value=["common"],
+                return_value=["alpha"],
             ),
             patch(
                 "dotfiles_cli.commands.install.get_profile_roles_paths", return_value=[]
@@ -190,23 +190,23 @@ class TestProfileSelectionWorkflow:
         # Create profile structure with config.yml files
         profiles_dir = tmp_path / "profiles"
         profiles_dir.mkdir()
-        (profiles_dir / "common").mkdir()
-        (profiles_dir / "common" / "config.yml").write_text("---\n")
-        (profiles_dir / "work").mkdir()
-        (profiles_dir / "work" / "config.yml").write_text("---\n")
-        (profiles_dir / "personal").mkdir()
-        (profiles_dir / "personal" / "config.yml").write_text("---\n")
+        (profiles_dir / "alpha").mkdir()
+        (profiles_dir / "alpha" / "config.yml").write_text("---\n")
+        (profiles_dir / "bravo").mkdir()
+        (profiles_dir / "bravo" / "config.yml").write_text("---\n")
+        (profiles_dir / "charlie").mkdir()
+        (profiles_dir / "charlie" / "config.yml").write_text("---\n")
 
         with patch("dotfiles_cli.profiles.discovery.DOTFILES_DIR", str(tmp_path)):
             # Get available profiles
             available = get_all_profile_names()
-            assert set(available) == {"common", "work", "personal"}
+            assert set(available) == {"alpha", "bravo", "charlie"}
 
             # Parse and resolve selection
-            selection = parse_profile_selection("common,work")
+            selection = parse_profile_selection("alpha,bravo")
             active = selection.resolve(available)
 
-            assert active == ["common", "work"]
+            assert active == ["alpha", "bravo"]
 
     def test_profile_selection_exclusion(self, tmp_path):
         """Test profile exclusion workflow."""
@@ -215,21 +215,21 @@ class TestProfileSelectionWorkflow:
 
         profiles_dir = tmp_path / "profiles"
         profiles_dir.mkdir()
-        (profiles_dir / "common").mkdir()
-        (profiles_dir / "common" / "config.yml").write_text("---\n")
-        (profiles_dir / "work").mkdir()
-        (profiles_dir / "work" / "config.yml").write_text("---\n")
-        (profiles_dir / "personal").mkdir()
-        (profiles_dir / "personal" / "config.yml").write_text("---\n")
+        (profiles_dir / "alpha").mkdir()
+        (profiles_dir / "alpha" / "config.yml").write_text("---\n")
+        (profiles_dir / "bravo").mkdir()
+        (profiles_dir / "bravo" / "config.yml").write_text("---\n")
+        (profiles_dir / "charlie").mkdir()
+        (profiles_dir / "charlie" / "config.yml").write_text("---\n")
 
         with patch("dotfiles_cli.profiles.discovery.DOTFILES_DIR", str(tmp_path)):
             available = get_all_profile_names()
-            selection = parse_profile_selection("-work")
+            selection = parse_profile_selection("-bravo")
             active = selection.resolve(available)
 
-            assert "common" in active
-            assert "personal" in active
-            assert "work" not in active
+            assert "alpha" in active
+            assert "charlie" in active
+            assert "bravo" not in active
 
 
 class TestVaultWorkflow:
@@ -247,7 +247,7 @@ class TestVaultWorkflow:
             "dotfiles_cli.vault.password.get_vault_password_file",
             return_value=vault_file,
         ):
-            password = get_vault_password("common")
+            password = get_vault_password("alpha")
 
         assert password == "my_secret_password"
 
@@ -292,11 +292,11 @@ class TestCommandAliases:
             patch("dotfiles_cli.constants.DOTFILES_DIR", str(temp_dotfiles_dir)),
             patch(
                 "dotfiles_cli.commands.install.get_active_profiles",
-                return_value=Mock(resolve=lambda x: ["common"]),
+                return_value=Mock(resolve=lambda x: ["alpha"]),
             ),
             patch(
                 "dotfiles_cli.commands.install.get_all_profile_names",
-                return_value=["common"],
+                return_value=["alpha"],
             ),
             patch(
                 "dotfiles_cli.commands.install.get_profile_roles_paths", return_value=[]
@@ -335,11 +335,11 @@ class TestErrorHandling:
             patch("dotfiles_cli.constants.DOTFILES_DIR", str(temp_dotfiles_dir)),
             patch(
                 "dotfiles_cli.commands.install.get_active_profiles",
-                return_value=Mock(resolve=lambda x: ["common"]),
+                return_value=Mock(resolve=lambda x: ["alpha"]),
             ),
             patch(
                 "dotfiles_cli.commands.install.get_all_profile_names",
-                return_value=["common"],
+                return_value=["alpha"],
             ),
             patch(
                 "dotfiles_cli.commands.install.get_profile_roles_paths", return_value=[]
@@ -416,11 +416,11 @@ class TestLogfileHandling:
             patch("dotfiles_cli.constants.DOTFILES_DIR", str(temp_dotfiles_dir)),
             patch(
                 "dotfiles_cli.commands.install.get_active_profiles",
-                return_value=Mock(resolve=lambda x: ["common"]),
+                return_value=Mock(resolve=lambda x: ["alpha"]),
             ),
             patch(
                 "dotfiles_cli.commands.install.get_all_profile_names",
-                return_value=["common"],
+                return_value=["alpha"],
             ),
             patch(
                 "dotfiles_cli.commands.install.get_profile_roles_paths", return_value=[]
@@ -457,11 +457,11 @@ class TestLogfileHandling:
             patch("dotfiles_cli.constants.DOTFILES_DIR", str(temp_dotfiles_dir)),
             patch(
                 "dotfiles_cli.commands.install.get_active_profiles",
-                return_value=Mock(resolve=lambda x: ["common"]),
+                return_value=Mock(resolve=lambda x: ["alpha"]),
             ),
             patch(
                 "dotfiles_cli.commands.install.get_all_profile_names",
-                return_value=["common"],
+                return_value=["alpha"],
             ),
             patch(
                 "dotfiles_cli.commands.install.get_profile_roles_paths", return_value=[]
@@ -523,7 +523,7 @@ class TestEndToEndScenarios:
             patch("dotfiles_cli.constants.DOTFILES_DIR", str(temp_dotfiles_dir)),
             patch(
                 "dotfiles_cli.commands.install.get_all_profile_names",
-                return_value=["common", "work"],
+                return_value=["alpha", "bravo"],
             ),
             patch(
                 "dotfiles_cli.commands.install.get_profile_roles_paths", return_value=[]
@@ -546,12 +546,12 @@ class TestEndToEndScenarios:
         ):
             # Step 1: Install with all tags and sync
             result = cli_runner.invoke(
-                cli, ["install", "--profile", "common,work", "--sync", "--all"]
+                cli, ["install", "--profile", "alpha,bravo", "--sync", "--all"]
             )
 
         assert result.exit_code == 0
         assert "Running sync before install" in result.output
-        assert "Running with profiles: common, work" in result.output
+        assert "Running with profiles: alpha, bravo" in result.output
 
     def test_update_and_push_scenario(self, cli_runner, mock_subprocess):
         """Test updating and pushing changes scenario."""

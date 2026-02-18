@@ -24,23 +24,23 @@ from dotfiles_cli.vault.password import (
 class TestGetSecretsFile:
     """Test secrets file path resolution."""
 
-    def test_get_secrets_file_common(self, tmp_path):
-        """Test getting secrets file for common profile."""
-        profile_path = tmp_path / "profiles" / "common"
+    def test_get_secrets_file_alpha(self, tmp_path):
+        """Test getting secrets file for alpha profile."""
+        profile_path = tmp_path / "profiles" / "alpha"
         with patch(
             "dotfiles_cli.vault.operations.get_profile_path", return_value=profile_path
         ):
-            result = get_secrets_file("common")
+            result = get_secrets_file("alpha")
 
         assert result == profile_path / "secrets.yml"
 
-    def test_get_secrets_file_work(self, tmp_path):
-        """Test getting secrets file for work profile."""
-        profile_path = tmp_path / "profiles" / "work"
+    def test_get_secrets_file_bravo(self, tmp_path):
+        """Test getting secrets file for bravo profile."""
+        profile_path = tmp_path / "profiles" / "bravo"
         with patch(
             "dotfiles_cli.vault.operations.get_profile_path", return_value=profile_path
         ):
-            result = get_secrets_file("work")
+            result = get_secrets_file("bravo")
 
         assert result == profile_path / "secrets.yml"
 
@@ -79,19 +79,19 @@ class TestGetAllSecretLocations:
         """Test getting all secret locations returns all profiles."""
         profiles_dir = tmp_path / "profiles"
         profiles_dir.mkdir()
-        (profiles_dir / "common").mkdir()
-        (profiles_dir / "work").mkdir()
-        (profiles_dir / "custom").mkdir()
+        (profiles_dir / "alpha").mkdir()
+        (profiles_dir / "bravo").mkdir()
+        (profiles_dir / "charlie").mkdir()
 
         with patch(
             "dotfiles_cli.vault.operations.get_profile_names",
-            return_value=["common", "work", "custom"],
+            return_value=["alpha", "bravo", "charlie"],
         ):
             result = get_all_secret_locations()
 
-        assert "common" in result
-        assert "work" in result
-        assert "custom" in result
+        assert "alpha" in result
+        assert "bravo" in result
+        assert "charlie" in result
         assert len(result) == 3
 
 
@@ -279,9 +279,9 @@ class TestGetVaultId:
 
     def test_get_vault_id_returns_profile_name(self):
         """Test vault ID returns the profile name."""
-        assert get_vault_id("common") == "common"
-        assert get_vault_id("work") == "work"
-        assert get_vault_id("personal") == "personal"
+        assert get_vault_id("alpha") == "alpha"
+        assert get_vault_id("bravo") == "bravo"
+        assert get_vault_id("charlie") == "charlie"
         assert get_vault_id("mycompany") == "mycompany"
         assert get_vault_id("custom") == "custom"
 
@@ -305,7 +305,7 @@ class TestGetVaultPasswordFile:
         global_pass_file = tmp_path / ".vault_password"
 
         with patch("dotfiles_cli.constants.DOTFILES_DIR", str(tmp_path)):
-            result = get_vault_password_file("common")
+            result = get_vault_password_file("alpha")
 
         assert result == global_pass_file
 
@@ -366,7 +366,7 @@ class TestGetVaultPassword:
             "dotfiles_cli.vault.password.get_vault_password_file",
             return_value=vault_file,
         ):
-            password = get_vault_password("common")
+            password = get_vault_password("alpha")
 
         assert password == "file_password"
 
@@ -382,7 +382,7 @@ class TestGetVaultPassword:
             ),
             patch("getpass.getpass", return_value="prompted_password"),
         ):
-            password = get_vault_password("common")
+            password = get_vault_password("alpha")
 
         assert password == "prompted_password"
 
@@ -409,12 +409,12 @@ class TestValidateVaultPassword:
 
     def test_validate_vault_password_success(self, tmp_path):
         """Test validating correct password."""
-        secrets_file = tmp_path / "profiles" / "common" / "secrets.yml"
+        secrets_file = tmp_path / "profiles" / "alpha" / "secrets.yml"
         secrets_file.parent.mkdir(parents=True)
         secrets_file.write_text("$ANSIBLE_VAULT;1.1;AES256\nencrypted")
 
         with (
-            patch("dotfiles_cli.profiles.get_profile_names", return_value=["common"]),
+            patch("dotfiles_cli.profiles.get_profile_names", return_value=["alpha"]),
             patch(
                 "dotfiles_cli.vault.operations.get_secrets_file",
                 return_value=secrets_file,
@@ -430,12 +430,12 @@ class TestValidateVaultPassword:
 
     def test_validate_vault_password_failure(self, tmp_path):
         """Test validating incorrect password."""
-        secrets_file = tmp_path / "profiles" / "common" / "secrets.yml"
+        secrets_file = tmp_path / "profiles" / "alpha" / "secrets.yml"
         secrets_file.parent.mkdir(parents=True)
         secrets_file.write_text("$ANSIBLE_VAULT;1.1;AES256\nencrypted")
 
         with (
-            patch("dotfiles_cli.profiles.get_profile_names", return_value=["common"]),
+            patch("dotfiles_cli.profiles.get_profile_names", return_value=["alpha"]),
             patch(
                 "dotfiles_cli.vault.operations.get_secrets_file",
                 return_value=secrets_file,

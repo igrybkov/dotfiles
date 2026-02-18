@@ -1,0 +1,14 @@
+---
+# yaml-language-server: $schema=../../schemas/config.schema.json
+# Neovim profile configuration
+# Editor: neovim, NvChad config, vim legacy, stylua, shfmt
+#
+# Profile configuration for dynamic inventory
+profile:
+  name: neovim
+  priority: 110
+
+brew_packages:
+  - name: neovim
+  - name: stylua
+  - name: shfmt

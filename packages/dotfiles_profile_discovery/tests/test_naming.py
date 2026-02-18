@@ -9,7 +9,7 @@ class TestPathToName:
     def test_single_level_path(self):
         """Single level path returns unchanged."""
         assert path_to_name("work") == "work"
-        assert path_to_name("common") == "common"
+        assert path_to_name("shell") == "shell"
         assert path_to_name("my-profile") == "my-profile"
 
     def test_nested_path_converts_slash_to_dash(self):
@@ -29,9 +29,21 @@ class TestGetDefaultPriority:
         """Default profile has priority 100."""
         assert get_default_priority("default") == 100
 
-    def test_common_profile_priority(self):
-        """Common profile has priority 150."""
-        assert get_default_priority("common") == 150
+    def test_shell_profile_priority(self):
+        """Shell profile has priority 100."""
+        assert get_default_priority("shell") == 100
+
+    def test_neovim_profile_priority(self):
+        """Neovim profile has priority 110."""
+        assert get_default_priority("neovim") == 110
+
+    def test_development_profile_priority(self):
+        """Development profile has priority 120."""
+        assert get_default_priority("development") == 120
+
+    def test_macos_desktop_profile_priority(self):
+        """macOS desktop profile has priority 130."""
+        assert get_default_priority("macos-desktop") == 130
 
     def test_work_profile_priority(self):
         """Work profile has priority 200."""

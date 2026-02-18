@@ -87,7 +87,7 @@ def profile_list(quiet: bool):
 
         # Add notes for special profiles
         notes = ""
-        if p.name == "common":
+        if p.name == "shell":
             notes = "base profile"
         elif p.priority == 200 and p.name in ("work", "personal"):
             notes = "built-in"

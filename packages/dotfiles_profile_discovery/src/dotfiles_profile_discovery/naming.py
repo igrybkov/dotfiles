@@ -25,8 +25,10 @@ def get_default_priority(profile_name: str) -> int:
     """Get default priority based on profile name.
 
     Special profiles get lower priorities (run earlier):
-    - 'default': 100
-    - 'common': 150
+    - 'default' / 'shell': 100
+    - 'neovim': 110
+    - 'development': 120
+    - 'macos-desktop': 130
     - 'work' / 'personal': 200 (built-in workstation types)
     - All others: 1000
 
@@ -38,7 +40,10 @@ def get_default_priority(profile_name: str) -> int:
     """
     special_priorities = {
         "default": 100,
-        "common": 150,
+        "shell": 100,
+        "neovim": 110,
+        "development": 120,
+        "macos-desktop": 130,
         "work": 200,
         "personal": 200,
     }

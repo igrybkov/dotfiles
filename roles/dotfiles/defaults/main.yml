@@ -1,9 +1,9 @@
 ---
 # These defaults are overridden by the inventory plugin with profile-specific paths
 # e.g., profiles/common/files/dotfiles, profiles/work/files/dotfiles, etc.
-dotfiles_dir: "{{ playbook_dir }}/profiles/common/files/dotfiles"
-dotfiles_copy_dir: "{{ playbook_dir }}/profiles/common/files/dotfiles-copy"
-bin_dir: "{{ playbook_dir }}/profiles/common/files/bin"
+dotfiles_dir: "{{ playbook_dir }}/profiles/shell/files/dotfiles"
+dotfiles_copy_dir: "{{ playbook_dir }}/profiles/shell/files/dotfiles-copy"
+bin_dir: "{{ playbook_dir }}/profiles/shell/files/bin"
 additional_dotfiles_dirs: []  # List of extra dotfiles directories from custom inventories
 skill_folders: []  # List of destination directories for skills (e.g., ["~/.claude/skills", "~/.cursor/skills"])
 agent_folders: []  # List of destination directories for agents (e.g., ["~/.claude/agents", "~/.cursor/agents"])

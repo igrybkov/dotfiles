@@ -167,7 +167,7 @@ class AnsibleHostListType(click.Choice):
         """Get all supported hosts from inventory (uses ansible.cfg settings)."""
         import ansible_runner
 
-        excluded_hosts = {"common", "all", "ungrouped"}
+        excluded_hosts = {"all", "ungrouped"}
 
         try:
             with TemporaryDirectory() as tmpdir:

@@ -220,11 +220,11 @@ class TestInstallCommand:
             patch("dotfiles_cli.constants.DOTFILES_DIR", str(temp_dotfiles_dir)),
             patch(
                 "dotfiles_cli.commands.install.get_active_profiles",
-                return_value=Mock(resolve=lambda x: ["common"]),
+                return_value=Mock(resolve=lambda x: ["alpha"]),
             ),
             patch(
                 "dotfiles_cli.commands.install.get_all_profile_names",
-                return_value=["common", "work"],
+                return_value=["alpha", "bravo"],
             ),
             patch(
                 "dotfiles_cli.commands.install.get_profile_roles_paths", return_value=[]
@@ -256,11 +256,11 @@ class TestInstallCommand:
             patch("dotfiles_cli.constants.DOTFILES_DIR", str(temp_dotfiles_dir)),
             patch(
                 "dotfiles_cli.commands.install.get_active_profiles",
-                return_value=Mock(resolve=lambda x: ["common"]),
+                return_value=Mock(resolve=lambda x: ["alpha"]),
             ),
             patch(
                 "dotfiles_cli.commands.install.get_all_profile_names",
-                return_value=["common"],
+                return_value=["alpha"],
             ),
             patch(
                 "dotfiles_cli.commands.install.get_profile_roles_paths", return_value=[]
@@ -295,11 +295,11 @@ class TestInstallCommand:
             patch("dotfiles_cli.constants.DOTFILES_DIR", str(temp_dotfiles_dir)),
             patch(
                 "dotfiles_cli.commands.install.get_active_profiles",
-                return_value=Mock(resolve=lambda x: ["common"]),
+                return_value=Mock(resolve=lambda x: ["alpha"]),
             ),
             patch(
                 "dotfiles_cli.commands.install.get_all_profile_names",
-                return_value=["common"],
+                return_value=["alpha"],
             ),
             patch(
                 "dotfiles_cli.commands.install.get_profile_roles_paths", return_value=[]
@@ -342,11 +342,11 @@ class TestInstallCommand:
             patch("dotfiles_cli.constants.DOTFILES_DIR", str(temp_dotfiles_dir)),
             patch(
                 "dotfiles_cli.commands.install.get_active_profiles",
-                return_value=Mock(resolve=lambda x: ["common"]),
+                return_value=Mock(resolve=lambda x: ["alpha"]),
             ),
             patch(
                 "dotfiles_cli.commands.install.get_all_profile_names",
-                return_value=["common"],
+                return_value=["alpha"],
             ),
             patch(
                 "dotfiles_cli.commands.install.get_profile_roles_paths", return_value=[]
@@ -382,11 +382,11 @@ class TestInstallCommand:
             patch("dotfiles_cli.constants.DOTFILES_DIR", str(temp_dotfiles_dir)),
             patch(
                 "dotfiles_cli.commands.install.get_active_profiles",
-                return_value=Mock(resolve=lambda x: ["common"]),
+                return_value=Mock(resolve=lambda x: ["alpha"]),
             ),
             patch(
                 "dotfiles_cli.commands.install.get_all_profile_names",
-                return_value=["common"],
+                return_value=["alpha"],
             ),
             patch(
                 "dotfiles_cli.commands.install.get_profile_roles_paths", return_value=[]
@@ -414,7 +414,7 @@ class TestInstallCommand:
             patch("dotfiles_cli.constants.DOTFILES_DIR", str(temp_dotfiles_dir)),
             patch(
                 "dotfiles_cli.commands.install.get_all_profile_names",
-                return_value=["common", "work", "personal"],
+                return_value=["alpha", "bravo", "charlie"],
             ),
             patch(
                 "dotfiles_cli.commands.install.get_profile_roles_paths", return_value=[]
@@ -433,7 +433,7 @@ class TestInstallCommand:
             ),
         ):
             result = cli_runner.invoke(
-                cli, ["install", "--profile", "common,work", "dotfiles"]
+                cli, ["install", "--profile", "alpha,bravo", "dotfiles"]
             )
 
         assert result.exit_code == 0, (
@@ -442,7 +442,7 @@ class TestInstallCommand:
 
         # Should run with specified profiles (localhost is always included for Bootstrap/Finalize plays)
         ansible_call = mock_ansible_runner["run"].call_args
-        assert ansible_call[1]["limit"] == "common,work,localhost"
+        assert ansible_call[1]["limit"] == "alpha,bravo,localhost"
 
     def test_install_with_dry_run(
         self, cli_runner, mock_ansible_runner, temp_dotfiles_dir, mock_getpass
@@ -452,11 +452,11 @@ class TestInstallCommand:
             patch("dotfiles_cli.constants.DOTFILES_DIR", str(temp_dotfiles_dir)),
             patch(
                 "dotfiles_cli.commands.install.get_active_profiles",
-                return_value=Mock(resolve=lambda x: ["common"]),
+                return_value=Mock(resolve=lambda x: ["alpha"]),
             ),
             patch(
                 "dotfiles_cli.commands.install.get_all_profile_names",
-                return_value=["common"],
+                return_value=["alpha"],
             ),
             patch(
                 "dotfiles_cli.commands.install.get_profile_roles_paths", return_value=[]
@@ -493,11 +493,11 @@ class TestInstallCommand:
             patch("dotfiles_cli.constants.DOTFILES_DIR", str(temp_dotfiles_dir)),
             patch(
                 "dotfiles_cli.commands.install.get_active_profiles",
-                return_value=Mock(resolve=lambda x: ["common"]),
+                return_value=Mock(resolve=lambda x: ["alpha"]),
             ),
             patch(
                 "dotfiles_cli.commands.install.get_all_profile_names",
-                return_value=["common"],
+                return_value=["alpha"],
             ),
             patch(
                 "dotfiles_cli.commands.install.get_profile_roles_paths", return_value=[]
@@ -551,11 +551,11 @@ class TestInstallCommand:
             patch("dotfiles_cli.constants.DOTFILES_DIR", str(temp_dotfiles_dir)),
             patch(
                 "dotfiles_cli.commands.install.get_active_profiles",
-                return_value=Mock(resolve=lambda x: ["common"]),
+                return_value=Mock(resolve=lambda x: ["alpha"]),
             ),
             patch(
                 "dotfiles_cli.commands.install.get_all_profile_names",
-                return_value=["common"],
+                return_value=["alpha"],
             ),
             patch(
                 "dotfiles_cli.commands.install.get_profile_roles_paths", return_value=[]
@@ -595,7 +595,7 @@ class TestInstallCommand:
             ),
             patch(
                 "dotfiles_cli.commands.install.get_all_profile_names",
-                return_value=["common", "work"],
+                return_value=["alpha", "bravo"],
             ),
             patch(
                 "dotfiles_cli.types.AnsibleTagListType._get_all_supported_tags",

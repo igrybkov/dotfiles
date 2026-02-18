@@ -10,11 +10,11 @@ class ProfileSelection:
     """Represents a parsed profile selection.
 
     Supports selection syntax:
-    - 'common,mycompany' -> explicit profiles
+    - 'shell,work' -> explicit profiles
     - '-mycompany' -> all except mycompany (exclusion)
     - 'all' -> all profiles
     - 'all,-mycompany' -> all except mycompany
-    - (empty) -> common only
+    - (empty) -> none (must configure profiles)
     """
 
     explicit_profiles: list[str] = field(default_factory=list)
@@ -37,8 +37,8 @@ class ProfileSelection:
             # Only use explicitly listed profiles
             result = set(self.explicit_profiles)
         else:
-            # Default: common only
-            result = {"common"}
+            # Default: no profiles (must configure explicitly)
+            result = set()
 
         # Apply exclusions
         result -= set(self.excluded_profiles)
@@ -53,11 +53,11 @@ def parse_profile_selection(selection: str | None) -> ProfileSelection:
     """Parse profile selection syntax.
 
     Supports:
-    - 'common,work' -> explicit profiles
+    - 'shell,work' -> explicit profiles
     - '-mycompany' -> all except mycompany
     - 'all' -> all profiles
     - 'all,-mycompany' -> all except mycompany
-    - (empty/None) -> common only
+    - (empty/None) -> none (must configure profiles)
 
     Args:
         selection: Comma-separated profile selection string

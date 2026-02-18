@@ -134,7 +134,6 @@ class TestAnsibleHostListType:
 
         assert "work-profile" in hosts
         assert "personal-profile" in hosts
-        assert "common" not in hosts  # Excluded
         assert "all" not in hosts  # Excluded
         assert "ungrouped" not in hosts  # Excluded
 

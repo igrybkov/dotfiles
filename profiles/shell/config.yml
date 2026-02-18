@@ -1,0 +1,59 @@
+---
+# yaml-language-server: $schema=../../schemas/config.schema.json
+# Shell profile configuration
+# Core CLI tools: fish, zsh, bash, git, fzf, ripgrep, zellij, starship, mise, etc.
+#
+# Profile configuration for dynamic inventory
+profile:
+  name: shell
+  priority: 100
+
+# Upgrade packages during shell config run
+brew_upgrade_all: true
+
+brew_taps:
+  - name: homebrew/bundle
+  - name: homebrew/services
+
+brew_packages:
+  - name: bat
+  - name: coreutils
+  - name: curl
+  - name: direnv
+  - name: dust # https://github.com/bootandy/dust
+  - name: eza
+  - name: fd # faster, colorized alternative to find
+  - name: fish
+  - name: fish-lsp
+  - name: fzf
+  - name: fzy
+  - name: gh
+  - name: git
+  - name: git-delta
+  - name: git-extras
+  - name: git-lfs
+  - name: gnu-sed
+  - name: htop
+  - name: jq
+  - name: lazygit
+  - name: less
+  - name: make
+  - name: mise
+  - name: pv
+  - name: ripgrep
+  - name: watch
+  - name: wget
+  - name: yq
+  - name: zellij
+  - name: zoxide
+  - name: zsh
+
+# SSH config text blocks to work with params that are not supported by ansible.builtin.ssh_config
+ssh_client_config_block:
+  - content: |
+      Include ~/.ssh/1Password/config
+    position: top
+  - content: |
+      Host *
+          identityagent "~/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
+    position: bottom

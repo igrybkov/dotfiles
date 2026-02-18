@@ -8,6 +8,17 @@ import pytest
 from click.testing import CliRunner
 
 
+@pytest.fixture(autouse=True)
+def clean_dotfiles_env():
+    """Clear DOTFILES_PROFILES env var to prevent leakage into tests.
+
+    Click's --profile option uses envvar="DOTFILES_PROFILES", so any value
+    in the environment bypasses get_active_profiles() entirely.
+    """
+    with patch.dict(os.environ, {"DOTFILES_PROFILES": ""}, clear=False):
+        yield
+
+
 @pytest.fixture
 def cli_runner():
     """Create a Click CLI test runner."""
@@ -31,18 +42,18 @@ def temp_dotfiles_dir(tmp_path):
 
     # Create basic directory structure
     (dotfiles / "profiles").mkdir()
-    (dotfiles / "profiles" / "common").mkdir()
-    (dotfiles / "profiles" / "work").mkdir()
-    (dotfiles / "profiles" / "personal").mkdir()
+    (dotfiles / "profiles" / "alpha").mkdir()
+    (dotfiles / "profiles" / "bravo").mkdir()
+    (dotfiles / "profiles" / "charlie").mkdir()
     (dotfiles / ".cache").mkdir()
 
     # Create config files
-    (dotfiles / "profiles" / "common" / "config.yml").write_text("---\n")
-    (dotfiles / "profiles" / "work" / "config.yml").write_text("---\n")
-    (dotfiles / "profiles" / "personal" / "config.yml").write_text("---\n")
+    (dotfiles / "profiles" / "alpha" / "config.yml").write_text("---\n")
+    (dotfiles / "profiles" / "bravo" / "config.yml").write_text("---\n")
+    (dotfiles / "profiles" / "charlie" / "config.yml").write_text("---\n")
 
     # Create .env file
-    (dotfiles / ".env").write_text("DOTFILES_PROFILES=common,work\n")
+    (dotfiles / ".env").write_text("DOTFILES_PROFILES=alpha,bravo\n")
 
     # Create playbook
     (dotfiles / "playbook.yml").write_text("---\n")
@@ -88,11 +99,14 @@ def mock_ansible_runner():
 
 @pytest.fixture
 def mock_getpass():
-    """Mock getpass.getpass and validate_sudo_password for password prompts."""
+    """Mock getpass.getpass and password validation for install command."""
     with (
         patch("getpass.getpass") as mock,
         patch(
             "dotfiles_cli.commands.install.validate_sudo_password", return_value=True
+        ),
+        patch(
+            "dotfiles_cli.commands.install.validate_vault_password", return_value=True
         ),
     ):
         mock.return_value = "test_password"
@@ -144,16 +158,16 @@ def mock_vault_operations():
 def sample_profiles_data():
     """Sample profile data for testing."""
     return {
-        "common": {
-            "name": "common",
-            "priority": 150,
+        "alpha": {
+            "name": "alpha",
+            "priority": 100,
         },
-        "work": {
-            "name": "work",
+        "bravo": {
+            "name": "bravo",
             "priority": 200,
         },
-        "personal": {
-            "name": "personal",
+        "charlie": {
+            "name": "charlie",
             "priority": 200,
         },
     }

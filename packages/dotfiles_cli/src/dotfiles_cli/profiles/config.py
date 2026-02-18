@@ -59,7 +59,7 @@ def show_current_config() -> None:
     table.add_column("Status", style="green")
     table.add_column("Type", style="dim")
 
-    builtin = ["common", "work", "personal"]
+    builtin = ["shell", "neovim", "development", "macos-desktop", "work", "personal"]
     # Sort by priority (lower = earlier), then alphabetically
     sorted_profiles = sorted(available, key=lambda p: (get_profile_priority(p), p))
     for profile in sorted_profiles:
@@ -123,7 +123,7 @@ def interactive_profile_config() -> int:
 
     cursor_pos = 0
     profile_list = sorted(available, key=lambda p: (get_profile_priority(p), p))
-    builtin = ["common", "work", "personal"]
+    builtin = ["shell", "neovim", "development", "macos-desktop", "work", "personal"]
 
     def get_key() -> str:
         """Read a single keypress."""
@@ -218,7 +218,7 @@ def interactive_profile_config() -> int:
 
         console.print()
         console.print(
-            "[dim]Shortcuts: 'm' toggle mode, 'a' select/include all, 'n' select none/exclude all, 'c' common only[/dim]"
+            "[dim]Shortcuts: 'm' toggle mode, 'a' select/include all, 'n' select none/exclude all[/dim]"
         )
 
     render()
@@ -265,11 +265,6 @@ def interactive_profile_config() -> int:
                 excluded = set(available)
             else:
                 selected = set()
-        elif key == "c":
-            if exclude_mode:
-                excluded = set(available) - {"common"}
-            else:
-                selected = {"common"}
 
         render()
 

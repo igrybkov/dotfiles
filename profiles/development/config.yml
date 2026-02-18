@@ -1,0 +1,88 @@
+---
+# yaml-language-server: $schema=../../schemas/config.schema.json
+# Development profile configuration
+# Dev tools: IDEs, languages, DBs, cloud/infra, task runners, containers
+#
+# Profile configuration for dynamic inventory
+profile:
+  name: development
+  priority: 120
+
+brew_taps:
+  - name: charmbracelet/tap
+  - name: frdmn/formulas
+  - name: hashicorp/tap
+
+brew_packages:
+  - name: awscli
+  - name: exiftool
+  - name: faas-cli
+  - name: ffmpeg
+  - name: go-task/tap/go-task
+  - name: graphviz
+  - name: hashicorp/tap/terraform
+  - name: helm
+  - name: hidetatz/tap/kubecolor
+  - name: hub
+  - name: joerdav/xc/xc
+  - name: jupyterlab
+  - name: just
+  - name: k9s
+  - name: lazydocker
+  - name: multitail
+  - name: mycli
+  - name: mysql-client
+  - name: ngrep
+  - name: nmap
+  - name: php # used by some alfred workflows
+  - name: pillow
+  - name: pipx
+  - name: poetry
+  - name: ruff
+  - name: runme
+  - name: tcpdump
+  - name: ttyd
+  - name: uping
+  - name: uv
+  - name: vhs
+  - name: watchexec
+  - name: yt-dlp
+
+cask_packages:
+  - name: dbngin
+  - name: docker-desktop
+  - name: jetbrains-toolbox
+  - name: mongodb-compass
+  - name: visual-studio-code
+
+npm_packages:
+  - name: "@google/gemini-cli"
+  - name: eslint
+  - name: gitignore-it
+  - name: prettier
+  - name: prettyjson
+  - name: yo
+
+gem_packages:
+  - name: nokogiri
+
+gh_extensions:
+  - name: seachicken/gh-poi
+    state: latest
+  - name: HaywardMorihara/gh-tidy
+    state: latest
+  - name: meiji163/gh-notify
+    state: latest
+  - name: garnertb/gh-gitignore
+    state: latest
+  - name: chelnak/gh-changelog
+    state: latest
+
+# pipx packages (installed in isolated environments)
+# Packages with native dependencies can use build_deps to auto-set CFLAGS/LDFLAGS
+# The role will run `brew --prefix <dep>` and set -I and -L flags accordingly
+pipx_packages:
+  - name: erdantic
+    build_deps:
+      - graphviz
+  - name: mlx-whisper

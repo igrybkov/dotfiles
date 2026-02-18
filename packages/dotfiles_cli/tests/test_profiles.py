@@ -28,54 +28,54 @@ class TestProfileSelection:
 
     def test_resolve_explicit_profiles(self):
         """Test resolving explicit profile list."""
-        selection = ProfileSelection(explicit_profiles=["common", "work"])
-        available = ["common", "work", "personal"]
+        selection = ProfileSelection(explicit_profiles=["alpha", "bravo"])
+        available = ["alpha", "bravo", "charlie"]
         result = selection.resolve(available)
-        assert result == ["common", "work"]
+        assert result == ["alpha", "bravo"]
 
     def test_resolve_include_all(self):
         """Test resolving 'all' selection."""
         selection = ProfileSelection(include_all=True)
-        available = ["common", "work", "personal"]
+        available = ["alpha", "bravo", "charlie"]
         result = selection.resolve(available)
-        assert result == ["common", "personal", "work"]
+        assert result == ["alpha", "bravo", "charlie"]
 
     def test_resolve_with_exclusions(self):
         """Test resolving with exclusions."""
-        selection = ProfileSelection(include_all=True, excluded_profiles=["personal"])
-        available = ["common", "work", "personal"]
+        selection = ProfileSelection(include_all=True, excluded_profiles=["charlie"])
+        available = ["alpha", "bravo", "charlie"]
         result = selection.resolve(available)
-        assert result == ["common", "work"]
+        assert result == ["alpha", "bravo"]
 
     def test_resolve_explicit_with_exclusions(self):
         """Test explicit profiles with exclusions."""
         selection = ProfileSelection(
-            explicit_profiles=["common", "work", "personal"], excluded_profiles=["work"]
+            explicit_profiles=["alpha", "bravo", "charlie"], excluded_profiles=["bravo"]
         )
-        available = ["common", "work", "personal", "mycompany"]
+        available = ["alpha", "bravo", "charlie", "delta"]
         result = selection.resolve(available)
-        assert result == ["common", "personal"]
+        assert result == ["alpha", "charlie"]
 
     def test_resolve_filters_unavailable(self):
         """Test that unavailable profiles are filtered out."""
         selection = ProfileSelection(
-            explicit_profiles=["common", "work", "nonexistent"]
+            explicit_profiles=["alpha", "bravo", "nonexistent"]
         )
-        available = ["common", "work"]
+        available = ["alpha", "bravo"]
         result = selection.resolve(available)
-        assert result == ["common", "work"]
+        assert result == ["alpha", "bravo"]
 
-    def test_resolve_default_common_only(self):
-        """Test default resolution (no selection) returns common only."""
+    def test_resolve_default_empty(self):
+        """Test default resolution (no selection) returns empty list."""
         selection = ProfileSelection()
-        available = ["common", "work", "personal"]
+        available = ["alpha", "bravo", "charlie"]
         result = selection.resolve(available)
-        assert result == ["common"]
+        assert result == []
 
-    def test_resolve_empty_when_no_common(self):
-        """Test resolution when common is not available."""
+    def test_resolve_empty_when_no_profiles(self):
+        """Test resolution with empty available list."""
         selection = ProfileSelection()
-        available = ["work", "personal"]
+        available = ["bravo", "charlie"]
         result = selection.resolve(available)
         assert result == []
 
@@ -85,8 +85,8 @@ class TestParseProfileSelection:
 
     def test_parse_explicit_profiles(self):
         """Test parsing explicit profile list."""
-        selection = parse_profile_selection("common,work")
-        assert selection.explicit_profiles == ["common", "work"]
+        selection = parse_profile_selection("alpha,bravo")
+        assert selection.explicit_profiles == ["alpha", "bravo"]
         assert not selection.include_all
         assert selection.excluded_profiles == []
 
@@ -99,24 +99,24 @@ class TestParseProfileSelection:
 
     def test_parse_exclusion_only(self):
         """Test parsing exclusion-only (implies all)."""
-        selection = parse_profile_selection("-work")
+        selection = parse_profile_selection("-bravo")
         assert selection.include_all
-        assert selection.excluded_profiles == ["work"]
+        assert selection.excluded_profiles == ["bravo"]
         assert selection.explicit_profiles == []
 
     def test_parse_all_with_exclusions(self):
         """Test parsing 'all' with exclusions."""
-        selection = parse_profile_selection("all,-work,-personal")
+        selection = parse_profile_selection("all,-bravo,-charlie")
         assert selection.include_all
-        assert selection.excluded_profiles == ["work", "personal"]
+        assert selection.excluded_profiles == ["bravo", "charlie"]
 
     def test_parse_explicit_with_exclusions(self):
         """Test parsing explicit list with exclusions."""
-        selection = parse_profile_selection("common,work,personal,-work")
+        selection = parse_profile_selection("alpha,bravo,charlie,-bravo")
         # Parsing stores both explicit and excluded separately
         # The exclusion is applied during resolve(), not parsing
-        assert selection.explicit_profiles == ["common", "work", "personal"]
-        assert selection.excluded_profiles == ["work"]
+        assert selection.explicit_profiles == ["alpha", "bravo", "charlie"]
+        assert selection.excluded_profiles == ["bravo"]
 
     def test_parse_empty_string(self):
         """Test parsing empty string (default)."""
@@ -134,18 +134,18 @@ class TestParseProfileSelection:
 
     def test_parse_whitespace(self):
         """Test parsing handles whitespace."""
-        selection = parse_profile_selection(" common , work ")
-        assert selection.explicit_profiles == ["common", "work"]
+        selection = parse_profile_selection(" alpha , bravo ")
+        assert selection.explicit_profiles == ["alpha", "bravo"]
 
     def test_parse_trailing_comma(self):
         """Test parsing handles trailing commas."""
-        selection = parse_profile_selection("common,work,")
-        assert selection.explicit_profiles == ["common", "work"]
+        selection = parse_profile_selection("alpha,bravo,")
+        assert selection.explicit_profiles == ["alpha", "bravo"]
 
     def test_parse_empty_exclusion(self):
         """Test parsing handles empty exclusion (-)."""
-        selection = parse_profile_selection("common,-")
-        assert selection.explicit_profiles == ["common"]
+        selection = parse_profile_selection("alpha,-")
+        assert selection.explicit_profiles == ["alpha"]
         assert selection.excluded_profiles == []
 
     def test_parse_case_insensitive_all(self):
@@ -164,9 +164,9 @@ class TestGetProfileNames:
         """Test getting profile names from directory."""
         profiles_dir = tmp_path / "profiles"
         profiles_dir.mkdir()
-        _create_profile(profiles_dir, "common")
-        _create_profile(profiles_dir, "work")
-        _create_profile(profiles_dir, "personal")
+        _create_profile(profiles_dir, "alpha")
+        _create_profile(profiles_dir, "bravo")
+        _create_profile(profiles_dir, "charlie")
         # Hidden directories are ignored
         (profiles_dir / ".hidden").mkdir()
         (profiles_dir / ".hidden" / "config.yml").write_text("---\n")
@@ -178,7 +178,7 @@ class TestGetProfileNames:
         with patch("dotfiles_cli.profiles.discovery.DOTFILES_DIR", str(tmp_path)):
             result = get_profile_names()
 
-        assert result == ["common", "personal", "work"]
+        assert result == ["alpha", "bravo", "charlie"]
         assert ".hidden" not in result
         assert "no-config" not in result
 
@@ -215,20 +215,20 @@ class TestGetProfileNames:
         profiles_dir = tmp_path / "profiles"
         profiles_dir.mkdir()
         # Single level
-        _create_profile(profiles_dir, "common")
+        _create_profile(profiles_dir, "alpha")
         # Nested level - repo directory without config.yml, profiles inside
         repo_dir = profiles_dir / "myrepo"
         repo_dir.mkdir()
-        _create_profile(repo_dir, "work")
-        _create_profile(repo_dir, "personal")
+        _create_profile(repo_dir, "bravo")
+        _create_profile(repo_dir, "charlie")
 
         with patch("dotfiles_cli.profiles.discovery.DOTFILES_DIR", str(tmp_path)):
             result = get_profile_names()
 
         # Nested profiles use dash-separated names
-        assert "common" in result
-        assert "myrepo-work" in result
-        assert "myrepo-personal" in result
+        assert "alpha" in result
+        assert "myrepo-bravo" in result
+        assert "myrepo-charlie" in result
         assert len(result) == 3
 
     def test_get_deep_nested_profile_names(self, tmp_path):
@@ -236,21 +236,21 @@ class TestGetProfileNames:
         profiles_dir = tmp_path / "profiles"
         profiles_dir.mkdir()
         # Single level
-        _create_profile(profiles_dir, "common")
-        # 3-level nested: profiles/private/myrepo/work
+        _create_profile(profiles_dir, "alpha")
+        # 3-level nested: profiles/private/myrepo/bravo
         private_dir = profiles_dir / "private"
         repo_dir = private_dir / "myrepo"
         repo_dir.mkdir(parents=True)
-        _create_profile(repo_dir, "work")
-        _create_profile(repo_dir, "personal")
+        _create_profile(repo_dir, "bravo")
+        _create_profile(repo_dir, "charlie")
 
         with patch("dotfiles_cli.profiles.discovery.DOTFILES_DIR", str(tmp_path)):
             result = get_profile_names()
 
         # Deep nested profiles use dash-separated names
-        assert "common" in result
-        assert "private-myrepo-work" in result
-        assert "private-myrepo-personal" in result
+        assert "alpha" in result
+        assert "private-myrepo-bravo" in result
+        assert "private-myrepo-charlie" in result
         assert len(result) == 3
 
 
@@ -263,31 +263,31 @@ class TestGetProfileRolesPaths:
         profiles_dir.mkdir()
 
         # Create profiles with and without roles
-        common_dir = _create_profile(profiles_dir, "common")
-        common_roles = common_dir / "roles"
-        common_roles.mkdir()
+        alpha_dir = _create_profile(profiles_dir, "alpha")
+        alpha_roles = alpha_dir / "roles"
+        alpha_roles.mkdir()
 
-        # work has no roles directory
-        _create_profile(profiles_dir, "work")
+        # bravo has no roles directory
+        _create_profile(profiles_dir, "bravo")
 
-        personal_dir = _create_profile(profiles_dir, "personal")
-        personal_roles = personal_dir / "roles"
-        personal_roles.mkdir()
+        charlie_dir = _create_profile(profiles_dir, "charlie")
+        charlie_roles = charlie_dir / "roles"
+        charlie_roles.mkdir()
 
         with patch("dotfiles_cli.profiles.discovery.DOTFILES_DIR", str(tmp_path)):
             result = get_profile_roles_paths()
 
         # Should only include profiles that have roles directories
         assert len(result) == 2
-        assert str(common_roles) in result
-        assert str(personal_roles) in result
+        assert str(alpha_roles) in result
+        assert str(charlie_roles) in result
 
     def test_get_profile_roles_paths_none_exist(self, tmp_path):
         """Test when no profile has roles directory."""
         profiles_dir = tmp_path / "profiles"
         profiles_dir.mkdir()
-        _create_profile(profiles_dir, "common")
-        _create_profile(profiles_dir, "work")
+        _create_profile(profiles_dir, "alpha")
+        _create_profile(profiles_dir, "bravo")
 
         with patch("dotfiles_cli.profiles.discovery.DOTFILES_DIR", str(tmp_path)):
             result = get_profile_roles_paths()
@@ -311,31 +311,31 @@ class TestGetProfileRequirementsPaths:
         profiles_dir.mkdir()
 
         # Create profiles with and without requirements
-        common_dir = _create_profile(profiles_dir, "common")
-        common_req = common_dir / "requirements.yml"
-        common_req.write_text("---\ncollections: []")
+        alpha_dir = _create_profile(profiles_dir, "alpha")
+        alpha_req = alpha_dir / "requirements.yml"
+        alpha_req.write_text("---\ncollections: []")
 
-        # work has no requirements file
-        _create_profile(profiles_dir, "work")
+        # bravo has no requirements file
+        _create_profile(profiles_dir, "bravo")
 
-        personal_dir = _create_profile(profiles_dir, "personal")
-        personal_req = personal_dir / "requirements.yml"
-        personal_req.write_text("---\ncollections: []")
+        charlie_dir = _create_profile(profiles_dir, "charlie")
+        charlie_req = charlie_dir / "requirements.yml"
+        charlie_req.write_text("---\ncollections: []")
 
         with patch("dotfiles_cli.profiles.discovery.DOTFILES_DIR", str(tmp_path)):
             result = get_profile_requirements_paths()
 
         # Should only include profiles that have requirements.yml
         assert len(result) == 2
-        assert str(common_req) in result
-        assert str(personal_req) in result
+        assert str(alpha_req) in result
+        assert str(charlie_req) in result
 
     def test_get_profile_requirements_paths_none_exist(self, tmp_path):
         """Test when no profile has requirements file."""
         profiles_dir = tmp_path / "profiles"
         profiles_dir.mkdir()
-        _create_profile(profiles_dir, "common")
-        _create_profile(profiles_dir, "work")
+        _create_profile(profiles_dir, "alpha")
+        _create_profile(profiles_dir, "bravo")
 
         with patch("dotfiles_cli.profiles.discovery.DOTFILES_DIR", str(tmp_path)):
             result = get_profile_requirements_paths()
@@ -355,8 +355,8 @@ class TestGetProfileRequirementsPaths:
         profiles_dir.mkdir()
 
         # Create a profile with a directory named requirements.yml
-        common_dir = _create_profile(profiles_dir, "common")
-        (common_dir / "requirements.yml").mkdir()  # directory, not file
+        alpha_dir = _create_profile(profiles_dir, "alpha")
+        (alpha_dir / "requirements.yml").mkdir()  # directory, not file
 
         with patch("dotfiles_cli.profiles.discovery.DOTFILES_DIR", str(tmp_path)):
             result = get_profile_requirements_paths()
@@ -371,58 +371,58 @@ class TestProfileIntegration:
         """Test complete workflow with explicit profile selection."""
         profiles_dir = tmp_path / "profiles"
         profiles_dir.mkdir()
-        _create_profile(profiles_dir, "common")
-        _create_profile(profiles_dir, "work")
-        _create_profile(profiles_dir, "personal")
+        _create_profile(profiles_dir, "alpha")
+        _create_profile(profiles_dir, "bravo")
+        _create_profile(profiles_dir, "charlie")
 
         with patch("dotfiles_cli.profiles.discovery.DOTFILES_DIR", str(tmp_path)):
             available = get_all_profile_names()
-            selection = parse_profile_selection("common,work")
+            selection = parse_profile_selection("alpha,bravo")
             result = selection.resolve(available)
 
-        assert result == ["common", "work"]
+        assert result == ["alpha", "bravo"]
 
     def test_full_workflow_all_minus_one(self, tmp_path):
         """Test complete workflow with 'all except' selection."""
         profiles_dir = tmp_path / "profiles"
         profiles_dir.mkdir()
-        _create_profile(profiles_dir, "common")
-        _create_profile(profiles_dir, "work")
-        _create_profile(profiles_dir, "personal")
+        _create_profile(profiles_dir, "alpha")
+        _create_profile(profiles_dir, "bravo")
+        _create_profile(profiles_dir, "charlie")
 
         with patch("dotfiles_cli.profiles.discovery.DOTFILES_DIR", str(tmp_path)):
             available = get_all_profile_names()
-            selection = parse_profile_selection("-work")
+            selection = parse_profile_selection("-bravo")
             result = selection.resolve(available)
 
-        assert result == ["common", "personal"]
+        assert result == ["alpha", "charlie"]
 
     def test_full_workflow_default(self, tmp_path):
-        """Test complete workflow with default (common only)."""
+        """Test complete workflow with default (empty)."""
         profiles_dir = tmp_path / "profiles"
         profiles_dir.mkdir()
-        _create_profile(profiles_dir, "common")
-        _create_profile(profiles_dir, "work")
+        _create_profile(profiles_dir, "alpha")
+        _create_profile(profiles_dir, "bravo")
 
         with patch("dotfiles_cli.profiles.discovery.DOTFILES_DIR", str(tmp_path)):
             available = get_all_profile_names()
             selection = parse_profile_selection(None)
             result = selection.resolve(available)
 
-        assert result == ["common"]
+        assert result == []
 
     def test_full_workflow_nested_profiles(self, tmp_path):
         """Test complete workflow with nested profile selection."""
         profiles_dir = tmp_path / "profiles"
         profiles_dir.mkdir()
-        _create_profile(profiles_dir, "common")
+        _create_profile(profiles_dir, "alpha")
         repo_dir = profiles_dir / "myrepo"
         repo_dir.mkdir()
-        _create_profile(repo_dir, "work")
+        _create_profile(repo_dir, "bravo")
 
         with patch("dotfiles_cli.profiles.discovery.DOTFILES_DIR", str(tmp_path)):
             available = get_all_profile_names()
-            selection = parse_profile_selection("common,myrepo-work")
+            selection = parse_profile_selection("alpha,myrepo-bravo")
             result = selection.resolve(available)
 
-        assert result == ["common", "myrepo-work"]
+        assert result == ["alpha", "myrepo-bravo"]

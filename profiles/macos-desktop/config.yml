@@ -1,0 +1,64 @@
+---
+# yaml-language-server: $schema=../../schemas/config.schema.json
+# macOS Desktop profile configuration
+# GUI: desktop apps, MAS, Alfred, fonts, terminal emulators
+#
+# Profile configuration for dynamic inventory
+profile:
+  name: macos-desktop
+  priority: 130
+
+brew_taps:
+  - name: domt4/autoupdate
+
+brew_packages:
+  - name: blueutil
+  - name: mas
+  - name: switchaudio-osx
+  - name: terminal-notifier
+
+cask_packages:
+  - name: 1password
+  - name: 1password-cli
+  - name: alfred
+  - name: anki
+  - name: daisydisk
+  - name: dash
+  - name: elgato-stream-deck
+  - name: firefox
+  - name: focus
+  - name: ghostty
+  - name: google-chrome
+  - name: handy
+  - name: hazel
+  - name: obsidian
+  - name: telegram
+  - name: vlc
+
+mas_upgrade_all: true
+
+mas_packages:
+  - name: GoodNotes
+    id: 1444383602
+  - name: Keynote
+    id: 409183694
+  - name: Just Press Record
+    id: 1033342465
+  - name: Magnet
+    id: 441258766
+  - name: Numbers
+    id: 409203825
+  - name: MindNode
+    id: 1289197285
+  - name: Pages
+    id: 409201541
+  - name: Amphetamine
+    id: 937984704
+  - name: Obsidian Web Clipper
+    id: 6720708363
+  - name: OmniFocus 4
+    id: 1542143627
+
+npm_packages:
+  - name: alfred-vscode
+  - name: "@bchatard/alfred-jetbrains"
