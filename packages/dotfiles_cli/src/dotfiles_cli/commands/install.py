@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import getpass
+import shutil
+import subprocess
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -142,9 +144,7 @@ def install(
     # Run sync before playbook if --sync flag is set
     if run_sync:
         click.echo("Running sync before install...")
-        sync_result = ctx.invoke(
-            sync, uv=False, no_mise=False, no_ansible_galaxy=False, skip_upgrade=False
-        )
+        sync_result = ctx.invoke(sync)
         if sync_result != 0:
             click.echo("Error: sync failed, aborting install", err=True)
             return sync_result
@@ -191,6 +191,19 @@ def install(
     from .link import link
 
     ctx.invoke(link, quiet=True)
+
+    # Install mise-managed tools from lockfile
+    mise_cmd = shutil.which("mise")
+    if mise_cmd:
+        result = subprocess.run(
+            [mise_cmd, "install"],
+            cwd=DOTFILES_DIR,
+            check=False,
+        )
+        if result.returncode != 0:
+            click.echo("Warning: mise install failed", err=True)
+    else:
+        click.echo("Warning: mise not found in PATH", err=True)
 
     with TemporaryDirectory() as tmpdir:
         # Install Ansible dependencies from main requirements

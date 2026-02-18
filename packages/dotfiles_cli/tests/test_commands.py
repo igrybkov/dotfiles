@@ -89,12 +89,9 @@ class TestPushCommand:
 class TestSyncCommand:
     """Test the sync command."""
 
-    def test_sync_pulls_upgrades_and_pushes(self, cli_runner, mock_subprocess):
-        """Test sync command performs pull, upgrade, push."""
-        with (
-            patch("dotfiles_cli.commands.git.sync_profile_repos"),
-            patch("dotfiles_cli.commands.upgrade.upgrade"),
-        ):
+    def test_sync_pulls_and_pushes(self, cli_runner, mock_subprocess):
+        """Test sync command performs pull and push."""
+        with patch("dotfiles_cli.commands.git.sync_profile_repos"):
             result = cli_runner.invoke(cli, ["sync"])
 
         assert result.exit_code == 0
@@ -103,30 +100,6 @@ class TestSyncCommand:
         calls = mock_subprocess["call"].call_args_list
         assert call(["git", "pull"]) in calls
         assert call(["git", "push", "origin", "main"]) in calls
-
-    def test_sync_with_uv_flag(self, cli_runner, mock_subprocess):
-        """Test sync with --uv flag enables uv upgrade."""
-        with (
-            patch("dotfiles_cli.commands.git.sync_profile_repos"),
-            patch("dotfiles_cli.commands.upgrade.upgrade"),
-        ):
-            result = cli_runner.invoke(cli, ["sync", "--uv"])
-
-        assert result.exit_code == 0
-        # Check that upgrade was called with correct parameters
-        # The upgrade function should be invoked with no_uv=False
-
-    def test_sync_skip_upgrade_flag(self, cli_runner, mock_subprocess):
-        """Test sync with --skip-upgrade flag."""
-        with (
-            patch("dotfiles_cli.commands.git.sync_profile_repos"),
-            patch("dotfiles_cli.commands.upgrade.upgrade") as mock_upgrade,
-        ):
-            result = cli_runner.invoke(cli, ["sync", "--skip-upgrade"])
-
-        assert result.exit_code == 0
-        # upgrade should not be called
-        mock_upgrade.assert_not_called()
 
     def test_sync_fails_on_pull_error(self, cli_runner):
         """Test sync aborts if git pull fails."""
@@ -141,22 +114,6 @@ class TestSyncCommand:
         assert "git pull failed" in result.output
         # Should only have one call (the failed pull), no push call
         assert mock_call.call_count == 1
-
-    def test_sync_continues_on_upgrade_error(self, cli_runner, mock_subprocess):
-        """Test sync continues to push even if upgrade fails."""
-        with (
-            patch("dotfiles_cli.commands.git.sync_profile_repos"),
-            patch("dotfiles_cli.commands.upgrade.upgrade", return_value=1),
-        ):
-            result = cli_runner.invoke(cli, ["sync"])
-
-        # Should complete with exit code 0 (warning but continues)
-        assert result.exit_code == 0
-
-        # Should have called both pull and push
-        calls = mock_subprocess["call"].call_args_list
-        assert call(["git", "pull"]) in calls
-        assert call(["git", "push", "origin", "main"]) in calls
 
 
 class TestEditCommand:

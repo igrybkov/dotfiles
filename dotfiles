@@ -112,7 +112,7 @@ if needs_preparation; then
   # Execute preparation steps and capture output
   DELAYED_OUTPUT="$({
     log "Installing dependencies..."
-    MISE_EXPERIMENTAL=true mise upgrade
+    mise install
     log
 
     # Use "mise" to create Python Virtual Environment using UV

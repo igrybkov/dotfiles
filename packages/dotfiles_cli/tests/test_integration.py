@@ -167,11 +167,8 @@ class TestSyncWorkflow:
     """Integration tests for sync workflow."""
 
     def test_sync_full_workflow(self, cli_runner, mock_subprocess):
-        """Test sync performs pull, upgrade, push."""
-        with (
-            patch("dotfiles_cli.commands.git.sync_profile_repos"),
-            patch("dotfiles_cli.commands.upgrade.upgrade", return_value=0),
-        ):
+        """Test sync performs pull and push."""
+        with patch("dotfiles_cli.commands.git.sync_profile_repos"):
             result = cli_runner.invoke(cli, ["sync"])
 
         assert result.exit_code == 0
@@ -180,17 +177,6 @@ class TestSyncWorkflow:
         calls = [str(call) for call in mock_subprocess["call"].call_args_list]
         assert any("git" in call and "pull" in call for call in calls)
         assert any("git" in call and "push" in call for call in calls)
-
-    def test_sync_with_skip_upgrade(self, cli_runner, mock_subprocess):
-        """Test sync --skip-upgrade skips upgrade step."""
-        with (
-            patch("dotfiles_cli.commands.git.sync_profile_repos"),
-            patch("dotfiles_cli.commands.upgrade.upgrade") as mock_upgrade,
-        ):
-            result = cli_runner.invoke(cli, ["sync", "--skip-upgrade"])
-
-        assert result.exit_code == 0
-        mock_upgrade.assert_not_called()
 
 
 class TestProfileSelectionWorkflow:
