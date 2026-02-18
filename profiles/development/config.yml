@@ -11,7 +11,10 @@ profile:
 brew_taps:
   - name: charmbracelet/tap
   - name: frdmn/formulas
+  - name: go-task/tap
   - name: hashicorp/tap
+  - name: hidetatz/tap
+  - name: joerdav/xc
 
 brew_packages:
   - name: awscli
