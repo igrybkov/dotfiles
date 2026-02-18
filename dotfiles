@@ -147,6 +147,7 @@ fi
 # Use venv python directly if available (faster), otherwise fall back to mise x -- uv run
 VENV_PYTHON="${DOTFILES_DIR}/.venv/bin/python"
 if [ -x "${VENV_PYTHON}" ]; then
+  export PATH="${DOTFILES_DIR}/.venv/bin:$PATH"
   exec "${VENV_PYTHON}" "${DOTFILES_DIR}/bin/dotfiles-cli.py" "$@"
 else
   exec env -u VIRTUAL_ENV mise x -- uv run --managed-python --directory="${DOTFILES_DIR}" ./bin/dotfiles-cli.py "$@"
