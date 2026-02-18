@@ -11,9 +11,7 @@ profile:
 # Upgrade packages during shell config run
 brew_upgrade_all: true
 
-brew_taps:
-  - name: homebrew/bundle
-  - name: homebrew/services
+brew_taps: []
 
 brew_packages:
   - name: bat
