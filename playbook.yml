@@ -158,6 +158,7 @@
 - name: Per-profile custom tasks
   hosts: all
   serial: 1
+  strategy: linear
   gather_facts: false
   tasks:
     - name: "[󰚩 Profile] Check if profile tasks file exists"
