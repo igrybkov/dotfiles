@@ -14,7 +14,7 @@
   ansible.builtin.include_role:
     name: "{{ profile_roles_dir }}/macos"
   when:
-    - ansible_facts['distribution'] | default('') == 'MacOSX'
+    - hostvars['localhost']['ansible_facts']['distribution'] | default('') == 'MacOSX'
     - not (skip_macos_marker.stat.exists | default(false))
 
 - name: Create skip-macos marker after successful run
@@ -24,5 +24,5 @@
     state: touch
     mode: "0644"
   when:
-    - ansible_facts['distribution'] | default('') == 'MacOSX'
+    - hostvars['localhost']['ansible_facts']['distribution'] | default('') == 'MacOSX'
     - not (skip_macos_marker.stat.exists | default(false))

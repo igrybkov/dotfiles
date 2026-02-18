@@ -1,6 +1,6 @@
 ---
 # Playbook structure:
-# 1. Gather facts (hosts: all) - collect facts from all profile hosts for hostvars
+# 1. Gather facts (hosts: localhost) - collect facts once (all hosts are same machine)
 # 2. Bootstrap (hosts: localhost) - one-time setup before per-profile tasks
 # 3. Setup (hosts: localhost) - dotfiles, pipx, MCP servers (aggregated, run once)
 # 4. Per-profile custom tasks (hosts: all) - profile-specific tasks only
@@ -10,13 +10,13 @@
 # and makes the intent explicit: these tasks either aggregate from hostvars or
 # simply need to run once regardless of profiles.
 
-# Gather minimal facts in a dedicated play for performance optimization:
+# Gather minimal facts on localhost only:
+# - All profile hosts use connection: local (same machine), so facts are identical
+# - Plays that need facts either run on localhost or reference hostvars['localhost']
 # - strategy: linear bypasses Mitogen which takes ~16s for fact gathering (~16s -> ~2s)
-# - gather_subset further reduces collection to only needed facts (~2s -> ~0.8s)
-# - Subsequent plays use gather_facts: false and rely on these cached facts
+# - gather_subset further reduces collection to only needed facts
 - name: Gather facts
-  hosts: all:localhost
-  serial: 1
+  hosts: localhost
   strategy: linear
   gather_subset:
     - "!all"
@@ -70,7 +70,7 @@
       ansible.builtin.stat:
         path: "{{ '/opt/homebrew/bin/brew' if ansible_facts['machine'] == 'arm64' else '/usr/local/bin/brew' }}"
       register: homebrew_binary_check
-      when: hostvars[groups['all'] | first]['ansible_facts']['distribution'] | default('') == 'MacOSX'
+      when: ansible_facts['distribution'] | default('') == 'MacOSX'
     - name: Check for skip-homebrew marker
       tags: [brew]
       ansible.builtin.stat:
@@ -83,7 +83,7 @@
         homebrew_taps: []
       tags: [brew]
       when:
-        - hostvars[groups['all'] | first]['ansible_facts']['distribution'] | default('') == 'MacOSX'
+        - ansible_facts['distribution'] | default('') == 'MacOSX'
         - not ((homebrew_binary_check.stat.exists | default(false)) and (skip_homebrew_marker.stat.exists | default(false)))
 
     - name: Install Homebrew packages (aggregated from all profiles)
@@ -94,7 +94,7 @@
         brew_packages: "{{ lookup('aggregated_profile_var', 'brew_packages') | community.general.lists_mergeby('name') }}"
         cask_packages: "{{ lookup('aggregated_profile_var', 'cask_packages') | community.general.lists_mergeby('name') }}"
         brew_upgrade_all: "{{ lookup('aggregated_profile_var', 'brew_upgrade_all', merge='any', default=false) }}"
-      when: hostvars[groups['all'] | first]['ansible_facts']['distribution'] | default('') == 'MacOSX'
+      when: ansible_facts['distribution'] | default('') == 'MacOSX'
 
   post_tasks:
     - name: Create skip-homebrew marker after successful run
@@ -104,7 +104,7 @@
         state: touch
         mode: "0644"
       when:
-        - hostvars[groups['all'] | first]['ansible_facts']['distribution'] | default('') == 'MacOSX'
+        - ansible_facts['distribution'] | default('') == 'MacOSX'
         - homebrew_binary_check.stat.exists | default(false)
         - not (skip_homebrew_marker.stat.exists | default(false))
 
@@ -190,7 +190,7 @@
       vars:
         mas_packages: "{{ lookup('aggregated_profile_var', 'mas_packages') | community.general.lists_mergeby('id') }}"
         mas_upgrade_all: "{{ lookup('aggregated_profile_var', 'mas_upgrade_all', merge='any', default=false) }}"
-      when: hostvars[groups['all'] | first]['ansible_facts']['distribution'] | default('') == 'MacOSX'
+      when: ansible_facts['distribution'] | default('') == 'MacOSX'
 
     - name: Set up ssh config (aggregated from all profiles)
       role: ssh_config
