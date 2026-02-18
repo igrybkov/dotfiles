@@ -48,7 +48,10 @@ class FilterModule:
         }
 
     def resolve_templates(
-        self, data: Any, variables: dict[str, Any] | None = None
+        self,
+        data: Any,
+        variables: dict[str, Any] | None = None,
+        extra_vars: dict[str, Any] | None = None,
     ) -> Any:
         """
         Recursively evaluate Jinja2 templates in a data structure.
@@ -57,6 +60,9 @@ class FilterModule:
             data: Any data structure (dict, list, or scalar)
             variables: Variables dict to use for template evaluation.
                        Pass `vars` or `hostvars[inventory_hostname]` from playbook.
+            extra_vars: Additional variables to merge into the context.
+                        Use this instead of `| combine()` to avoid Ansible
+                        proxy object issues with HostVarsVars.
 
         Returns:
             A deep copy of the data with all Jinja2 expressions evaluated.
@@ -68,6 +74,9 @@ class FilterModule:
 
         if variables is None:
             variables = {}
+
+        if extra_vars:
+            variables = {**variables, **extra_vars}
 
         # Check if there are any templates to resolve
         if not self._has_templates(data):

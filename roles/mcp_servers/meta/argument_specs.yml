@@ -77,6 +77,10 @@ argument_specs:
             description: Shell command to run after cloning the repository
             type: str
             required: false
+          _profile:
+            description: Profile name that contributed this server (injected by playbook aggregation)
+            type: str
+            required: false
           config_files:
             description: List of config files to update for this server
             type: list

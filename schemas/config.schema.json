@@ -376,6 +376,10 @@
       "items": {
         "type": "object",
         "properties": {
+          "_profile": {
+            "description": "Profile name that contributed this server (injected by playbook aggregation)",
+            "type": "string"
+          },
           "args": {
             "description": "Arguments to pass to the command",
             "type": "array",
