@@ -16,9 +16,11 @@ class AgentConfig(BaseModel):
 
     Attributes:
         resume_args: Arguments to add for resume functionality.
+        skip_permissions_args: Arguments to add for skip-permissions mode.
     """
 
     resume_args: Annotated[list[str], Field(default_factory=list)]
+    skip_permissions_args: Annotated[list[str], Field(default_factory=list)]
 
 
 class AgentsConfig(BaseModel):
@@ -85,6 +87,7 @@ class WorktreesConfig(BaseModel):
         copy_files: Files to copy from main repo to worktree.
         symlink_files: Files to symlink from main repo to worktree.
         resume: Default --resume flag for worktree sessions.
+        skip_permissions: Default --skip-permissions flag for worktree sessions.
     """
 
     enabled: bool = True
@@ -95,6 +98,7 @@ class WorktreesConfig(BaseModel):
     copy_files: Annotated[list[str], Field(default_factory=list)]
     symlink_files: Annotated[list[str], Field(default_factory=list)]
     resume: bool = False
+    skip_permissions: bool = False
 
 
 class ZellijConfig(BaseModel):

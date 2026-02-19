@@ -15,26 +15,32 @@ agents:
     # Claude uses --continue flag
     claude:
       resume_args: ["--continue"]
+      skip_permissions_args: ["--dangerously-skip-permissions"]
 
     # Copilot uses --continue flag
     copilot:
       resume_args: ["--continue"]
+      skip_permissions_args: ["--allow-all"]
 
     # Codex uses resume subcommand with --last
     codex:
       resume_args: ["resume", "--last"]
+      skip_permissions_args: ["--full-auto"]
 
     # Gemini uses --resume with latest argument
     gemini:
       resume_args: ["--resume", "latest"]
+      skip_permissions_args: ["-y"]
 
     # Cursor agent CLI uses resume subcommand
     agent:
       resume_args: ["resume"]
+      skip_permissions_args: ["-f"]
 
     # Cursor agent alternative name
     cursor-agent:
       resume_args: ["resume"]
+      skip_permissions_args: ["-f"]
 
 resume:
   enabled: false

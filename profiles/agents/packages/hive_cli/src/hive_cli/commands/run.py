@@ -115,6 +115,14 @@ def run(
             help="Delay in seconds between restarts (default: 0).",
         ),
     ] = 0,
+    skip_permissions: Annotated[
+        bool | None,
+        Parameter(
+            name=["--skip-permissions", "-s"],
+            negative=["--no-skip-permissions", "-S"],
+            help="Skip permission prompts (default from config).",
+        ),
+    ] = None,
     auto_select: Annotated[
         str | None,
         Parameter(
@@ -152,6 +160,8 @@ def run(
         hive run -w feature-123       # Run in specific worktree
         hive run --auto-select main   # Show picker, auto-select main after timeout
         hive run --auto-select -      # Auto-select repo's default branch
+        hive run -s                   # Skip permission prompts
+        hive run -a claude -s         # Use Claude with --dangerously-skip-permissions
         hive run --help               # Pass --help to the agent
         hive run -a claude            # Use Claude specifically
         HIVE_AGENT=gemini hive run    # Use Gemini via env var
@@ -166,6 +176,14 @@ def run(
             resume = config.worktrees.resume
         else:
             resume = config.resume.enabled
+
+    # Determine skip-permissions: CLI flag > env var > config
+    if skip_permissions is None:
+        env_skip = os.environ.get("HIVE_SKIP_PERMISSIONS")
+        if env_skip is not None:
+            skip_permissions = env_skip == "1"
+        else:
+            skip_permissions = config.worktrees.skip_permissions
 
     # Initial agent detection (for validation and pane name)
     # This may be overridden by HIVE_AGENT set during worktree selection (Ctrl+A)
@@ -185,6 +203,11 @@ def run(
     # Check if we need resume logic (agent has resume_args configured)
     agent_config = get_agent_config(detected.name) if resume else None
     has_resume_args = agent_config and agent_config.resume_args
+
+    # Check if we need skip-permissions logic
+    has_skip_permissions = (
+        skip_permissions or os.environ.get("HIVE_SKIP_PERMISSIONS") == "1"
+    )
 
     # Check if user explicitly specified -a/--agent on command line
     # (as opposed to it being populated from HIVE_AGENT env var)
@@ -206,6 +229,18 @@ def run(
 
         current_agent_name, current_cmd = result
 
+        # Re-read skip-permissions from env var (may be toggled by Ctrl+S in picker)
+        effective_skip = (
+            skip_permissions or os.environ.get("HIVE_SKIP_PERMISSIONS") == "1"
+        )
+
+        # Get skip-permissions args for current agent
+        skip_perm_args: list[str] = []
+        if effective_skip:
+            current_agent_config = get_agent_config(current_agent_name)
+            if current_agent_config:
+                skip_perm_args = current_agent_config.skip_permissions_args
+
         # Handle resume logic if enabled and agent has resume args
         if resume:
             current_agent_config = get_agent_config(current_agent_name)
@@ -214,6 +249,7 @@ def run(
                 resume_cmd = [
                     current_cmd[0],
                     *current_agent_config.resume_args,
+                    *skip_perm_args,
                     *args,
                 ]
                 result = subprocess.run(resume_cmd, stderr=subprocess.DEVNULL)
@@ -221,14 +257,23 @@ def run(
                     return 0
                 # Resume failed, fall back to base command
 
+        # Build final command with skip-permissions args
+        if skip_perm_args:
+            final_cmd = [current_cmd[0], *skip_perm_args, *current_cmd[1:]]
+        else:
+            final_cmd = current_cmd
+
         # Run the agent
-        result = subprocess.run(current_cmd)
+        result = subprocess.run(final_cmd)
         return result.returncode
 
     # Use dynamic runner when:
     # - restart/restart_confirmation mode (needs restart loop)
     # - resume is enabled AND agent has resume_args (needs retry logic)
-    use_dynamic_runner = restart or restart_confirmation or has_resume_args
+    # - skip-permissions is enabled (needs arg injection)
+    use_dynamic_runner = (
+        restart or restart_confirmation or has_resume_args or has_skip_permissions
+    )
 
     # Determine auto_select settings: CLI overrides config
     auto_select_branch = auto_select
@@ -236,9 +281,20 @@ def run(
     if auto_select_branch is None and config.worktrees.auto_select.enabled:
         auto_select_branch = config.worktrees.auto_select.branch
 
+    # Build initial command with skip-permissions args if applicable
+    initial_skip_args: list[str] = []
+    if skip_permissions:
+        init_agent_config = get_agent_config(detected.name)
+        if init_agent_config:
+            initial_skip_args = init_agent_config.skip_permissions_args
+    if initial_skip_args:
+        initial_cmd = [detected.command, *initial_skip_args, *args]
+    else:
+        initial_cmd = [detected.command, *args]
+
     # Use exec_runner for worktree selection and restart loop
     exit_code = run_in_worktree(
-        [detected.command, *args],  # Initial command (may be overridden)
+        initial_cmd,  # Initial command (may be overridden)
         worktree=worktree,
         restart=restart,
         restart_confirmation=restart_confirmation,

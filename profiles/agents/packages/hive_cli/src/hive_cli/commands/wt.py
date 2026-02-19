@@ -56,6 +56,7 @@ ACTION_DELETE_PREFIX = "__delete__:"
 ACTION_OPEN_IN_EDITOR_PREFIX = "__open_in_editor__:"
 ACTION_ISSUE_PREFIX = "__issue__:"
 ACTION_CHANGE_AGENT = "__change_agent__"
+ACTION_TOGGLE_SKIP_PERMISSIONS = "__toggle_skip_permissions__"
 
 # Emoji prefix for GitHub issues to distinguish them from branches
 ISSUE_EMOJI = "🎫"
@@ -809,6 +810,9 @@ def _interactive_ensure(
     # Set environment variable for current process and child processes
     os.environ["HIVE_AGENT"] = selected_agent
 
+    # Track skip-permissions state (initialized from env var)
+    skip_permissions = os.environ.get("HIVE_SKIP_PERMISSIONS") == "1"
+
     while True:
         # Build initial items immediately (fast version - skips slow git operations)
         items, initial_selection = _build_fuzzy_items_fast(
@@ -816,8 +820,10 @@ def _interactive_ensure(
         )
 
         # Base header text
+        skip_perms_tag = " [skip-perms]" if skip_permissions else ""
         base_header = (
-            f"Agent {agent_num} [{selected_agent}] - Select worktree or branch"
+            f"Agent {agent_num} [{selected_agent}]{skip_perms_tag}"
+            f" - Select worktree or branch"
         )
         # Start with "Fetching..." indicator
         header_with_indicator = f"{base_header} <dim>(Fetching...)</dim>"
@@ -837,6 +843,10 @@ def _interactive_ensure(
         # Define ctrl+a handler - returns sentinel to trigger agent change
         def on_ctrl_a() -> str | None:
             return ACTION_CHANGE_AGENT
+
+        # Define ctrl+s handler - returns sentinel to toggle skip-permissions
+        def on_ctrl_s() -> str | None:
+            return ACTION_TOGGLE_SKIP_PERMISSIONS
 
         # List to receive update functions (populated before app.run())
         update_callbacks: list = []
@@ -980,6 +990,7 @@ def _interactive_ensure(
 
         # Show fuzzy finder immediately with fetching indicator
         # Update functions will be populated in update_callbacks before app.run()
+        skip_perms_indicator = "ON" if skip_permissions else "OFF"
         selected = fuzzy_select(
             items=items,
             prompt_text=">",
@@ -987,7 +998,9 @@ def _interactive_ensure(
             hint=(
                 "</dim><b>↑↓</b><dim> nav  </dim><b>Enter</b><dim> open  "
                 "</dim><b>^O</b><dim> editor  </dim><b>^D</b><dim> del  "
-                "</dim><b>^A</b><dim> agent  </dim><b>Esc</b><dim> new  "
+                "</dim><b>^A</b><dim> agent  "
+                f"</dim><b>^S</b><dim> skip-perms:{skip_perms_indicator}  "
+                "</dim><b>Esc</b><dim> new  "
                 "</dim><b>^C</b><dim> quit"
             ),
             initial_selection=initial_selection,
@@ -995,6 +1008,7 @@ def _interactive_ensure(
             on_tab=on_tab,
             on_shift_enter=on_shift_enter,
             on_ctrl_a=on_ctrl_a,
+            on_ctrl_s=on_ctrl_s,
             update_callbacks=update_callbacks,
             update_callbacks_ready=update_callbacks_ready,
             auto_select_value=resolved_auto_select,
@@ -1023,11 +1037,17 @@ def _interactive_ensure(
                 selected_agent = new_agent
                 # Set environment variable for current process and child processes
                 os.environ["HIVE_AGENT"] = selected_agent
-                # Update base header with new agent name
-                base_header = (
-                    f"Agent {agent_num} [{selected_agent}] - Select worktree or branch"
-                )
             # Loop back to picker (whether changed or cancelled)
+            continue
+
+        # Handle "toggle skip-permissions" action (triggered by Ctrl+S)
+        if selected == ACTION_TOGGLE_SKIP_PERMISSIONS:
+            skip_permissions = not skip_permissions
+            if skip_permissions:
+                os.environ["HIVE_SKIP_PERMISSIONS"] = "1"
+            else:
+                os.environ.pop("HIVE_SKIP_PERMISSIONS", None)
+            # Loop back to picker
             continue
 
         # Handle "delete" action (triggered by Tab)

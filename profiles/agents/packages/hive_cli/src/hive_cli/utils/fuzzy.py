@@ -78,6 +78,7 @@ def fuzzy_select(
     on_tab: Callable[[str], str | None] | None = None,
     on_shift_enter: Callable[[str], str | None] | None = None,
     on_ctrl_a: Callable[[], str | None] | None = None,
+    on_ctrl_s: Callable[[], str | None] | None = None,
     update_callbacks: list[
         tuple[Callable[[list[FuzzyItem]], None], Callable[[str], None]]
     ]
@@ -100,6 +101,8 @@ def fuzzy_select(
         on_shift_enter: Callback when Ctrl+O is pressed with current selection.
             If returns a string, use as result. If returns None, stay in picker.
         on_ctrl_a: Callback when Ctrl+A is pressed.
+            If returns a string, use as result. If returns None, stay in picker.
+        on_ctrl_s: Callback when Ctrl+S is pressed.
             If returns a string, use as result. If returns None, stay in picker.
         update_callbacks: Optional list to store (update_items, update_header)
             functions. If provided, functions available immediately when picker opens.
@@ -215,6 +218,17 @@ def fuzzy_select(
             ctrl_a_result = on_ctrl_a()
             if ctrl_a_result is not None:
                 result = ctrl_a_result
+                safe_exit(event)
+            # If None returned, stay in picker
+
+    @kb.add("c-s")
+    def _ctrl_s(event):
+        nonlocal result
+        cancel_auto_select()
+        if on_ctrl_s:
+            ctrl_s_result = on_ctrl_s()
+            if ctrl_s_result is not None:
+                result = ctrl_s_result
                 safe_exit(event)
             # If None returned, stay in picker
 

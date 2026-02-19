@@ -83,6 +83,9 @@ class HiveEnvSettings(BaseSettings):
     # HIVE_WORKTREES_RESUME -> worktrees.resume
     worktrees_resume: bool | None = None
 
+    # HIVE_WORKTREES_SKIP_PERMISSIONS -> worktrees.skip_permissions
+    worktrees_skip_permissions: bool | None = None
+
     # HIVE_ZELLIJ_LAYOUT -> zellij.layout
     zellij_layout: str | None = None
 
@@ -256,6 +259,11 @@ def _get_env_overrides() -> dict[str, Any]:
     if env_settings.worktrees_resume is not None:
         overrides.setdefault("worktrees", {})["resume"] = env_settings.worktrees_resume
 
+    if env_settings.worktrees_skip_permissions is not None:
+        overrides.setdefault("worktrees", {})["skip_permissions"] = (
+            env_settings.worktrees_skip_permissions
+        )
+
     if env_settings.zellij_layout is not None:
         overrides.setdefault("zellij", {})["layout"] = env_settings.zellij_layout
 
@@ -293,7 +301,10 @@ def _parse_agent_config(data: dict[str, Any]) -> AgentConfig:
     Returns:
         AgentConfig instance.
     """
-    return AgentConfig(resume_args=data.get("resume_args", []))
+    return AgentConfig(
+        resume_args=data.get("resume_args", []),
+        skip_permissions_args=data.get("skip_permissions_args", []),
+    )
 
 
 def _parse_agents_config(data: dict[str, Any]) -> AgentsConfig:
@@ -374,6 +385,7 @@ def _parse_worktrees_config(data: dict[str, Any]) -> WorktreesConfig:
         copy_files=data.get("copy_files", []),
         symlink_files=data.get("symlink_files", []),
         resume=data.get("resume", False),
+        skip_permissions=data.get("skip_permissions", False),
     )
 
 
