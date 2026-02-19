@@ -1,0 +1,251 @@
+#!/usr/bin/env python3
+"""Clean up text copied from Claude Code agent windows.
+
+Two-pass approach:
+  1. Strip external borders (│ wrapping with → prompt prefix), unwrap soft-wrapped lines
+  2. Process internal borders (┌└│ code/diff boxes) → markdown fences
+
+Also removes UI artifacts (→, ⏺) and normalizes indentation.
+
+Usage:
+    clean-agent-copy file.txt        # Read from file
+    pbpaste | clean-agent-copy       # Read from stdin pipe
+    clean-agent-copy                 # Read from clipboard (macOS)
+    clean-agent-copy --copy          # Clean clipboard and write back to it
+"""
+
+import re
+import subprocess
+import sys
+import textwrap
+
+# Matches horizontal border lines (┌───┐, └───┘, etc.), including truncated ones
+BORDER_LINE = re.compile(r"^[\s]*[┌└├┬┴┼][─┬┴┼]*[┐┘┤┬┴┼]?[\s]*$")
+# Matches the left │ border of a box content line
+LEFT_BORDER = re.compile(r"^[\s]*│\s?")
+
+# Lines with less trailing padding than this before the right │ border
+# were soft-wrapped by the UI and should be joined with the next line.
+WRAP_PADDING_THRESHOLD = 10
+
+
+def _strip_box_borders(line):
+    """Strip │ borders from a line. Returns (text, padding) where padding
+    is the trailing space count before the right │, or None if no right border."""
+    content = LEFT_BORDER.sub("", line, count=1)
+    right_idx = content.rfind("│")
+    if right_idx >= 0:
+        padded = content[:right_idx]
+        stripped = padded.rstrip()
+        padding = len(padded) - len(stripped)
+        return stripped, padding
+    return content.rstrip(), None
+
+
+# ---------------------------------------------------------------------------
+# Pass 1: Strip external borders (the outermost │ wrapping with → prompt)
+# ---------------------------------------------------------------------------
+
+
+def _strip_external_borders(lines):
+    """Strip external │ borders if present. Returns plain text lines.
+
+    External borders = │ wrapping the content, identified by → prompt prefix.
+    After stripping, soft-wrapped lines are rejoined into paragraphs.
+    """
+    # Find the first non-empty, non-border content line
+    first_content = None
+    for line in lines:
+        stripped = line.strip()
+        if not stripped or BORDER_LINE.match(stripped):
+            continue
+        first_content = line
+        break
+
+    if first_content is None:
+        return []
+
+    # Check if this is an external border (│ lines with → prompt)
+    if not LEFT_BORDER.match(first_content):
+        return lines  # No external borders, pass through
+
+    text, _ = _strip_box_borders(first_content)
+    if not text.strip().startswith("→ "):
+        return lines  # │ lines but no → prompt — not an external border
+
+    # Strip external borders and unwrap soft-wrapped lines
+    entries = []
+    for line in lines:
+        if BORDER_LINE.match(line.strip()):
+            continue
+
+        if LEFT_BORDER.match(line):
+            text, padding = _strip_box_borders(line)
+            is_full = (
+                padding is not None
+                and padding <= WRAP_PADDING_THRESHOLD
+                and len(text) > 0
+            )
+
+            if text.startswith("→ "):
+                text = text[2:]
+            elif text.startswith("  "):
+                text = text[2:]
+            if text.startswith("⏺ "):
+                text = text[2:]
+
+            entries.append((text, is_full))
+        else:
+            # Bare line mixed in (shouldn't happen in a prompt box, but handle it)
+            entries.append((line.rstrip(), False))
+
+    # Unwrap soft-wrapped lines
+    result = []
+    for i, (text, _) in enumerate(entries):
+        if not text:
+            result.append("")
+            continue
+        prev_was_full = i > 0 and entries[i - 1][1]
+        if prev_was_full and result and result[-1]:
+            result[-1] += " " + text
+        else:
+            result.append(text)
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Pass 2: Process internal borders (code/diff boxes → markdown fences)
+# ---------------------------------------------------------------------------
+
+
+def _parse_segments(lines):
+    """Parse lines into text and box segments based on ┌└│ borders."""
+    segments = []
+    current_text = []
+    current_box = None
+
+    for line in lines:
+        is_border = bool(BORDER_LINE.match(line.strip())) if line.strip() else False
+        is_box_content = not is_border and bool(LEFT_BORDER.match(line))
+
+        if is_border or is_box_content:
+            if current_text:
+                segments.append(("text", current_text))
+                current_text = []
+            if current_box is None:
+                current_box = []
+            if is_box_content:
+                current_box.append(line)
+        else:
+            if current_box is not None:
+                segments.append(("box", current_box))
+                current_box = None
+            current_text.append(line)
+
+    if current_box is not None:
+        segments.append(("box", current_box))
+    if current_text:
+        segments.append(("text", current_text))
+
+    return segments
+
+
+def _process_code_box(lines):
+    """Process an internal code/diff box: convert to markdown code fence."""
+    content = []
+    for line in lines:
+        text, _ = _strip_box_borders(line)
+        content.append(text)
+
+    if not content:
+        return ["```", "```"]
+
+    # First non-empty line is the header (filename, etc.)
+    header_idx = next((i for i, line in enumerate(content) if line.strip()), 0)
+    header = content[header_idx].strip()
+    code_lines = content[header_idx + 1 :]
+
+    # Strip leading/trailing empty lines from code body
+    while code_lines and not code_lines[0].strip():
+        code_lines = code_lines[1:]
+    while code_lines and not code_lines[-1].strip():
+        code_lines = code_lines[:-1]
+
+    return [f"```{header}", *code_lines, "```"]
+
+
+def _process_text(lines):
+    """Process bare text lines (outside boxes)."""
+    cleaned = []
+    for line in lines:
+        text = line.rstrip()
+        stripped = text.lstrip()
+        if stripped.startswith("⏺ "):
+            indent = text[: len(text) - len(stripped)]
+            text = indent + stripped[2:]
+        cleaned.append(text)
+    return textwrap.dedent("\n".join(cleaned)).splitlines()
+
+
+# ---------------------------------------------------------------------------
+# Main pipeline
+# ---------------------------------------------------------------------------
+
+
+def clean(text: str) -> str:
+    lines = text.splitlines()
+
+    # Pass 1: Strip external borders (prompt │ wrapping)
+    lines = _strip_external_borders(lines)
+
+    # Pass 2: Process internal borders (code boxes → fences)
+    segments = _parse_segments(lines)
+
+    result = []
+    for seg_type, seg_lines in segments:
+        if seg_type == "box":
+            result.extend(_process_code_box(seg_lines))
+        else:
+            result.extend(_process_text(seg_lines))
+
+    return "\n".join(result).strip()
+
+
+def main():
+    args = [a for a in sys.argv[1:] if not a.startswith("-")]
+    copy_back = "--copy" in sys.argv or "-c" in sys.argv
+
+    if args:
+        # Read from file argument
+        try:
+            with open(args[0]) as f:
+                input_text = f.read()
+        except FileNotFoundError:
+            print(f"File not found: {args[0]}", file=sys.stderr)
+            sys.exit(1)
+    elif not sys.stdin.isatty():
+        # Read from stdin pipe
+        input_text = sys.stdin.read()
+    else:
+        # Read from clipboard
+        try:
+            input_text = subprocess.check_output(["pbpaste"], text=True)
+        except FileNotFoundError:
+            print(
+                "No input: pass a file, pipe stdin, or have pbpaste available",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+    output = clean(input_text)
+
+    if copy_back:
+        subprocess.run(["pbcopy"], input=output, text=True, check=True)
+        print("Cleaned text copied to clipboard", file=sys.stderr)
+    else:
+        print(output)
+
+
+if __name__ == "__main__":
+    main()
