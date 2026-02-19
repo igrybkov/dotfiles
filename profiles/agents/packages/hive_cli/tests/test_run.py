@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 
 from conftest import CycloptsTestRunner
 
@@ -52,11 +52,11 @@ class TestRunCommand:
         """Test that run command calls execvp with correct args."""
         with (
             patch("shutil.which", return_value="/usr/bin/claude"),
-            patch("os.execvp") as mock_execvp,
+            patch("os.execvpe") as mock_execvpe,
         ):
             cli_runner.invoke(app, ["run", "-a", "claude"])
             # execvp replaces process, so we check it was called correctly
-            mock_execvp.assert_called_once_with("claude", ["claude"])
+            mock_execvpe.assert_called_once_with("claude", ["claude"], ANY)
 
     def test_run_passes_args_to_agent(
         self, cli_runner: CycloptsTestRunner, temp_git_repo
@@ -64,13 +64,15 @@ class TestRunCommand:
         """Test that arguments are passed to the agent."""
         with (
             patch("shutil.which", return_value="/usr/bin/claude"),
-            patch("hive_cli.commands.exec_runner.os.execvp") as mock_execvp,
+            patch("hive_cli.commands.exec_runner.os.execvpe") as mock_execvpe,
         ):
             # Use repeated --args to pass agent arguments in Cyclopts
             cli_runner.invoke(
                 app, ["run", "-a", "claude", "--args", "--model", "--args", "opus"]
             )
-            mock_execvp.assert_called_once_with("claude", ["claude", "--model", "opus"])
+            mock_execvpe.assert_called_once_with(
+                "claude", ["claude", "--model", "opus"], ANY
+            )
 
     def test_run_changes_to_git_root(
         self, cli_runner: CycloptsTestRunner, temp_git_repo
@@ -84,12 +86,12 @@ class TestRunCommand:
 
         with (
             patch("shutil.which", return_value="/usr/bin/claude"),
-            patch("os.execvp") as mock_execvp,
+            patch("os.execvpe") as mock_execvpe,
         ):
             cli_runner.invoke(app, ["run", "-a", "claude"])
             # After running, we should have changed to git root
             # The command changes dir before execvp
-            mock_execvp.assert_called_once()
+            mock_execvpe.assert_called_once()
 
 
 class TestRunResume:
@@ -103,7 +105,7 @@ class TestRunResume:
                 "hive_cli.commands.exec_runner.get_git_root", return_value=temp_git_repo
             ),
             patch("hive_cli.commands.run.subprocess.run") as mock_run,
-            patch("hive_cli.commands.exec_runner.os.execvp") as mock_execvp,
+            patch("hive_cli.commands.exec_runner.os.execvpe") as mock_execvpe,
         ):
             mock_run.return_value.returncode = 0
             result = cli_runner.invoke(app, ["run", "-a", "claude", "--resume"])
@@ -112,7 +114,7 @@ class TestRunResume:
             call_args = mock_run.call_args[0][0]
             assert call_args == ["claude", "--continue"]
             # Should NOT fall back to execvp
-            mock_execvp.assert_not_called()
+            mock_execvpe.assert_not_called()
             assert result.exit_code == 0
 
     def test_run_resume_fallback(self, cli_runner: CycloptsTestRunner, temp_git_repo):
@@ -123,7 +125,7 @@ class TestRunResume:
                 "hive_cli.commands.exec_runner.get_git_root", return_value=temp_git_repo
             ),
             patch("hive_cli.commands.run.subprocess.run") as mock_run,
-            patch("hive_cli.commands.exec_runner.os.execvp") as mock_execvp,
+            patch("hive_cli.commands.exec_runner.os.execvpe") as mock_execvpe,
         ):
             mock_run.return_value.returncode = (
                 1  # Resume failed, then fallback returns 1
@@ -138,7 +140,7 @@ class TestRunResume:
             fallback_args = mock_run.call_args_list[1][0][0]
             assert fallback_args == ["claude"]
             # execvp should NOT be called (we use subprocess.run for fallback now)
-            mock_execvp.assert_not_called()
+            mock_execvpe.assert_not_called()
 
     def test_run_resume_short_flag(self, cli_runner: CycloptsTestRunner, temp_git_repo):
         """Test that -r short flag works same as --resume."""
@@ -148,7 +150,7 @@ class TestRunResume:
                 "hive_cli.commands.exec_runner.get_git_root", return_value=temp_git_repo
             ),
             patch("hive_cli.commands.run.subprocess.run") as mock_run,
-            patch("hive_cli.commands.exec_runner.os.execvp"),
+            patch("hive_cli.commands.exec_runner.os.execvpe"),
         ):
             mock_run.return_value.returncode = 0
             cli_runner.invoke(app, ["run", "-a", "claude", "-r"])
@@ -166,7 +168,7 @@ class TestRunResume:
                 "hive_cli.commands.exec_runner.get_git_root", return_value=temp_git_repo
             ),
             patch("hive_cli.commands.run.subprocess.run") as mock_run,
-            patch("hive_cli.commands.exec_runner.os.execvp"),
+            patch("hive_cli.commands.exec_runner.os.execvpe"),
         ):
             mock_run.return_value.returncode = 0
             # Use repeated --args to pass agent arguments in Cyclopts
@@ -197,7 +199,7 @@ class TestRunResume:
                 "hive_cli.commands.exec_runner.get_git_root", return_value=temp_git_repo
             ),
             patch("hive_cli.commands.run.subprocess.run") as mock_run,
-            patch("hive_cli.commands.exec_runner.os.execvp") as mock_execvp,
+            patch("hive_cli.commands.exec_runner.os.execvpe") as mock_execvpe,
         ):
             mock_run.return_value.returncode = 1  # Resume failed
             # Use repeated --args to pass agent arguments in Cyclopts
@@ -219,7 +221,7 @@ class TestRunResume:
             fallback_args = mock_run.call_args_list[1][0][0]
             assert fallback_args == ["claude", "--model", "opus"]
             # execvp should NOT be called
-            mock_execvp.assert_not_called()
+            mock_execvpe.assert_not_called()
 
     def test_run_without_resume(self, cli_runner: CycloptsTestRunner, temp_git_repo):
         """Test that resume args are not added when flag is not used."""
@@ -228,14 +230,16 @@ class TestRunResume:
             patch(
                 "hive_cli.commands.exec_runner.get_git_root", return_value=temp_git_repo
             ),
-            patch("hive_cli.commands.exec_runner.os.execvp") as mock_execvp,
+            patch("hive_cli.commands.exec_runner.os.execvpe") as mock_execvpe,
         ):
             # Use repeated --args to pass agent arguments in Cyclopts
             cli_runner.invoke(
                 app, ["run", "-a", "claude", "--args", "--model", "--args", "opus"]
             )
             # Should directly execvp without subprocess.run
-            mock_execvp.assert_called_once_with("claude", ["claude", "--model", "opus"])
+            mock_execvpe.assert_called_once_with(
+                "claude", ["claude", "--model", "opus"], ANY
+            )
 
 
 class TestRunResumeAgentSpecific:
@@ -251,14 +255,14 @@ class TestRunResumeAgentSpecific:
                 "hive_cli.commands.exec_runner.get_git_root", return_value=temp_git_repo
             ),
             patch("hive_cli.commands.run.subprocess.run") as mock_run,
-            patch("hive_cli.commands.exec_runner.os.execvp") as mock_execvp,
+            patch("hive_cli.commands.exec_runner.os.execvpe") as mock_execvpe,
         ):
             mock_run.return_value.returncode = 0
             result = cli_runner.invoke(app, ["run", "-a", "agent", "--resume"])
             mock_run.assert_called_once()
             call_args = mock_run.call_args[0][0]
             assert call_args == ["agent", "resume"]
-            mock_execvp.assert_not_called()
+            mock_execvpe.assert_not_called()
             assert result.exit_code == 0
 
     def test_cursor_agent_resume_uses_subcommand(
@@ -271,14 +275,14 @@ class TestRunResumeAgentSpecific:
                 "hive_cli.commands.exec_runner.get_git_root", return_value=temp_git_repo
             ),
             patch("hive_cli.commands.run.subprocess.run") as mock_run,
-            patch("hive_cli.commands.exec_runner.os.execvp") as mock_execvp,
+            patch("hive_cli.commands.exec_runner.os.execvpe") as mock_execvpe,
         ):
             mock_run.return_value.returncode = 0
             result = cli_runner.invoke(app, ["run", "-a", "cursor-agent", "--resume"])
             mock_run.assert_called_once()
             call_args = mock_run.call_args[0][0]
             assert call_args == ["cursor-agent", "resume"]
-            mock_execvp.assert_not_called()
+            mock_execvpe.assert_not_called()
             assert result.exit_code == 0
 
     def test_codex_resume_uses_subcommand_with_last(
@@ -291,14 +295,14 @@ class TestRunResumeAgentSpecific:
                 "hive_cli.commands.exec_runner.get_git_root", return_value=temp_git_repo
             ),
             patch("hive_cli.commands.run.subprocess.run") as mock_run,
-            patch("hive_cli.commands.exec_runner.os.execvp") as mock_execvp,
+            patch("hive_cli.commands.exec_runner.os.execvpe") as mock_execvpe,
         ):
             mock_run.return_value.returncode = 0
             result = cli_runner.invoke(app, ["run", "-a", "codex", "--resume"])
             mock_run.assert_called_once()
             call_args = mock_run.call_args[0][0]
             assert call_args == ["codex", "resume", "--last"]
-            mock_execvp.assert_not_called()
+            mock_execvpe.assert_not_called()
             assert result.exit_code == 0
 
     def test_copilot_resume_uses_continue(
@@ -311,14 +315,14 @@ class TestRunResumeAgentSpecific:
                 "hive_cli.commands.exec_runner.get_git_root", return_value=temp_git_repo
             ),
             patch("hive_cli.commands.run.subprocess.run") as mock_run,
-            patch("hive_cli.commands.exec_runner.os.execvp") as mock_execvp,
+            patch("hive_cli.commands.exec_runner.os.execvpe") as mock_execvpe,
         ):
             mock_run.return_value.returncode = 0
             result = cli_runner.invoke(app, ["run", "-a", "copilot", "--resume"])
             mock_run.assert_called_once()
             call_args = mock_run.call_args[0][0]
             assert call_args == ["copilot", "--continue"]
-            mock_execvp.assert_not_called()
+            mock_execvpe.assert_not_called()
             assert result.exit_code == 0
 
     def test_gemini_resume_uses_resume_latest(
@@ -331,14 +335,14 @@ class TestRunResumeAgentSpecific:
                 "hive_cli.commands.exec_runner.get_git_root", return_value=temp_git_repo
             ),
             patch("hive_cli.commands.run.subprocess.run") as mock_run,
-            patch("hive_cli.commands.exec_runner.os.execvp") as mock_execvp,
+            patch("hive_cli.commands.exec_runner.os.execvpe") as mock_execvpe,
         ):
             mock_run.return_value.returncode = 0
             result = cli_runner.invoke(app, ["run", "-a", "gemini", "--resume"])
             mock_run.assert_called_once()
             call_args = mock_run.call_args[0][0]
             assert call_args == ["gemini", "--resume", "latest"]
-            mock_execvp.assert_not_called()
+            mock_execvpe.assert_not_called()
             assert result.exit_code == 0
 
     def test_agent_resume_fallback(self, cli_runner: CycloptsTestRunner, temp_git_repo):
@@ -349,7 +353,7 @@ class TestRunResumeAgentSpecific:
                 "hive_cli.commands.exec_runner.get_git_root", return_value=temp_git_repo
             ),
             patch("hive_cli.commands.run.subprocess.run") as mock_run,
-            patch("hive_cli.commands.exec_runner.os.execvp") as mock_execvp,
+            patch("hive_cli.commands.exec_runner.os.execvpe") as mock_execvpe,
         ):
             mock_run.return_value.returncode = 1  # Resume failed
             cli_runner.invoke(app, ["run", "-a", "agent", "--resume"])
@@ -360,7 +364,7 @@ class TestRunResumeAgentSpecific:
             fallback_args = mock_run.call_args_list[1][0][0]
             assert fallback_args == ["agent"]
             # execvp should NOT be called
-            mock_execvp.assert_not_called()
+            mock_execvpe.assert_not_called()
 
     def test_codex_resume_with_extra_args(
         self, cli_runner: CycloptsTestRunner, temp_git_repo
@@ -372,7 +376,7 @@ class TestRunResumeAgentSpecific:
                 "hive_cli.commands.exec_runner.get_git_root", return_value=temp_git_repo
             ),
             patch("hive_cli.commands.run.subprocess.run") as mock_run,
-            patch("hive_cli.commands.exec_runner.os.execvp"),
+            patch("hive_cli.commands.exec_runner.os.execvpe"),
         ):
             mock_run.return_value.returncode = 0
             # Use repeated --args to pass agent arguments in Cyclopts
@@ -394,15 +398,15 @@ class TestRunResumeAgentSpecific:
                 "hive_cli.commands.exec_runner.get_git_root", return_value=temp_git_repo
             ),
             patch("hive_cli.commands.run.subprocess.run") as mock_run,
-            patch("hive_cli.commands.exec_runner.os.execvp") as mock_execvp,
+            patch("hive_cli.commands.exec_runner.os.execvpe") as mock_execvpe,
         ):
             mock_run.return_value.returncode = 0
             result = cli_runner.invoke(app, ["run", "-a", "unknown-agent", "--resume"])
             # Unknown agents have no resume_args, so they run via execvp
             mock_run.assert_not_called()
-            mock_execvp.assert_called_once()
+            mock_execvpe.assert_called_once()
             # Runs without any resume flags since agent is not configured
-            assert mock_execvp.call_args[0] == ("unknown-agent", ["unknown-agent"])
+            assert mock_execvpe.call_args[0][:2] == ("unknown-agent", ["unknown-agent"])
             assert result.exit_code == 0
 
 

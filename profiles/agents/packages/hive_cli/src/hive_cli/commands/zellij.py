@@ -13,9 +13,10 @@ from cyclopts import App, Parameter
 from rich.console import Console
 
 from ..agents import detect_agent
-from ..config import KNOWN_AGENTS, load_config
+from ..config import KNOWN_AGENTS, get_runtime_settings, get_settings
 from ..git.repo import change_to_main_repo, get_session_name
 from ..utils import error, format_yellow
+from ..utils.zellij import set_pane_custom_title, set_pane_status
 
 console = Console()
 stderr_console = Console(stderr=True)
@@ -83,11 +84,12 @@ def zellij(
             error(f"No AI coding agent found. Install one of: {agents_list}")
         sys.exit(1)
 
-    # Set HIVE_AGENT env var for child processes (hive run uses this)
-    os.environ["HIVE_AGENT"] = detected.name
+    # Set HIVE_AGENT for child processes (hive run uses this)
+    rt = get_runtime_settings()
+    rt.agent = detected.name
 
     # Get zellij config
-    config = load_config()
+    config = get_settings()
 
     # Build session name from template
     # Supports {repo} and {agent} placeholders
@@ -105,11 +107,13 @@ def zellij(
 
     cmd.extend(["attach", "--create", full_session_name])
 
+    child_env = rt.build_child_env()
+
     if restart:
         # Auto-restart loop
         try:
             while True:
-                subprocess.run(cmd)
+                subprocess.run(cmd, env=child_env)
                 console.print("\n[hive] Zellij exited. Restarting... (Ctrl+C to stop)")
                 if restart_delay > 0:
                     time.sleep(restart_delay)
@@ -118,7 +122,7 @@ def zellij(
             sys.exit(0)
     else:
         # Execute zellij, replacing the current process
-        os.execvp("zellij", cmd)
+        os.execvpe("zellij", cmd, child_env)
 
 
 @zellij_app.command(name="set-status")
@@ -134,8 +138,6 @@ def set_status(
         hive zellij set-status "[idle]"
         hive zellij set-status           # Clear status
     """
-    from ..utils.zellij import set_pane_status
-
     if not set_pane_status(status):
         stderr_console.print("[dim]Not running in Zellij session[/dim]")
 
@@ -151,7 +153,5 @@ def set_title(
         hive zellij set-title "JIRA-123"
         hive zellij set-title             # Clear custom title
     """
-    from ..utils.zellij import set_pane_custom_title
-
     if not set_pane_custom_title(title):
         stderr_console.print("[dim]Not running in Zellij session[/dim]")

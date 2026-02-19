@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import subprocess
 import sys
 from typing import Annotated
@@ -10,7 +9,7 @@ from typing import Annotated
 from cyclopts import App, Parameter
 
 from ..agents import detect_agent
-from ..config import KNOWN_AGENTS, get_agent_config, load_config
+from ..config import KNOWN_AGENTS, get_agent_config, get_runtime_settings, get_settings
 from ..utils import error, format_yellow
 from .exec_runner import run_in_worktree
 
@@ -27,11 +26,11 @@ def _detect_current_agent(
     Returns:
         Tuple of (agent_name, command_list) or None if no agent found.
     """
-    # Check HIVE_AGENT env var (set by interactive picker via Ctrl+A)
-    env_agent = os.environ.get("HIVE_AGENT")
+    # Check HIVE_AGENT (set by interactive picker via Ctrl+A)
+    rt = get_runtime_settings()
 
     # CLI flag takes precedence, then env var
-    agent_to_use = preferred or env_agent
+    agent_to_use = preferred or rt.agent
 
     detected = detect_agent(preferred=agent_to_use)
     if detected is None:
@@ -50,9 +49,9 @@ def _get_pane_name_info(agent_name: str) -> tuple[str, bool]:
     Returns:
         Tuple of (prefix, layout_has_base_name).
     """
-    pane_id = os.environ.get("HIVE_PANE_ID")
-    if pane_id:
-        return f"agent-{pane_id}", True
+    rt = get_runtime_settings()
+    if rt.pane_id:
+        return f"agent-{rt.pane_id}", True
     return agent_name, False
 
 
@@ -167,7 +166,7 @@ def run(
         HIVE_AGENT=gemini hive run    # Use Gemini via env var
     """
     # Load config once at the start
-    config = load_config()
+    config = get_settings()
 
     # Determine resume behavior from config if not explicitly set
     if resume is None:
@@ -177,13 +176,14 @@ def run(
         else:
             resume = config.resume.enabled
 
-    # Determine skip-permissions: CLI flag > env var > config
-    if skip_permissions is None:
-        env_skip = os.environ.get("HIVE_SKIP_PERMISSIONS")
-        if env_skip is not None:
-            skip_permissions = env_skip == "1"
-        else:
-            skip_permissions = config.worktrees.skip_permissions
+    # Resolve skip-permissions: CLI flag > env var > config → write to runtime settings
+    rt = get_runtime_settings()
+    if skip_permissions is not None:
+        # CLI flag explicitly set — write to runtime settings
+        rt.skip_permissions = skip_permissions
+    elif not rt.skip_permissions:
+        # No CLI flag, no env var — fall back to config
+        rt.skip_permissions = config.worktrees.skip_permissions
 
     # Initial agent detection (for validation and pane name)
     # This may be overridden by HIVE_AGENT set during worktree selection (Ctrl+A)
@@ -205,9 +205,7 @@ def run(
     has_resume_args = agent_config and agent_config.resume_args
 
     # Check if we need skip-permissions logic
-    has_skip_permissions = (
-        skip_permissions or os.environ.get("HIVE_SKIP_PERMISSIONS") == "1"
-    )
+    has_skip_permissions = rt.skip_permissions
 
     # Check if user explicitly specified -a/--agent on command line
     # (as opposed to it being populated from HIVE_AGENT env var)
@@ -229,14 +227,10 @@ def run(
 
         current_agent_name, current_cmd = result
 
-        # Re-read skip-permissions from env var (may be toggled by Ctrl+S in picker)
-        effective_skip = (
-            skip_permissions or os.environ.get("HIVE_SKIP_PERMISSIONS") == "1"
-        )
-
+        # Re-read skip-permissions (may be toggled by Ctrl+S in picker)
         # Get skip-permissions args for current agent
         skip_perm_args: list[str] = []
-        if effective_skip:
+        if get_runtime_settings().skip_permissions:
             current_agent_config = get_agent_config(current_agent_name)
             if current_agent_config:
                 skip_perm_args = current_agent_config.skip_permissions_args
@@ -252,7 +246,12 @@ def run(
                     *skip_perm_args,
                     *args,
                 ]
-                result = subprocess.run(resume_cmd, stderr=subprocess.DEVNULL)
+                child_env = get_runtime_settings().build_child_env()
+                result = subprocess.run(
+                    resume_cmd,
+                    stderr=subprocess.DEVNULL,
+                    env=child_env,
+                )
                 if result.returncode == 0:
                     return 0
                 # Resume failed, fall back to base command
@@ -264,7 +263,8 @@ def run(
             final_cmd = current_cmd
 
         # Run the agent
-        result = subprocess.run(final_cmd)
+        child_env = get_runtime_settings().build_child_env()
+        result = subprocess.run(final_cmd, env=child_env)
         return result.returncode
 
     # Use dynamic runner when:
@@ -283,7 +283,7 @@ def run(
 
     # Build initial command with skip-permissions args if applicable
     initial_skip_args: list[str] = []
-    if skip_permissions:
+    if rt.skip_permissions:
         init_agent_config = get_agent_config(detected.name)
         if init_agent_config:
             initial_skip_args = init_agent_config.skip_permissions_args

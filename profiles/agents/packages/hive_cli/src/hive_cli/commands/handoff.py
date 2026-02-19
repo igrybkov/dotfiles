@@ -18,6 +18,7 @@ from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
 
+from ..config import get_runtime_settings
 from ..git import (
     get_current_branch,
     get_main_repo,
@@ -305,7 +306,7 @@ git status
         handoff_file.parent.mkdir(parents=True, exist_ok=True)
         handoff_file.write_text(template)
 
-    editor = os.environ.get("EDITOR", "vim")
+    editor = get_runtime_settings().editor
     subprocess.run([editor, str(handoff_file)])
 
 

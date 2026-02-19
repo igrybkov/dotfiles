@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 import sys
 import threading
@@ -16,7 +15,7 @@ from cyclopts import App, Parameter
 from rich.console import Console
 
 from ..agents import detect_agent
-from ..config import get_agent_order, load_config
+from ..config import get_agent_order, get_runtime_settings, get_settings
 from ..git import (
     create_worktree,
     delete_worktree,
@@ -142,9 +141,7 @@ def _get_issues_cache_path(main_repo: Path) -> Path | None:
         return None
 
     org, repo = repo_info
-    cache_dir = (
-        Path(os.getenv("XDG_CACHE_HOME", os.path.expanduser("~/.cache"))) / "hive"
-    )
+    cache_dir = Path(str(get_runtime_settings().xdg_cache_home)) / "hive"
     cache_dir.mkdir(parents=True, exist_ok=True)
     return cache_dir / f"gh-{org}--{repo}-issues.json"
 
@@ -201,7 +198,7 @@ def _fetch_github_issues(main_repo: Path) -> list[GitHubIssue] | None:
         List of GitHub issues if fetch succeeded (may be empty),
         or None if disabled or fetch failed.
     """
-    config = load_config()
+    config = get_settings()
 
     # Check if issue fetching is enabled
     if not config.github.fetch_issues:
@@ -800,18 +797,17 @@ def _interactive_ensure(
     current_worktree_branch = get_current_worktree_branch()
 
     # Detect current agent, respecting HIVE_AGENT env var if set
-    env_agent = os.environ.get("HIVE_AGENT")
-    detected = detect_agent(preferred=env_agent)
+    rt = get_runtime_settings()
+    detected = detect_agent(preferred=rt.agent)
     if not detected:
         agent_list = ", ".join(get_agent_order())
         error(f"Can't find installed agent that matches configuration: {agent_list}")
         return None
     selected_agent = detected.name
-    # Set environment variable for current process and child processes
-    os.environ["HIVE_AGENT"] = selected_agent
+    rt.agent = selected_agent
 
-    # Track skip-permissions state (initialized from env var)
-    skip_permissions = os.environ.get("HIVE_SKIP_PERMISSIONS") == "1"
+    # Track skip-permissions state from runtime settings
+    skip_permissions = rt.skip_permissions
 
     while True:
         # Build initial items immediately (fast version - skips slow git operations)
@@ -1035,18 +1031,14 @@ def _interactive_ensure(
             new_agent = select_agent(current_agent=selected_agent)
             if new_agent:
                 selected_agent = new_agent
-                # Set environment variable for current process and child processes
-                os.environ["HIVE_AGENT"] = selected_agent
+                rt.agent = selected_agent
             # Loop back to picker (whether changed or cancelled)
             continue
 
         # Handle "toggle skip-permissions" action (triggered by Ctrl+S)
         if selected == ACTION_TOGGLE_SKIP_PERMISSIONS:
             skip_permissions = not skip_permissions
-            if skip_permissions:
-                os.environ["HIVE_SKIP_PERMISSIONS"] = "1"
-            else:
-                os.environ.pop("HIVE_SKIP_PERMISSIONS", None)
+            rt.skip_permissions = skip_permissions
             # Loop back to picker
             continue
 
@@ -1079,9 +1071,10 @@ def _interactive_ensure(
                 # Cancelled, go back to picker
                 continue
 
-            # Open in editor
+            # Open in editor, then loop back to picker with this branch selected
             open_in_editor(worktree_path, editor)
-            return (str(worktree_path), branch_to_open)
+            preselect_branch = branch_to_open
+            continue
 
         # Handle GitHub issue selection
         if selected.startswith(ACTION_ISSUE_PREFIX):
@@ -1140,7 +1133,7 @@ def _complete_branch(ctx, param, incomplete):
 
 def _check_worktrees_enabled():
     """Check if worktrees are enabled in config, exit if not."""
-    config = load_config()
+    config = get_settings()
     if not config.worktrees.enabled:
         error("Worktrees are disabled in configuration (worktrees.enabled = false)")
         sys.exit(1)

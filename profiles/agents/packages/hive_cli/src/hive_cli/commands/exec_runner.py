@@ -11,8 +11,10 @@ from pathlib import Path
 
 from rich.console import Console
 
+from ..config import get_runtime_settings
 from ..git import get_git_root, get_main_repo, get_worktree_path
 from ..utils import error, format_yellow, is_interactive
+from ..utils.zellij import set_pane_branch
 from .wt import _interactive_ensure
 
 console = Console()
@@ -45,7 +47,7 @@ def select_and_change_to_worktree(
         if not is_interactive():
             error("Interactive mode required for worktree selection")
             sys.exit(1)
-        agent_num = int(os.environ.get("HIVE_PANE_ID", 0))
+        agent_num = get_runtime_settings().pane_id_int
         result = _interactive_ensure(
             agent_num=agent_num,
             preselect_branch=last_selected_branch,
@@ -82,7 +84,7 @@ def select_and_change_to_worktree(
 
 def _default_run_command(command: list[str]) -> int:
     """Default command runner using subprocess."""
-    result = subprocess.run(command)
+    result = subprocess.run(command, env=get_runtime_settings().build_child_env())
     return result.returncode
 
 
@@ -104,8 +106,6 @@ def _update_zellij_pane_name(
         compatibility but are no longer used. The agent name now comes from
         HIVE_AGENT env var, which is set by `hive zellij`.
     """
-    from ..utils.zellij import set_pane_branch
-
     set_pane_branch(branch)
 
 
@@ -246,12 +246,12 @@ def run_in_worktree(
             # Check if HIVE_AGENT was changed during worktree selection (Ctrl+A)
             # and rebuild command if needed
             final_command = command
-            env_agent = os.environ.get("HIVE_AGENT")
-            if env_agent and command and command[0] != env_agent:
+            rt = get_runtime_settings()
+            if rt.agent and command and command[0] != rt.agent:
                 # Agent was changed - rebuild command with new agent
                 # Keep original args (everything after the command name)
-                final_command = [env_agent, *command[1:]]
-            os.execvp(final_command[0], final_command)
+                final_command = [rt.agent, *command[1:]]
+            os.execvpe(final_command[0], final_command, rt.build_child_env())
             # execvp doesn't return, but for type checker:
             return 0
         else:

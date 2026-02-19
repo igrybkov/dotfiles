@@ -64,11 +64,11 @@ class TestZellijCommand:
 
         with (
             patch("shutil.which", side_effect=mock_which),
-            patch("os.execvp") as mock_execvp,
+            patch("os.execvpe") as mock_execvpe,
         ):
             cli_runner.invoke(app, ["zellij", "-a", "claude"])
-            mock_execvp.assert_called_once()
-            call_args = mock_execvp.call_args
+            mock_execvpe.assert_called_once()
+            call_args = mock_execvpe.call_args
             assert call_args[0][0] == "zellij"
             cmd_list = call_args[0][1]
             assert cmd_list[0] == "zellij"
@@ -98,18 +98,17 @@ class TestZellijCommand:
 
         with (
             patch("shutil.which", side_effect=mock_which),
-            patch("os.execvp") as mock_execvp,
+            patch("os.execvpe") as mock_execvpe,
         ):
             cli_runner.invoke(app, ["zellij", "-a", "claude"])
-            mock_execvp.assert_called_once()
-            cmd_list = mock_execvp.call_args[0][1]
+            mock_execvpe.assert_called_once()
+            cmd_list = mock_execvpe.call_args[0][1]
             assert "--layout" in cmd_list
             layout_idx = cmd_list.index("--layout")
             assert cmd_list[layout_idx + 1] == "custom-layout"
 
     def test_zellij_sets_agent_env(self, cli_runner: CycloptsTestRunner, temp_git_repo):
-        """Test that AGENT env var is set before launching."""
-        import os
+        """Test that HIVE_AGENT env var is passed to child process."""
 
         def mock_which(cmd):
             if cmd in ["zellij", "claude"]:
@@ -118,16 +117,16 @@ class TestZellijCommand:
 
         captured_env = {}
 
-        def capture_execvp(cmd, args):
-            captured_env["AGENT"] = os.environ.get("AGENT")
+        def capture_execvpe(cmd, args, env):
+            captured_env["HIVE_AGENT"] = env.get("HIVE_AGENT")
             raise SystemExit(0)
 
         with (
             patch("shutil.which", side_effect=mock_which),
-            patch("os.execvp", side_effect=capture_execvp),
+            patch("os.execvpe", side_effect=capture_execvpe),
         ):
             cli_runner.invoke(app, ["zellij", "-a", "claude"])
-            # Can't easily check this due to execvp, but we verify the call happens
+            assert captured_env["HIVE_AGENT"] == "claude"
 
 
 class TestZellijHelp:

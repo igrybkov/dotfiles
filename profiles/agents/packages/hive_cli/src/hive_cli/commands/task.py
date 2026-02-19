@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import subprocess
 from datetime import datetime
 from pathlib import Path
@@ -11,6 +10,7 @@ from typing import Annotated
 from cyclopts import App, Parameter
 from rich.console import Console
 
+from ..config import get_runtime_settings
 from ..git import get_main_repo, list_worktrees
 from ..utils import success, warn
 
@@ -183,7 +183,7 @@ def edit_task(agent_id: str) -> None:
 """
         task_file.write_text(template)
 
-    editor = os.environ.get("EDITOR", "vim")
+    editor = get_runtime_settings().editor
     subprocess.run([editor, str(task_file)])
 
 

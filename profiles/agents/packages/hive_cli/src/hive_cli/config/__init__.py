@@ -25,13 +25,18 @@ Legacy environment variables (still supported):
     GIT_WORKTREES_HOME  - Set to "true" for home worktrees mode
 
 Usage:
-    from hive_cli.config import load_config, reload_config
+    from hive_cli.config import get_settings, get_runtime_settings
 
-    config = load_config()
-    print(config.agents.order)
-    print(config.worktrees.parent_dir)
+    settings = get_settings()
+    print(settings.agents.order)
+    print(settings.worktrees.parent_dir)
+
+    rt = get_runtime_settings()
+    print(rt.agent)
+    print(rt.editor)
 """
 
+from .base import HiveBaseSettings
 from .defaults import KNOWN_AGENTS
 from .loader import (
     CONFIG_FILE,
@@ -42,12 +47,11 @@ from .loader import (
     find_git_root,
     find_global_config,
     get_xdg_config_home,
-    load_config,
     load_default_config,
     load_yaml_file,
-    reload_config,
 )
 from .merge import deep_merge
+from .runtime import RuntimeSettings, get_runtime_settings
 from .schema import (
     AgentConfig,
     AgentsConfig,
@@ -58,9 +62,43 @@ from .schema import (
     WorktreesConfig,
     ZellijConfig,
 )
+from .settings import HiveSettings, MergedYamlSource, get_settings, reset_settings
 
 # Backward-compatible constants
 ENV_HIVE_AGENT = "HIVE_AGENT"
+
+
+# --- Backward-compatible wrappers ---
+
+
+def load_config() -> HiveSettings:
+    """Load configuration (backward-compatible wrapper).
+
+    Returns HiveSettings (which has the same field names as HiveConfig).
+    """
+    return get_settings()
+
+
+def _load_config_cache_clear() -> None:
+    """Clear settings cache (backward compat for load_config.cache_clear()).
+
+    Resets the singleton so the next load_config() call creates fresh settings.
+    """
+    reset_settings()
+
+
+# Attach cache_clear for backward compat with lru_cache API
+load_config.cache_clear = _load_config_cache_clear  # type: ignore[attr-defined]
+
+
+def reload_config() -> HiveSettings:
+    """Force reload of configuration (backward-compatible wrapper).
+
+    Clears YAML cache, re-reads env vars, returns fresh settings.
+    """
+    settings = get_settings()
+    settings.reload()
+    return settings
 
 
 def get_agent_config(agent_name: str) -> AgentConfig:
@@ -72,8 +110,8 @@ def get_agent_config(agent_name: str) -> AgentConfig:
     Returns:
         AgentConfig for the agent, or default config if not found.
     """
-    config = load_config()
-    return config.agents.configs.get(agent_name, AgentConfig())
+    settings = get_settings()
+    return settings.agents.configs.get(agent_name, AgentConfig())
 
 
 def get_agent_order() -> list[str]:
@@ -85,11 +123,20 @@ def get_agent_order() -> list[str]:
     Returns:
         List of agent names in priority order.
     """
-    config = load_config()
-    return config.agents.order
+    settings = get_settings()
+    return settings.agents.order
 
 
 __all__ = [
+    # Base
+    "HiveBaseSettings",
+    # New API
+    "HiveSettings",
+    "MergedYamlSource",
+    "get_settings",
+    "reset_settings",
+    "RuntimeSettings",
+    "get_runtime_settings",
     # Schema
     "AgentConfig",
     "AgentsConfig",
@@ -99,7 +146,7 @@ __all__ = [
     "ResumeConfig",
     "WorktreesConfig",
     "ZellijConfig",
-    # Loader
+    # Loader utilities
     "CONFIG_FILE",
     "GLOBAL_CONFIG_DIR",
     "GLOBAL_CONFIG_FILES",
@@ -108,16 +155,18 @@ __all__ = [
     "find_git_root",
     "find_global_config",
     "get_xdg_config_home",
-    "load_config",
     "load_default_config",
     "load_yaml_file",
+    # Backward-compatible
+    "load_config",
     "reload_config",
     # Defaults
     "KNOWN_AGENTS",
     # Merge
     "deep_merge",
-    # Backward-compatible
+    # Constants
     "ENV_HIVE_AGENT",
+    # Helpers
     "get_agent_config",
     "get_agent_order",
 ]

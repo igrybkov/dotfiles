@@ -6,9 +6,12 @@ Pydantic model defaults here are only used as fallbacks during parsing.
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
 
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field, field_validator
+from pydantic_settings import SettingsConfigDict
+
+from .base import HiveBaseSettings
 
 
 class AgentConfig(BaseModel):
@@ -23,7 +26,7 @@ class AgentConfig(BaseModel):
     skip_permissions_args: Annotated[list[str], Field(default_factory=list)]
 
 
-class AgentsConfig(BaseModel):
+class AgentsConfig(HiveBaseSettings):
     """Configuration for AI coding agents.
 
     Attributes:
@@ -31,16 +34,20 @@ class AgentsConfig(BaseModel):
         configs: Per-agent configuration.
     """
 
+    model_config = SettingsConfigDict(env_prefix="HIVE_AGENTS_")
+
     order: Annotated[list[str], Field(default_factory=list)]
     configs: Annotated[dict[str, AgentConfig], Field(default_factory=dict)]
 
 
-class ResumeConfig(BaseModel):
+class ResumeConfig(HiveBaseSettings):
     """Configuration for resume behavior.
 
     Attributes:
         enabled: Whether --resume flag is enabled by default.
     """
+
+    model_config = SettingsConfigDict(env_prefix="HIVE_RESUME_")
 
     enabled: bool = False
 
@@ -75,7 +82,7 @@ class AutoSelectConfig(BaseModel):
     timeout: float = 3.0
 
 
-class WorktreesConfig(BaseModel):
+class WorktreesConfig(HiveBaseSettings):
     """Configuration for git worktrees.
 
     Attributes:
@@ -90,18 +97,43 @@ class WorktreesConfig(BaseModel):
         skip_permissions: Default --skip-permissions flag for worktree sessions.
     """
 
+    model_config = SettingsConfigDict(env_prefix="HIVE_WORKTREES_")
+
     enabled: bool = True
     auto_select: Annotated[AutoSelectConfig, Field(default_factory=AutoSelectConfig)]
     parent_dir: str = ".worktrees"
-    use_home: bool = False
+    use_home: bool = Field(
+        False,
+        validation_alias=AliasChoices(
+            "use_home",
+            "HIVE_WORKTREES_USE_HOME",
+            "GIT_WORKTREES_HOME",
+        ),
+    )
     post_create: Annotated[list[PostCreateCommand], Field(default_factory=list)]
     copy_files: Annotated[list[str], Field(default_factory=list)]
     symlink_files: Annotated[list[str], Field(default_factory=list)]
     resume: bool = False
     skip_permissions: bool = False
 
+    @field_validator("post_create", mode="before")
+    @classmethod
+    def normalize_post_create(cls, v: Any) -> Any:
+        """Normalize post_create entries: strings become {"command": str}."""
+        if isinstance(v, list):
+            return [{"command": item} if isinstance(item, str) else item for item in v]
+        return v
 
-class ZellijConfig(BaseModel):
+    @field_validator("use_home", mode="before")
+    @classmethod
+    def parse_use_home(cls, v: Any) -> Any:
+        """Parse string 'true'/'false' for legacy GIT_WORKTREES_HOME compatibility."""
+        if isinstance(v, str):
+            return v.lower() == "true"
+        return v
+
+
+class ZellijConfig(HiveBaseSettings):
     """Configuration for Zellij terminal multiplexer.
 
     Attributes:
@@ -109,11 +141,13 @@ class ZellijConfig(BaseModel):
         session_name: Session name template.
     """
 
+    model_config = SettingsConfigDict(env_prefix="HIVE_ZELLIJ_")
+
     layout: str | None = None
     session_name: str = "{repo}-{agent}"
 
 
-class GitHubConfig(BaseModel):
+class GitHubConfig(HiveBaseSettings):
     """Configuration for GitHub integration.
 
     Attributes:
@@ -121,12 +155,17 @@ class GitHubConfig(BaseModel):
         issue_limit: Maximum number of issues to fetch.
     """
 
+    model_config = SettingsConfigDict(env_prefix="HIVE_GITHUB_")
+
     fetch_issues: bool = True
     issue_limit: int = 20
 
 
 class HiveConfig(BaseModel):
     """Root configuration for Hive CLI.
+
+    Kept as BaseModel for backward compatibility. HiveSettings replaces this
+    as the primary settings entrypoint.
 
     Attributes:
         agents: Agent detection and configuration.

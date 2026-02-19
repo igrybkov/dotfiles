@@ -87,6 +87,7 @@ def clean_environment(tmp_path, monkeypatch):
     # Clear config-related env vars (both new HIVE_* and legacy)
     monkeypatch.delenv("AGENT", raising=False)
     monkeypatch.delenv("HIVE_AGENT", raising=False)
+    monkeypatch.delenv("HIVE_SKIP_PERMISSIONS", raising=False)
     monkeypatch.delenv("GIT_WORKTREES_HOME", raising=False)
     monkeypatch.delenv("HIVE_AGENTS_ORDER", raising=False)
     monkeypatch.delenv("HIVE_RESUME_ENABLED", raising=False)
@@ -94,15 +95,23 @@ def clean_environment(tmp_path, monkeypatch):
     monkeypatch.delenv("HIVE_WORKTREES_PARENT_DIR", raising=False)
     monkeypatch.delenv("HIVE_WORKTREES_USE_HOME", raising=False)
     monkeypatch.delenv("HIVE_WORKTREES_RESUME", raising=False)
+    monkeypatch.delenv("HIVE_WORKTREES_SKIP_PERMISSIONS", raising=False)
     monkeypatch.delenv("HIVE_ZELLIJ_LAYOUT", raising=False)
     monkeypatch.delenv("HIVE_ZELLIJ_SESSION_NAME", raising=False)
     monkeypatch.delenv("HIVE_GITHUB_FETCH_ISSUES", raising=False)
     monkeypatch.delenv("HIVE_GITHUB_ISSUE_LIMIT", raising=False)
 
-    # Clear config cache
-    from hive_cli.config import reload_config
+    # Reset settings singletons and eagerly repopulate.
+    # Eagerly creating settings ensures find_git_root() subprocess call
+    # happens here (outside test mock contexts), not during the test.
+    from hive_cli.config import get_settings, reset_settings
 
-    reload_config()
+    reset_settings()
+    get_settings()
+
+    import hive_cli.config.runtime as _rt_mod
+
+    _rt_mod._runtime_settings = None
 
 
 @pytest.fixture

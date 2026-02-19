@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 from pathlib import Path
+
+from ..config import get_runtime_settings
 
 
 def is_running_in_zellij() -> bool:
     """Check if we're running inside a Zellij session."""
-    return os.environ.get("ZELLIJ") == "0"
+    return get_runtime_settings().in_zellij
 
 
 def rename_pane(name: str) -> None:
@@ -75,8 +76,10 @@ def _get_state_file() -> Path | None:
     """
     if not is_running_in_zellij():
         return None
-    session = os.environ.get("ZELLIJ_SESSION_NAME", "default")
-    pane_id = os.environ.get("ZELLIJ_PANE_ID", "0")
+
+    rt = get_runtime_settings()
+    session = rt.zellij_session_name
+    pane_id = rt.zellij_pane_id
     state_dir = Path("/tmp/hive-zellij") / session
     state_dir.mkdir(parents=True, exist_ok=True)
     return state_dir / f"{pane_id}.json"
@@ -116,8 +119,9 @@ def rebuild_pane_title() -> bool:
         return False
 
     state = _read_state()
-    pane_id = os.environ.get("HIVE_PANE_ID")
-    agent = os.environ.get("HIVE_AGENT")
+    rt = get_runtime_settings()
+    pane_id = rt.pane_id
+    agent = rt.agent
 
     # Build title parts
     # When HIVE_PANE_ID is set, we're in a layout that already defines
@@ -129,7 +133,7 @@ def rebuild_pane_title() -> bool:
         # Not in layout - need to set the full name including prefix
         if agent:
             # Use ZELLIJ_PANE_ID as fallback for pane numbering
-            zellij_pane_id = os.environ.get("ZELLIJ_PANE_ID", "0")
+            zellij_pane_id = rt.zellij_pane_id
             parts.append(f"{agent}-{zellij_pane_id}")
         else:
             # Fallback to current directory path relative to home
