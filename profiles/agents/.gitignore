@@ -3,6 +3,3 @@ __pycache__/
 
 # Vault password file (never commit)
 .vault_password
-
-# Cursor plans
-.cursor/plans/
