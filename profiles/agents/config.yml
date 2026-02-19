@@ -14,7 +14,7 @@
 
 profile:
   name: agents
-  priority: 300  # After common profiles
+  priority: 300 # After common profiles
 
 # Homebrew taps
 brew_taps:
@@ -28,8 +28,8 @@ cask_packages:
   - name: chatgpt
   - name: claude-code
   - name: copilot-cli
-  - name: cursor  # Optional - remove if not needed
-  - name: codex   # Optional - remove if not needed
+  - name: cursor # Optional - remove if not needed
+  - name: codex # Optional - remove if not needed
 
 # Python CLI package (installed via pipx in editable mode)
 # Paths starting with "packages/" are relative to profile_dir
