@@ -1,3 +1,6 @@
 # Hive CLI local config (project-specific overrides)
 .hive.local.yml
 .hive.local.yaml
+
+# Cursor plans
+.cursor/plans/
