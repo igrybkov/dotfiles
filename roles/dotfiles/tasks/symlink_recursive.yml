@@ -24,20 +24,50 @@
       --json
   register: symlink_result
   changed_when: (symlink_result.stdout | from_json).changed
-  failed_when: (symlink_result.stdout | from_json).failed
+  failed_when: false
 
 - name: "[🔗 dotfiles] Report symlink results"
+  vars:
+    _result: "{{ symlink_result.stdout | from_json }}"
   ansible.builtin.debug:
     msg: >-
-      Created: {{ (symlink_result.stdout | from_json).created }},
-      Updated: {{ (symlink_result.stdout | from_json).updated }},
-      Skipped: {{ (symlink_result.stdout | from_json).skipped }}
+      Created: {{ _result.created }},
+      Updated: {{ _result.updated }},
+      Skipped: {{ _result.skipped }}
   when: symlink_result.stdout is defined and (symlink_result.stdout | trim | length > 0)
 
-- name: "[🔗 dotfiles] Report symlink conflicts"
+- name: "[🔗 dotfiles] Fail on symlink conflicts"
+  vars:
+    _result: "{{ symlink_result.stdout | from_json }}"
+    _conflicts: "{{ _result.conflicts }}"
+    _backup_dir: "~/dotfiles-backup-{{ ansible_date_time.iso8601_basic_short }}"
   ansible.builtin.fail:
     msg: |
-      Cannot create symlinks - conflicts detected:
-      {{ (symlink_result.stdout | from_json).conflicts | join('\n') }}
-      Please remove or backup these files manually before running dotfiles install.
-  when: symlink_result.stdout is defined and (symlink_result.stdout | trim | length > 0) and ((symlink_result.stdout | from_json).conflicts | length > 0)
+
+      Conflict: {{ _conflicts | length }} existing file(s) would be overwritten by symlinks:
+      {% for f in _conflicts %}
+        - {{ f }}
+      {% endfor %}
+
+      These are regular files, not symlinks. This typically happens on first run
+      when the system already has default config files (e.g. ~/.bashrc, ~/.gitconfig).
+
+      To fix, backup and remove the conflicting files, then re-run:
+
+        mkdir -p {{ _backup_dir }}
+        mv {{ _conflicts | join(' ') }} {{ _backup_dir }}/
+        dotfiles install dotfiles
+  when:
+    - symlink_result.stdout is defined
+    - (symlink_result.stdout | trim | length > 0)
+    - _result.conflicts | length > 0
+
+- name: "[🔗 dotfiles] Fail on symlink errors"
+  vars:
+    _result: "{{ symlink_result.stdout | from_json }}"
+  ansible.builtin.fail:
+    msg: "Symlink errors: {{ _result.errors | join(', ') }}"
+  when:
+    - symlink_result.stdout is defined
+    - (symlink_result.stdout | trim | length > 0)
+    - _result.errors | length > 0
