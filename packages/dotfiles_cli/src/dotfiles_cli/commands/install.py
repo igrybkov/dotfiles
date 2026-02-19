@@ -5,6 +5,8 @@ from __future__ import annotations
 import getpass
 import shutil
 import subprocess
+import threading
+from contextlib import contextmanager
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -41,6 +43,23 @@ from ..vault import (
     get_vault_password_file,
     validate_vault_password,
 )
+
+
+_SUDO_PROMPT_NOTIFICATION_DELAY = 60
+
+
+@contextmanager
+def _notify_on_idle_prompt(
+    title: str, message: str, delay: int = _SUDO_PROMPT_NOTIFICATION_DELAY
+):
+    """Send a notification if a password prompt is idle for too long."""
+    timer = threading.Timer(delay, send_notification, args=[title, message])
+    timer.daemon = True
+    timer.start()
+    try:
+        yield
+    finally:
+        timer.cancel()
 
 
 def complete_profiles(
@@ -246,7 +265,11 @@ def install(
 
             for attempt in range(1, max_attempts + 1):
                 try:
-                    become_password = getpass.getpass("SUDO password: ")
+                    with _notify_on_idle_prompt(
+                        "Dotfiles: Sudo Required",
+                        "Waiting for sudo password...",
+                    ):
+                        become_password = getpass.getpass("SUDO password: ")
                 except (KeyboardInterrupt, EOFError):
                     click.echo("\nError: Password prompt cancelled.", err=True)
                     return 1

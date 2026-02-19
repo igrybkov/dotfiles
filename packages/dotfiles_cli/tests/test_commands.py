@@ -1,10 +1,13 @@
 """Tests for CLI commands."""
 
+import time
+
 import pytest
 from unittest.mock import Mock, call, patch
 
 
 from dotfiles_cli.app import cli
+from dotfiles_cli.commands.install import _notify_on_idle_prompt
 from dotfiles_cli.constants import SUDO_TAGS
 
 
@@ -888,3 +891,31 @@ class TestProfileBootstrap:
         except FileNotFoundError:
             # check-jsonschema not available, skip this part
             pass
+
+
+class TestNotifyOnIdlePrompt:
+    """Test the _notify_on_idle_prompt context manager."""
+
+    def test_no_notification_on_fast_input(self):
+        """Timer is cancelled when context exits immediately."""
+        with patch("dotfiles_cli.commands.install.send_notification") as mock_notify:
+            with _notify_on_idle_prompt("title", "msg", delay=10):
+                pass
+        time.sleep(0.1)
+        mock_notify.assert_not_called()
+
+    def test_no_notification_on_exception(self):
+        """Timer is cancelled when an exception occurs."""
+        with patch("dotfiles_cli.commands.install.send_notification") as mock_notify:
+            with pytest.raises(KeyboardInterrupt):
+                with _notify_on_idle_prompt("title", "msg", delay=10):
+                    raise KeyboardInterrupt
+        time.sleep(0.1)
+        mock_notify.assert_not_called()
+
+    def test_notification_fires_after_delay(self):
+        """Notification fires when prompt is idle past the delay."""
+        with patch("dotfiles_cli.commands.install.send_notification") as mock_notify:
+            with _notify_on_idle_prompt("Sudo Required", "Waiting...", delay=0.1):
+                time.sleep(0.3)
+        mock_notify.assert_called_once_with("Sudo Required", "Waiting...")
