@@ -10,7 +10,7 @@ Usage:
 
 from __future__ import annotations
 
-from typing import Any, ClassVar
+from typing import Annotated, Any, ClassVar
 
 from pydantic import Field
 from pydantic_settings import PydanticBaseSettingsSource
@@ -77,11 +77,11 @@ class HiveSettings(HiveBaseSettings):
     Precedence per sub-config field: env var > YAML > default.
     """
 
-    agents: AgentsConfig = Field(default_factory=AgentsConfig)
-    resume: ResumeConfig = Field(default_factory=ResumeConfig)
-    worktrees: WorktreesConfig = Field(default_factory=WorktreesConfig)
-    zellij: ZellijConfig = Field(default_factory=ZellijConfig)
-    github: GitHubConfig = Field(default_factory=GitHubConfig)
+    agents: Annotated[AgentsConfig, Field(default_factory=AgentsConfig)]
+    resume: Annotated[ResumeConfig, Field(default_factory=ResumeConfig)]
+    worktrees: Annotated[WorktreesConfig, Field(default_factory=WorktreesConfig)]
+    zellij: Annotated[ZellijConfig, Field(default_factory=ZellijConfig)]
+    github: Annotated[GitHubConfig, Field(default_factory=GitHubConfig)]
 
     @classmethod
     def settings_customise_sources(

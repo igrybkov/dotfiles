@@ -102,14 +102,17 @@ class WorktreesConfig(HiveBaseSettings):
     enabled: bool = True
     auto_select: Annotated[AutoSelectConfig, Field(default_factory=AutoSelectConfig)]
     parent_dir: str = ".worktrees"
-    use_home: bool = Field(
-        False,
-        validation_alias=AliasChoices(
-            "use_home",
-            "HIVE_WORKTREES_USE_HOME",
-            "GIT_WORKTREES_HOME",
+    use_home: Annotated[
+        bool,
+        Field(
+            False,
+            validation_alias=AliasChoices(
+                "use_home",
+                "HIVE_WORKTREES_USE_HOME",
+                "GIT_WORKTREES_HOME",
+            ),
         ),
-    )
+    ]
     post_create: Annotated[list[PostCreateCommand], Field(default_factory=list)]
     copy_files: Annotated[list[str], Field(default_factory=list)]
     symlink_files: Annotated[list[str], Field(default_factory=list)]

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Annotated
 
 from pydantic import Field, computed_field, field_validator
 
@@ -38,26 +39,29 @@ class RuntimeSettings(HiveBaseSettings):
     # --- Mutable state ---
     # validation_alias  → pydantic-settings reads this env var
     # serialization_alias → model_dump(by_alias=True) produces this key
-    agent: str | None = Field(
-        None,
-        validation_alias="HIVE_AGENT",
-        serialization_alias="HIVE_AGENT",
-    )
-    pane_id: str | None = Field(
-        None,
-        validation_alias="HIVE_PANE_ID",
-        serialization_alias="HIVE_PANE_ID",
-    )
-    skip_permissions: bool = Field(
-        False,
-        validation_alias="HIVE_SKIP_PERMISSIONS",
-        serialization_alias="HIVE_SKIP_PERMISSIONS",
-    )
+    agent: Annotated[
+        str | None,
+        Field(None, validation_alias="HIVE_AGENT", serialization_alias="HIVE_AGENT"),
+    ]
+    pane_id: Annotated[
+        str | None,
+        Field(
+            None, validation_alias="HIVE_PANE_ID", serialization_alias="HIVE_PANE_ID"
+        ),
+    ]
+    skip_permissions: Annotated[
+        bool,
+        Field(
+            False,
+            validation_alias="HIVE_SKIP_PERMISSIONS",
+            serialization_alias="HIVE_SKIP_PERMISSIONS",
+        ),
+    ]
 
     # --- Immutable context ---
     # Zellij sets ZELLIJ=0 when running inside a session.
     # Any non-empty string (including "0") means we're in Zellij.
-    in_zellij: bool = Field(False, validation_alias="ZELLIJ")
+    in_zellij: Annotated[bool, Field(False, validation_alias="ZELLIJ")]
 
     @field_validator("in_zellij", mode="before")
     @classmethod
@@ -67,13 +71,18 @@ class RuntimeSettings(HiveBaseSettings):
             return True
         return bool(v) if v is not None else False
 
-    zellij_session_name: str = Field("default", validation_alias="ZELLIJ_SESSION_NAME")
-    zellij_pane_id: str = Field("0", validation_alias="ZELLIJ_PANE_ID")
-    editor: str = Field("vim", validation_alias="EDITOR")
-    xdg_cache_home: Path = Field(
-        default_factory=lambda: Path.home() / ".cache",
-        validation_alias="XDG_CACHE_HOME",
-    )
+    zellij_session_name: Annotated[
+        str, Field("default", validation_alias="ZELLIJ_SESSION_NAME")
+    ]
+    zellij_pane_id: Annotated[str, Field("0", validation_alias="ZELLIJ_PANE_ID")]
+    editor: Annotated[str, Field("vim", validation_alias="EDITOR")]
+    xdg_cache_home: Annotated[
+        Path,
+        Field(
+            default_factory=lambda: Path.home() / ".cache",
+            validation_alias="XDG_CACHE_HOME",
+        ),
+    ]
 
     @computed_field
     @property
