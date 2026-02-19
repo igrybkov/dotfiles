@@ -23,15 +23,6 @@ set -g fisher_path $__fish_config_dir/fisher
 set -p fish_function_path $fisher_path/functions
 set -p fish_complete_path $fisher_path/completions
 
-# Fallback _evalcache: runs commands directly (no caching) when the real
-# fish-evalcache plugin isn't installed yet (first boot / offline / child processes).
-# On subsequent boots the real plugin autoloads from fisher_path/functions/.
-if not test -f $fisher_path/functions/_evalcache.fish
-    function _evalcache
-        $argv | source
-    end
-end
-
 # Automatic plugin synchronization
 set -l managed_plugins_file $__fish_config_dir/managed_fish_plugins
 set -l installed_plugins_file $__fish_config_dir/fish_plugins
