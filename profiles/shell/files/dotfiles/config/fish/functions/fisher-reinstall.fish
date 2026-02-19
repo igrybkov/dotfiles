@@ -89,6 +89,21 @@ function fisher-reinstall --description "Reinstall all Fisher plugins"
     end
     set -l result $status
 
+    # Re-source all plugin files to restore functions and bindings that were
+    # erased by plugin event handlers during installation. For example, the
+    # abbr-tips plugin's update handler calls __abbr_tips_clean which erases
+    # its own functions and key bindings. In fish 4.x, `functions --erase`
+    # permanently blocks autoloading for that function name within the
+    # session, so we must explicitly re-source everything.
+    if test $result -eq 0 -a -d "$fisher_path"
+        for f in $fisher_path/functions/*.fish
+            source $f
+        end
+        for f in $fisher_path/conf.d/*.fish
+            test -r $f; and source $f
+        end
+    end
+
     # Clean up
     rm -f $lock_file
     functions -e __fisher_reinstall_cleanup
