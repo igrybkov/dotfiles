@@ -226,7 +226,7 @@ class TestPaneStateManagement:
         """Test rebuild_pane_title with no state components.
 
         When HIVE_PANE_ID is set (in layout), we're appending to a layout-defined
-        base name (e.g., "chat-1"), so we append [agent-name] with leading space.
+        base name (e.g., "c1: Andrii"), so we append [agent-name] with leading space.
         """
         from hive_cli.utils.zellij import rebuild_pane_title
 

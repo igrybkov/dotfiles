@@ -108,7 +108,7 @@ def rebuild_pane_title() -> bool:
 
     Title format depends on context:
     - With HIVE_PANE_ID (in layout): [{agent}] {status} [{branch}] {custom_title}
-      (Layout provides "chat-{id}" as base name, we append agent and branch info)
+      (Layout provides "c{id}: Name" as base name, we append agent and branch info)
     - Without HIVE_PANE_ID: {agent}-{pane_id} {status} [{branch}] {custom_title}
       or falls back to cwd relative to home
 
@@ -125,7 +125,7 @@ def rebuild_pane_title() -> bool:
 
     # Build title parts
     # When HIVE_PANE_ID is set, we're in a layout that already defines
-    # the base pane name (e.g., "chat-2"). Since rename-pane appends
+    # the base pane name (e.g., "c2: Bohdan"). Since rename-pane appends
     # to the layout name, we should NOT include the base name prefix.
     parts: list[str] = []
 

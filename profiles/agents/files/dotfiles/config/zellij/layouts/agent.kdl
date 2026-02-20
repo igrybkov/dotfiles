@@ -18,19 +18,19 @@ layout {
         pane split_direction="vertical" {
             // Left: Agents 1-4 stacked
             pane stacked=true {
-                pane name="chat-1" expanded=true {
+                pane name="c1: Andrii" expanded=true {
                     command "fish"
                     args "-c" "env HIVE_PANE_ID=1 hive run --restart"
                 }
-                pane name="chat-2" start_suspended=true {
+                pane name="c2: Bohdan" start_suspended=true {
                     command "fish"
                     args "-c" "env HIVE_PANE_ID=2 hive run --restart"
                 }
-                pane name="chat-3" start_suspended=true {
+                pane name="c3: Chris" start_suspended=true {
                     command "fish"
                     args "-c" "env HIVE_PANE_ID=3 hive run --restart"
                 }
-                pane name="chat-4" start_suspended=true {
+                pane name="c4: Dmytro" start_suspended=true {
                     command "fish"
                     args "-c" "env HIVE_PANE_ID=4 hive run --restart"
                 }
@@ -38,19 +38,19 @@ layout {
             // Right: Agents 5-8 stacked + status board
             pane split_direction="horizontal" {
                 pane size="75%" stacked=true {
-                    pane name="chat-5" expanded=true start_suspended=true {
+                    pane name="c5: Emily" expanded=true start_suspended=true {
                         command "fish"
                         args "-c" "env HIVE_PANE_ID=5 hive run --restart"
                     }
-                    pane name="chat-6" start_suspended=true {
+                    pane name="c6: Fedir" start_suspended=true {
                         command "fish"
                         args "-c" "env HIVE_PANE_ID=6 hive run --restart"
                     }
-                    pane name="chat-7" start_suspended=true {
+                    pane name="c7: Grace" start_suspended=true {
                         command "fish"
                         args "-c" "env HIVE_PANE_ID=7 hive run --restart"
                     }
-                    pane name="chat-8" start_suspended=true {
+                    pane name="c8: Halyna" start_suspended=true {
                         command "fish"
                         args "-c" "env HIVE_PANE_ID=8 hive run --restart"
                     }
@@ -68,38 +68,38 @@ layout {
         pane split_direction="vertical" {
             // Left: Agents 9-12 stacked
             pane stacked=true {
-                pane name="chat-9" expanded=true start_suspended=true {
+                pane name="c9: Ivan" expanded=true start_suspended=true {
                     command "fish"
                     args "-c" "env HIVE_PANE_ID=9 hive run --restart"
                 }
-                pane name="chat-10" start_suspended=true {
+                pane name="c10: Jake" start_suspended=true {
                     command "fish"
                     args "-c" "env HIVE_PANE_ID=10 hive run --restart"
                 }
-                pane name="chat-11" start_suspended=true {
+                pane name="c11: Kateryna" start_suspended=true {
                     command "fish"
                     args "-c" "env HIVE_PANE_ID=11 hive run --restart"
                 }
-                pane name="chat-12" start_suspended=true {
+                pane name="c12: Liam" start_suspended=true {
                     command "fish"
                     args "-c" "env HIVE_PANE_ID=12 hive run --restart"
                 }
             }
             // Right: Agents 13-16 stacked
             pane stacked=true {
-                pane name="chat-13" expanded=true start_suspended=true {
+                pane name="c13: Mykola" expanded=true start_suspended=true {
                     command "fish"
                     args "-c" "env HIVE_PANE_ID=13 hive run --restart"
                 }
-                pane name="chat-14" start_suspended=true {
+                pane name="c14: Nadia" start_suspended=true {
                     command "fish"
                     args "-c" "env HIVE_PANE_ID=14 hive run --restart"
                 }
-                pane name="chat-15" start_suspended=true {
+                pane name="c15: Oliver" start_suspended=true {
                     command "fish"
                     args "-c" "env HIVE_PANE_ID=15 hive run --restart"
                 }
-                pane name="chat-16" start_suspended=true {
+                pane name="c16: Petro" start_suspended=true {
                     command "fish"
                     args "-c" "env HIVE_PANE_ID=16 hive run --restart"
                 }
