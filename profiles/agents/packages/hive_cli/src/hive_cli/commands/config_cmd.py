@@ -171,25 +171,12 @@ def _create_bootstrap_header() -> str:
 """
 
 
-def create_bootstrap_config(file_path: Path | str, *, force: bool = False) -> None:
-    """Create a bootstrap configuration file.
+def _generate_bootstrap_content() -> str:
+    """Generate the bootstrap configuration content.
 
-    Args:
-        file_path: Path where to create the config file.
-        force: If True, overwrite existing file.
+    Returns:
+        Full bootstrap config string with header and commented-out defaults.
     """
-    path = Path(file_path).expanduser().resolve()
-
-    # Check if file already exists
-    if path.exists() and not force:
-        error(f"File already exists: {path}")
-        info("Use --force to overwrite, or remove it first.")
-        sys.exit(1)
-
-    # Create parent directories if needed
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-    # Get default config and comment it out
     default_content = _get_default_yaml_content()
 
     # Remove the existing header from default.yml (up to first blank line)
@@ -225,8 +212,28 @@ def create_bootstrap_config(file_path: Path | str, *, force: bool = False) -> No
     if not final_content.endswith("\n"):
         final_content += "\n"
 
-    # Write the file
-    path.write_text(final_content)
+    return final_content
+
+
+def create_bootstrap_config(file_path: Path | str, *, force: bool = False) -> None:
+    """Create a bootstrap configuration file.
+
+    Args:
+        file_path: Path where to create the config file.
+        force: If True, overwrite existing file.
+    """
+    path = Path(file_path).expanduser().resolve()
+
+    # Check if file already exists
+    if path.exists() and not force:
+        error(f"File already exists: {path}")
+        info("Use --force to overwrite, or remove it first.")
+        sys.exit(1)
+
+    # Create parent directories if needed
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    path.write_text(_generate_bootstrap_content())
 
     success(f"Created config file: {path}")
     info("Edit with your preferred editor to customize settings.")
@@ -249,7 +256,7 @@ def config_default():
 
     Examples:
         hive config                          # Show active config
-        hive config bootstrap                # Show common paths
+        hive config bootstrap                # Print bootstrap to stdout
         hive config bootstrap .hive.yml      # Create project config
     """
     show_active_config()
@@ -272,19 +279,20 @@ def bootstrap(
 ):
     """Create a new config file with documented options.
 
-    Without FILE argument, shows common config paths where
-    configuration can be created.
+    Without FILE argument, prints the bootstrap config to stdout
+    (pipe to a file or use with -o to save).
 
     With FILE argument, creates a new configuration file at that
     path with all options commented out and documented.
 
     Examples:
-        hive config bootstrap                  # Show common paths
-        hive config bootstrap .hive.yml        # Create project config
-        hive config bootstrap .hive.local.yml  # Create local overrides
-        hive config bootstrap .hive.yml -f     # Overwrite existing
+        hive config bootstrap                           # Print to stdout
+        hive config bootstrap > .hive.yml               # Redirect to file
+        hive config bootstrap .hive.yml                 # Create project config
+        hive config bootstrap .hive.local.yml           # Create local overrides
+        hive config bootstrap .hive.yml -f              # Overwrite existing
     """
     if file is None:
-        show_common_paths()
+        print(_generate_bootstrap_content(), end="")
     else:
         create_bootstrap_config(str(file), force=force)
