@@ -42,15 +42,15 @@ layout {
                         command "fish"
                         args "-c" "env HIVE_PANE_ID=5 hive run --restart"
                     }
-                    pane name="c6: Fedir" start_suspended=true {
+                    pane name="c6: Frank" start_suspended=true {
                         command "fish"
                         args "-c" "env HIVE_PANE_ID=6 hive run --restart"
                     }
-                    pane name="c7: Grace" start_suspended=true {
+                    pane name="c7: Grygoriy" start_suspended=true {
                         command "fish"
                         args "-c" "env HIVE_PANE_ID=7 hive run --restart"
                     }
-                    pane name="c8: Halyna" start_suspended=true {
+                    pane name="c8: Henry" start_suspended=true {
                         command "fish"
                         args "-c" "env HIVE_PANE_ID=8 hive run --restart"
                     }
@@ -68,7 +68,7 @@ layout {
         pane split_direction="vertical" {
             // Left: Agents 9-12 stacked
             pane stacked=true {
-                pane name="c9: Ivan" expanded=true start_suspended=true {
+                pane name="c9: Ihor" expanded=true start_suspended=true {
                     command "fish"
                     args "-c" "env HIVE_PANE_ID=9 hive run --restart"
                 }
@@ -91,11 +91,11 @@ layout {
                     command "fish"
                     args "-c" "env HIVE_PANE_ID=13 hive run --restart"
                 }
-                pane name="c14: Nadia" start_suspended=true {
+                pane name="c14: Noah" start_suspended=true {
                     command "fish"
                     args "-c" "env HIVE_PANE_ID=14 hive run --restart"
                 }
-                pane name="c15: Oliver" start_suspended=true {
+                pane name="c15: Orest" start_suspended=true {
                     command "fish"
                     args "-c" "env HIVE_PANE_ID=15 hive run --restart"
                 }
