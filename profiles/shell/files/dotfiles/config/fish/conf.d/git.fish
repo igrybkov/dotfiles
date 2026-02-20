@@ -10,6 +10,25 @@ if type -q lazygit
     abbr --add -g lgstash "lazygit stash"
 end
 
+# Lookup table for position-aware git alias expansion
+set -g _git_abbr_expansions
+
+# Only expand git aliases in first-arg position so that e.g.
+# 'git remove' → 'git remote' but 'git worktree remove' stays unchanged
+function _git_abbr_positional
+    set -l tokens (commandline -op)
+    set -l token $tokens[-1]
+    if test (count $tokens) -le 2
+        for entry in $_git_abbr_expansions
+            if string match -q -- "$token=*" $entry
+                string replace -- "$token=" '' $entry
+                return
+            end
+        end
+    end
+    echo $token
+end
+
 # Parse git aliases and create fish abbreviations using native string commands
 for line in (git config --get-regexp '^alias\.')
     # Extract alias name: "alias.foo bar baz" -> "foo"
@@ -27,8 +46,9 @@ for line in (git config --get-regexp '^alias\.')
         # if it's a complex alias that's a shell command, we're not going to expand it
         set alias_value $alias_name
     else
-        # expand the alias value to the full command for git cli
-        abbr --add -g --command git "$alias_name" "$alias_value"
+        # Register in lookup table and create position-aware abbreviation
+        set -a _git_abbr_expansions "$alias_name=$alias_value"
+        abbr --add -g --command git --function _git_abbr_positional -- "$alias_name"
     end
 
     # Check if there is a command or an abbreviation with the same name as the alias
