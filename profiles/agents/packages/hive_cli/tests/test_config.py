@@ -179,7 +179,6 @@ class TestLoadConfig:
         """Returns default config when no files exist."""
         monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
         monkeypatch.delenv("HIVE_AGENTS_ORDER", raising=False)
-        monkeypatch.delenv("GIT_WORKTREES_HOME", raising=False)
 
         # Clear cache and mock find_config_files to return empty
         reload_config.cache_clear() if hasattr(reload_config, "cache_clear") else None
@@ -191,7 +190,7 @@ class TestLoadConfig:
         assert config.agents.order == KNOWN_AGENTS
         assert config.resume.enabled is False
         assert config.worktrees.enabled is True
-        assert config.worktrees.parent_dir == ".worktrees"
+        assert config.worktrees.parent_dir == "~/.worktrees/{repo}/{branch}"
         assert config.zellij.layout is None  # No layout by default
 
     def test_config_from_file(self, tmp_path, monkeypatch):
@@ -257,25 +256,12 @@ resume:
         """Environment variables used as fallback."""
         monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
         monkeypatch.setenv("HIVE_AGENTS_ORDER", "codex,claude")
-        monkeypatch.setenv("HIVE_WORKTREES_USE_HOME", "true")
 
         load_config.cache_clear()
         with patch("hive_cli.config.loader.find_config_files", return_value=[]):
             config = load_config()
 
         assert config.agents.order == ["codex", "claude"]
-        assert config.worktrees.use_home is True
-
-    def test_legacy_git_worktrees_home_env(self, tmp_path, monkeypatch):
-        """Legacy GIT_WORKTREES_HOME environment variable still works."""
-        monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
-        monkeypatch.setenv("GIT_WORKTREES_HOME", "true")
-
-        load_config.cache_clear()
-        with patch("hive_cli.config.loader.find_config_files", return_value=[]):
-            config = load_config()
-
-        assert config.worktrees.use_home is True
 
     def test_env_overrides_config(self, tmp_path, monkeypatch):
         """Environment variables take precedence over config files."""
@@ -296,19 +282,6 @@ agents:
 
         # Environment variable takes precedence over config file
         assert config.agents.order == ["codex", "claude"]
-
-    def test_new_env_overrides_legacy_worktrees(self, tmp_path, monkeypatch):
-        """New HIVE_* env vars take precedence over legacy env vars."""
-        monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
-        monkeypatch.setenv("GIT_WORKTREES_HOME", "true")
-        monkeypatch.setenv("HIVE_WORKTREES_USE_HOME", "false")
-
-        load_config.cache_clear()
-        with patch("hive_cli.config.loader.find_config_files", return_value=[]):
-            config = load_config()
-
-        # New HIVE_* env var takes precedence over legacy
-        assert config.worktrees.use_home is False
 
     def test_hive_worktrees_enabled_env(self, tmp_path, monkeypatch):
         """HIVE_WORKTREES_ENABLED env var works."""

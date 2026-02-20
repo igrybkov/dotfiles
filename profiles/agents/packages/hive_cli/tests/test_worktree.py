@@ -8,6 +8,7 @@ from unittest.mock import patch
 from hive_cli.config import reload_config
 from hive_cli.git.worktree import (
     WorktreeInfo,
+    _path_to_name,
     get_worktree_path,
     get_worktrees_base,
     list_worktrees,
@@ -48,58 +49,46 @@ class TestSanitizeBranchName:
         assert sanitize_branch_name("v1.2.3-fix") == "v1.2.3-fix"
 
 
+class TestPathToName:
+    """Tests for _path_to_name function."""
+
+    def test_path_under_home(self):
+        """Test path relative to home uses double-dash separator."""
+        home = Path.home()
+        path = home / "Projects" / "dotfiles"
+        assert _path_to_name(path) == "Projects--dotfiles"
+
+    def test_path_not_under_home(self):
+        """Test path not under home uses full path with double dashes."""
+        path = Path("/opt/repos/myproject")
+        assert _path_to_name(path) == "opt--repos--myproject"
+
+    def test_nested_path(self):
+        """Test deeply nested path."""
+        home = Path.home()
+        path = home / "work" / "org" / "repo"
+        assert _path_to_name(path) == "work--org--repo"
+
+
 class TestGetWorktreesBase:
     """Tests for get_worktrees_base function."""
 
-    def test_default_local_mode(self, monkeypatch, tmp_path):
-        """Test default uses local .worktrees directory."""
-        # Set XDG to empty dir to avoid global config
+    def test_default_template_with_repo(self, monkeypatch, tmp_path):
+        """Test default ~/.worktrees/{repo}/{branch} returns repo dir as base."""
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
-        monkeypatch.delenv("GIT_WORKTREES_HOME", raising=False)
         reload_config()
 
-        with patch("hive_cli.git.worktree.get_main_repo", return_value=tmp_path):
+        repo = Path.home() / "Projects" / "myrepo"
+        with patch("hive_cli.git.worktree.get_main_repo", return_value=repo):
             base = get_worktrees_base()
-            assert base == tmp_path / ".worktrees"
+            assert base == Path.home() / ".worktrees" / "Projects--myrepo"
 
-    def test_home_mode_from_env(self, monkeypatch, tmp_path):
-        """Test GIT_WORKTREES_HOME=true uses home directory."""
-        # Set XDG to empty dir to avoid global config
-        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
-        monkeypatch.setenv("GIT_WORKTREES_HOME", "true")
-        reload_config()
-
-        with patch("hive_cli.git.worktree.get_main_repo", return_value=tmp_path):
-            base = get_worktrees_base()
-            assert base == Path.home() / ".git-worktrees"
-
-    def test_home_mode_from_config(self, monkeypatch, tmp_path):
-        """Test worktrees.use_home from config file."""
-        # Create config file
-        config_file = tmp_path / ".hive.yml"
-        config_file.write_text("worktrees:\n  use_home: true\n")
-
-        # Set XDG to empty dir to avoid global config
-        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
-        monkeypatch.delenv("GIT_WORKTREES_HOME", raising=False)
-
-        with patch(
-            "hive_cli.config.loader.find_config_files", return_value=[config_file]
-        ):
-            reload_config()
-            with patch("hive_cli.git.worktree.get_main_repo", return_value=tmp_path):
-                base = get_worktrees_base()
-                assert base == Path.home() / ".git-worktrees"
-
-    def test_custom_parent_dir(self, monkeypatch, tmp_path):
-        """Test custom worktrees.parent_dir from config."""
-        # Create config file
+    def test_custom_parent_dir_no_placeholders(self, monkeypatch, tmp_path):
+        """Test custom parent_dir without placeholders."""
         config_file = tmp_path / ".hive.yml"
         config_file.write_text("worktrees:\n  parent_dir: custom-wt\n")
 
-        # Set XDG to empty dir to avoid global config
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
-        monkeypatch.delenv("GIT_WORKTREES_HOME", raising=False)
 
         with patch(
             "hive_cli.config.loader.find_config_files", return_value=[config_file]
@@ -109,15 +98,51 @@ class TestGetWorktreesBase:
                 base = get_worktrees_base()
                 assert base == tmp_path / "custom-wt"
 
+    def test_parent_dir_with_repo_placeholder(self, monkeypatch, tmp_path):
+        """Test parent_dir with {repo} placeholder expands correctly."""
+        config_file = tmp_path / ".hive.yml"
+        config_file.write_text('worktrees:\n  parent_dir: "~/.worktrees/{repo}"\n')
+
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+
+        repo = Path.home() / "Projects" / "dotfiles"
+        with patch(
+            "hive_cli.config.loader.find_config_files", return_value=[config_file]
+        ):
+            reload_config()
+            with patch("hive_cli.git.worktree.get_main_repo", return_value=repo):
+                base = get_worktrees_base()
+                assert base == Path.home() / ".worktrees" / "Projects--dotfiles"
+
+    def test_parent_dir_with_branch_strips_to_base(self, monkeypatch, tmp_path):
+        """Test parent_dir with {branch} strips it for the base."""
+        config_file = tmp_path / ".hive.yml"
+        config_file.write_text('worktrees:\n  parent_dir: "~/.wt/{repo}/{branch}"\n')
+
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+
+        repo = Path.home() / "Projects" / "myrepo"
+        with patch(
+            "hive_cli.config.loader.find_config_files", return_value=[config_file]
+        ):
+            reload_config()
+            with patch("hive_cli.git.worktree.get_main_repo", return_value=repo):
+                base = get_worktrees_base()
+                assert base == Path.home() / ".wt" / "Projects--myrepo"
+
     def test_explicit_main_repo(self, monkeypatch, tmp_path):
         """Test passing explicit main_repo."""
-        # Set XDG to empty dir to avoid global config
-        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
-        monkeypatch.delenv("GIT_WORKTREES_HOME", raising=False)
-        reload_config()
+        config_file = tmp_path / ".hive.yml"
+        config_file.write_text('worktrees:\n  parent_dir: ".worktrees"\n')
 
-        base = get_worktrees_base(tmp_path)
-        assert base == tmp_path / ".worktrees"
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+
+        with patch(
+            "hive_cli.config.loader.find_config_files", return_value=[config_file]
+        ):
+            reload_config()
+            base = get_worktrees_base(tmp_path)
+            assert base == tmp_path / ".worktrees"
 
 
 class TestGetWorktreePath:
@@ -133,25 +158,94 @@ class TestGetWorktreePath:
         path = get_worktree_path("1", tmp_path)
         assert path == tmp_path
 
-    def test_branch_returns_worktree_path(self, monkeypatch, tmp_path):
-        """Test branch name returns worktree path."""
-        # Set XDG to empty dir to avoid global config
+    def test_template_with_repo_and_branch(self, monkeypatch, tmp_path):
+        """Test full template with {repo} and {branch} placeholders."""
+        config_file = tmp_path / ".hive.yml"
+        config_file.write_text(
+            'worktrees:\n  parent_dir: "~/.worktrees/{repo}/{branch}"\n'
+        )
+
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
-        monkeypatch.delenv("GIT_WORKTREES_HOME", raising=False)
-        reload_config()
 
-        path = get_worktree_path("feature-123", tmp_path)
-        assert path == tmp_path / ".worktrees" / "feature-123"
+        repo = Path.home() / "Projects" / "dotfiles"
+        with patch(
+            "hive_cli.config.loader.find_config_files", return_value=[config_file]
+        ):
+            reload_config()
+            path = get_worktree_path("feature-123", repo)
+            assert path == (
+                Path.home() / ".worktrees" / "Projects--dotfiles" / "feature-123"
+            )
 
-    def test_branch_with_slash(self, monkeypatch, tmp_path):
-        """Test branch with slashes is sanitized."""
-        # Set XDG to empty dir to avoid global config
+    def test_template_with_only_repo(self, monkeypatch, tmp_path):
+        """Test template with {repo} only appends branch as subdir."""
+        config_file = tmp_path / ".hive.yml"
+        config_file.write_text('worktrees:\n  parent_dir: "~/.worktrees/{repo}"\n')
+
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
-        monkeypatch.delenv("GIT_WORKTREES_HOME", raising=False)
-        reload_config()
 
-        path = get_worktree_path("user/feat/update", tmp_path)
-        assert path == tmp_path / ".worktrees" / "user--feat--update"
+        repo = Path.home() / "Projects" / "dotfiles"
+        with patch(
+            "hive_cli.config.loader.find_config_files", return_value=[config_file]
+        ):
+            reload_config()
+            path = get_worktree_path("feature-123", repo)
+            assert path == (
+                Path.home() / ".worktrees" / "Projects--dotfiles" / "feature-123"
+            )
+
+    def test_template_no_placeholders_uses_flat(self, monkeypatch, tmp_path):
+        """Test no placeholders uses flat repo--branch format."""
+        config_file = tmp_path / ".hive.yml"
+        config_file.write_text('worktrees:\n  parent_dir: ".worktrees"\n')
+
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+
+        with patch(
+            "hive_cli.config.loader.find_config_files", return_value=[config_file]
+        ):
+            reload_config()
+            repo_name = _path_to_name(tmp_path)
+            path = get_worktree_path("feature-123", tmp_path)
+            assert path == tmp_path / ".worktrees" / f"{repo_name}--feature-123"
+
+    def test_flat_template_with_both_placeholders(self, monkeypatch, tmp_path):
+        """Test flat template {repo}--{branch} produces flat directory."""
+        config_file = tmp_path / ".hive.yml"
+        config_file.write_text(
+            'worktrees:\n  parent_dir: "~/.worktrees/{repo}--{branch}"\n'
+        )
+
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+
+        repo = Path.home() / "Projects" / "dotfiles"
+        with patch(
+            "hive_cli.config.loader.find_config_files", return_value=[config_file]
+        ):
+            reload_config()
+            path = get_worktree_path("feature-123", repo)
+            assert path == (
+                Path.home() / ".worktrees" / "Projects--dotfiles--feature-123"
+            )
+
+    def test_branch_with_slash_sanitized(self, monkeypatch, tmp_path):
+        """Test branch with slashes is sanitized in template."""
+        config_file = tmp_path / ".hive.yml"
+        config_file.write_text(
+            'worktrees:\n  parent_dir: "~/.worktrees/{repo}/{branch}"\n'
+        )
+
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+
+        repo = Path.home() / "Projects" / "dotfiles"
+        with patch(
+            "hive_cli.config.loader.find_config_files", return_value=[config_file]
+        ):
+            reload_config()
+            path = get_worktree_path("user/feat/update", repo)
+            assert path == (
+                Path.home() / ".worktrees" / "Projects--dotfiles" / "user--feat--update"
+            )
 
 
 class TestWorktreeExists:
@@ -167,23 +261,60 @@ class TestWorktreeExists:
 
     def test_nonexistent_branch(self, monkeypatch, tmp_path):
         """Test non-existent worktree returns False."""
-        # Set XDG to empty dir to avoid global config
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
-        monkeypatch.delenv("GIT_WORKTREES_HOME", raising=False)
         reload_config()
 
         assert worktree_exists("nonexistent", tmp_path) is False
 
-    def test_existing_worktree(self, monkeypatch, tmp_path):
-        """Test existing worktree returns True."""
-        # Set XDG to empty dir to avoid global config
-        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
-        monkeypatch.delenv("GIT_WORKTREES_HOME", raising=False)
-        reload_config()
+    def test_existing_worktree_from_git(self, monkeypatch, tmp_path):
+        """Test existing worktree found via git worktree list."""
+        wt_path = tmp_path / "old-path" / "feature-123"
+        mock_worktrees = [
+            WorktreeInfo(branch="main", path=tmp_path, is_main=True),
+            WorktreeInfo(branch="feature-123", path=wt_path, is_main=False),
+        ]
+        with patch("hive_cli.git.worktree.list_worktrees", return_value=mock_worktrees):
+            assert worktree_exists("feature-123", tmp_path) is True
 
-        # Create the worktree directory
-        (tmp_path / ".worktrees" / "feature-123").mkdir(parents=True)
-        assert worktree_exists("feature-123", tmp_path) is True
+
+class TestGetWorktreePathExisting:
+    """Tests for get_worktree_path with existing worktrees from git."""
+
+    def test_returns_git_path_for_existing_worktree(self, monkeypatch, tmp_path):
+        """Test that existing worktrees use their actual git path, not computed."""
+        actual_path = tmp_path / "some-other-location" / "feature-123"
+        mock_worktrees = [
+            WorktreeInfo(branch="main", path=tmp_path, is_main=True),
+            WorktreeInfo(branch="feature-123", path=actual_path, is_main=False),
+        ]
+        with patch("hive_cli.git.worktree.list_worktrees", return_value=mock_worktrees):
+            path = get_worktree_path("feature-123", tmp_path)
+            assert path == actual_path
+
+    def test_falls_back_to_computed_for_new_branch(self, monkeypatch, tmp_path):
+        """Test that new branches use the computed template path."""
+        config_file = tmp_path / ".hive.yml"
+        config_file.write_text(
+            'worktrees:\n  parent_dir: "~/.worktrees/{repo}/{branch}"\n'
+        )
+
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+
+        repo = Path.home() / "Projects" / "dotfiles"
+        mock_worktrees = [
+            WorktreeInfo(branch="main", path=repo, is_main=True),
+        ]
+        with patch(
+            "hive_cli.config.loader.find_config_files", return_value=[config_file]
+        ):
+            reload_config()
+            with patch(
+                "hive_cli.git.worktree.list_worktrees", return_value=mock_worktrees
+            ):
+                path = get_worktree_path("new-branch", repo)
+                assert path == (
+                    Path.home() / ".worktrees" / "Projects--dotfiles" / "new-branch"
+                )
 
 
 class TestListWorktrees:

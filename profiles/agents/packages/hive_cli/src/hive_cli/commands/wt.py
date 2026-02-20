@@ -1361,8 +1361,7 @@ def base():
 
     Examples:
         hive wt base
-        # /path/to/repo/.worktrees
-        # or ~/.git-worktrees if GIT_WORKTREES_HOME=true
+        # ~/.worktrees/Projects--myrepo (with default {repo}/{branch} template)
     """
     _check_worktrees_enabled()
     base_path = get_worktrees_base()

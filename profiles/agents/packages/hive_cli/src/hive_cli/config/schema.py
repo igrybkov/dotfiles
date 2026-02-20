@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from pydantic import AliasChoices, BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import SettingsConfigDict
 
 from .base import HiveBaseSettings
@@ -85,11 +85,20 @@ class AutoSelectConfig(BaseModel):
 class WorktreesConfig(HiveBaseSettings):
     """Configuration for git worktrees.
 
+    The parent_dir supports ~ expansion and placeholders:
+      {repo}   - expands to a name derived from the repo's path relative to
+                 home (e.g., Projects--dotfiles for ~/Projects/dotfiles).
+      {branch} - expands to the sanitized branch name.
+
+    When both {repo} and {branch} are in parent_dir the entire string is
+    used as the full worktree path template.
+    When only {repo} is present the branch is appended as a subdirectory.
+    When neither is present the flat format {repo}--{branch} is appended.
+
     Attributes:
         enabled: Whether worktrees feature is enabled.
         auto_select: Auto-select configuration for worktree picker.
-        parent_dir: Directory for worktrees.
-        use_home: Use ~/.git-worktrees/{repo}-{branch} instead.
+        parent_dir: Directory for worktrees. Supports ~, {repo}, {branch}.
         post_create: Commands to run after creating a worktree.
         copy_files: Files to copy from main repo to worktree.
         symlink_files: Files to symlink from main repo to worktree.
@@ -101,18 +110,7 @@ class WorktreesConfig(HiveBaseSettings):
 
     enabled: bool = True
     auto_select: Annotated[AutoSelectConfig, Field(default_factory=AutoSelectConfig)]
-    parent_dir: str = ".worktrees"
-    use_home: Annotated[
-        bool,
-        Field(
-            False,
-            validation_alias=AliasChoices(
-                "use_home",
-                "HIVE_WORKTREES_USE_HOME",
-                "GIT_WORKTREES_HOME",
-            ),
-        ),
-    ]
+    parent_dir: str = "~/.worktrees/{repo}/{branch}"
     post_create: Annotated[list[PostCreateCommand], Field(default_factory=list)]
     copy_files: Annotated[list[str], Field(default_factory=list)]
     symlink_files: Annotated[list[str], Field(default_factory=list)]
@@ -125,14 +123,6 @@ class WorktreesConfig(HiveBaseSettings):
         """Normalize post_create entries: strings become {"command": str}."""
         if isinstance(v, list):
             return [{"command": item} if isinstance(item, str) else item for item in v]
-        return v
-
-    @field_validator("use_home", mode="before")
-    @classmethod
-    def parse_use_home(cls, v: Any) -> Any:
-        """Parse string 'true'/'false' for legacy GIT_WORKTREES_HOME compatibility."""
-        if isinstance(v, str):
-            return v.lower() == "true"
         return v
 
 

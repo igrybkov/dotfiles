@@ -70,14 +70,29 @@ def _expand_path(path_str: str, main_repo: Path) -> Path:
     return path
 
 
+def _path_to_name(path: Path) -> str:
+    """Convert a path to a double-dash-separated name relative to home.
+
+    Args:
+        path: The path to convert.
+
+    Returns:
+        A double-dash-separated name (e.g., "Projects--dotfiles").
+    """
+    home = Path.home()
+    try:
+        relative = path.relative_to(home)
+        return str(relative).replace("/", "--")
+    except ValueError:
+        # Path is not under home - use full path
+        return str(path).lstrip("/").replace("/", "--")
+
+
 def get_worktrees_base(main_repo: Path | None = None) -> Path:
     """Get the base directory for worktrees.
 
-    Uses configuration from .hive.yml/.hive.local.yml:
-    - worktrees.use_home: If true, uses ~/.git-worktrees/
-    - worktrees.parent_dir: Custom directory (relative to git root, or absolute/~ path)
-
-    Falls back to GIT_WORKTREES_HOME env var for backward compatibility.
+    Expands ~ and {repo} in worktrees.parent_dir. When {branch} is also
+    present, the base is everything before the {branch} portion.
 
     Args:
         main_repo: Path to main repository. If None, auto-detected.
@@ -89,35 +104,80 @@ def get_worktrees_base(main_repo: Path | None = None) -> Path:
         main_repo = get_main_repo()
 
     config = load_config()
+    template = config.worktrees.parent_dir
+    repo_name = _path_to_name(main_repo)
 
-    if config.worktrees.use_home:
-        return Path.home() / ".git-worktrees"
+    if "{branch}" in template:
+        # Strip from {branch} onwards to get the base
+        template = template.split("{branch}")[0].rstrip("/")
 
-    return _expand_path(config.worktrees.parent_dir, main_repo)
+    if "{repo}" in template:
+        template = template.replace("{repo}", repo_name)
+    elif "{branch}" not in config.worktrees.parent_dir:
+        # No placeholders at all - worktrees for different repos would
+        # collide, so the base already groups by repo name implicitly
+        pass
+
+    return _expand_path(template, main_repo)
 
 
-def _path_to_name(path: Path) -> str:
-    """Convert a path to a dash-separated name relative to home.
+def _find_existing_worktree(branch: str, main_repo: Path) -> Path | None:
+    """Look up the actual path of an existing worktree from git.
 
     Args:
-        path: The path to convert.
+        branch: Branch name to look up.
+        main_repo: Path to main repository.
 
     Returns:
-        A dash-separated name (e.g., "Projects-dotfiles").
+        Actual path if worktree exists in git, None otherwise.
     """
-    home = Path.home()
-    try:
-        relative = path.relative_to(home)
-        return str(relative).replace("/", "-")
-    except ValueError:
-        # Path is not under home - use full path
-        return str(path).lstrip("/").replace("/", "-")
+    for wt in list_worktrees(main_repo):
+        if wt.branch == branch:
+            return wt.path
+    return None
+
+
+def _compute_worktree_path(branch: str, main_repo: Path) -> Path:
+    """Compute the expected worktree path from the parent_dir template.
+
+    This is where a *new* worktree would be created. For existing worktrees,
+    use _find_existing_worktree() instead.
+
+    Args:
+        branch: Branch name.
+        main_repo: Path to main repository.
+
+    Returns:
+        Computed path based on the parent_dir template.
+    """
+    config = load_config()
+    template = config.worktrees.parent_dir
+    safe_branch = sanitize_branch_name(branch)
+    repo_name = _path_to_name(main_repo)
+
+    if "{branch}" in template:
+        # Full template: expand all placeholders and return directly
+        expanded = template.replace("{repo}", repo_name).replace(
+            "{branch}", safe_branch
+        )
+        return _expand_path(expanded, main_repo)
+
+    base = get_worktrees_base(main_repo)
+
+    if "{repo}" in template:
+        # Repo in path, branch as subdirectory
+        return base / safe_branch
+
+    # No placeholders: flat format with repo prefix
+    return base / f"{repo_name}--{safe_branch}"
 
 
 def get_worktree_path(branch: str, main_repo: Path | None = None) -> Path:
     """Get the path for a worktree given a branch name.
 
-    Uses configuration from .hive.yml/.hive.local.yml for worktree paths.
+    First checks git's actual worktree list for existing worktrees (which may
+    live at a different path than the current template would produce). Falls
+    back to computing the path from the parent_dir template for new worktrees.
 
     Args:
         branch: Branch name (or "main"/"1" for main repo).
@@ -138,17 +198,13 @@ def get_worktree_path(branch: str, main_repo: Path | None = None) -> Path:
     if branch in ("1", "main"):
         return main_repo
 
-    config = load_config()
-    base = get_worktrees_base(main_repo)
-    safe_suffix = sanitize_branch_name(branch)
+    # Check git's actual worktree list first
+    existing = _find_existing_worktree(branch, main_repo)
+    if existing is not None:
+        return existing
 
-    if config.worktrees.use_home:
-        # Home mode: ~/.git-worktrees/{repo-name}-{safe_suffix}
-        repo_name = _path_to_name(main_repo)
-        return base / f"{repo_name}-{safe_suffix}"
-
-    # Local mode: {parent_dir}/{safe_suffix}
-    return base / safe_suffix
+    # No existing worktree - compute where a new one would go
+    return _compute_worktree_path(branch, main_repo)
 
 
 def list_worktrees(main_repo: Path | None = None) -> list[WorktreeInfo]:
@@ -208,6 +264,8 @@ def list_worktrees(main_repo: Path | None = None) -> list[WorktreeInfo]:
 def worktree_exists(branch: str, main_repo: Path | None = None) -> bool:
     """Check if a worktree exists for a branch.
 
+    Checks git's actual worktree list, not the computed path.
+
     Args:
         branch: Branch name to check.
         main_repo: Path to main repository. If None, auto-detected.
@@ -222,8 +280,7 @@ def worktree_exists(branch: str, main_repo: Path | None = None) -> bool:
     if main_repo is None:
         main_repo = get_main_repo()
 
-    path = get_worktree_path(branch, main_repo)
-    return path.is_dir()
+    return _find_existing_worktree(branch, main_repo) is not None
 
 
 def is_worktree_dirty(worktree_path: Path) -> bool:
@@ -343,7 +400,8 @@ def create_worktree(branch: str, main_repo: Path | None = None) -> Path:
             f"Branch '{branch}' is already checked out in the main repository"
         )
 
-    worktree_path = get_worktree_path(branch, main_repo)
+    # Use computed path (not git lookup) since we're creating a new worktree
+    worktree_path = _compute_worktree_path(branch, main_repo)
 
     if worktree_path.exists():
         raise FileExistsError(f"Worktree already exists: {worktree_path}")

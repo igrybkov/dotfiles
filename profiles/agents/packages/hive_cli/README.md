@@ -185,11 +185,10 @@ worktrees:
   # Set to false to disable worktrees feature entirely
   enabled: true
 
-  # Directory for worktrees (relative to git root, or absolute/~ path)
-  parent_dir: ".worktrees"
-
-  # Use ~/.git-worktrees/{repo}-{branch} instead of parent_dir
-  use_home: false
+  # Directory template for worktrees. Supports ~ expansion and placeholders:
+  #   {repo}   - repo path relative to home (e.g., Projects--dotfiles)
+  #   {branch} - sanitized branch name
+  parent_dir: "~/.worktrees/{repo}/{branch}"
 
   # Default --resume flag for worktree sessions
   resume: false
@@ -273,13 +272,8 @@ github:
 
 #### `worktrees.parent_dir`
 - **Type:** `string`
-- **Default:** `".worktrees"`
-- **Description:** Directory for worktrees. Can be relative (to git root), absolute, or use `~`.
-
-#### `worktrees.use_home`
-- **Type:** `boolean`
-- **Default:** `false`
-- **Description:** Use `~/.git-worktrees/{repo}-{branch}` instead of `parent_dir`.
+- **Default:** `"~/.worktrees/{repo}/{branch}"`
+- **Description:** Directory template for worktrees. Supports `~` expansion and placeholders: `{repo}` (repo path name, e.g., `Projects--dotfiles`), `{branch}` (sanitized branch name). When `{repo}` is absent, a flat `{repo}--{branch}` directory is used automatically.
 
 #### `worktrees.resume`
 - **Type:** `boolean`
@@ -338,8 +332,7 @@ Environment variables use the `HIVE_` prefix and take precedence over config fil
 | `HIVE_AGENTS_ORDER` | CSV | Agent priority order, e.g., `claude,gemini` |
 | `HIVE_RESUME_ENABLED` | boolean | Enable resume by default |
 | `HIVE_WORKTREES_ENABLED` | boolean | Enable worktrees feature |
-| `HIVE_WORKTREES_PARENT_DIR` | string | Directory for worktrees |
-| `HIVE_WORKTREES_USE_HOME` | boolean | Use `~/.git-worktrees/` instead |
+| `HIVE_WORKTREES_PARENT_DIR` | string | Directory template for worktrees |
 | `HIVE_WORKTREES_RESUME` | boolean | Default resume for worktree sessions |
 | `HIVE_ZELLIJ_LAYOUT` | string | Zellij layout name |
 | `HIVE_ZELLIJ_SESSION_NAME` | string | Session name template |
@@ -349,7 +342,6 @@ Environment variables use the `HIVE_` prefix and take precedence over config fil
 **Legacy variables** (still supported, lower precedence than `HIVE_*`):
 
 - `AGENT`: Override agent selection for current command
-- `GIT_WORKTREES_HOME`: Set to `true` for home-based worktrees (equivalent to `worktrees.use_home: true`)
 
 ### Example Configurations
 

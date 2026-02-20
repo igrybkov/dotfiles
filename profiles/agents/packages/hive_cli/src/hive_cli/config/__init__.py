@@ -13,16 +13,12 @@ Environment Variables:
     HIVE_AGENTS_ORDER         - Comma-separated list of agents, e.g., 'claude,gemini'
     HIVE_RESUME_ENABLED       - Enable resume by default (true/false)
     HIVE_WORKTREES_ENABLED    - Enable worktrees feature (true/false)
-    HIVE_WORKTREES_PARENT_DIR - Directory for worktrees
-    HIVE_WORKTREES_USE_HOME   - Use ~/.git-worktrees/ (true/false)
+    HIVE_WORKTREES_PARENT_DIR - Directory for worktrees (supports {repo}, {branch})
     HIVE_WORKTREES_RESUME     - Resume default for worktrees (true/false)
     HIVE_ZELLIJ_LAYOUT        - Zellij layout name
     HIVE_ZELLIJ_SESSION_NAME  - Session name template
     HIVE_GITHUB_FETCH_ISSUES  - Fetch GitHub issues (true/false)
     HIVE_GITHUB_ISSUE_LIMIT   - Max issues to fetch (integer)
-
-Legacy environment variables (still supported):
-    GIT_WORKTREES_HOME  - Set to "true" for home worktrees mode
 
 Usage:
     from hive_cli.config import get_settings, get_runtime_settings
