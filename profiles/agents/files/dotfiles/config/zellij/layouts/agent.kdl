@@ -195,4 +195,10 @@ layout {
             args "-c" "hive wt exec -c 'nvim' --restart -w=-"
         }
     }
+
+    swap_floating_layout {
+        floating_panes {
+            pane x="17%" y="17%" width="65%" height="65%"
+        }
+    }
 }
