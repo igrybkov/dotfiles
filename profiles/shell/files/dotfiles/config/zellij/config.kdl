@@ -163,10 +163,6 @@ keybinds clear-defaults=true {
         bind "Alt 7" { GoToTab 7; }
         bind "Alt 8" { GoToTab 8; }
         bind "Alt 9" { GoToTab 9; }
-        bind "Alt left" { MoveFocusOrTab "left"; }
-        bind "Alt down" { MoveFocus "down"; }
-        bind "Alt up" { MoveFocus "up"; }
-        bind "Alt right" { MoveFocusOrTab "right"; }
         bind "Alt +" { Resize "Increase"; }
         bind "Alt -" { Resize "Decrease"; }
         bind "Alt =" { Resize "Increase"; }
@@ -208,7 +204,6 @@ keybinds clear-defaults=true {
                 // Navigation
                 "Alt h/j/k/l" "Move focus left/down/up/right"
                 "Alt 1-9" "Go to tab 1-9"
-                "Alt left/right" "Move focus or tab left/right"
                 // Panes
                 "Alt n" "New pane"
                 "Alt f" "Toggle floating panes"
