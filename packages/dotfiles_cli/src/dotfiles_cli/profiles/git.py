@@ -123,10 +123,36 @@ def get_profile_repos() -> list[Path]:
     return repos
 
 
+def _has_remote(repo: Path) -> bool:
+    """Check if a git repository has at least one remote with a URL configured."""
+    result = subprocess.run(
+        ["git", "remote"],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0 or not result.stdout.strip():
+        return False
+
+    # Verify at least one remote has a URL (a remote can exist without a URL)
+    for remote in result.stdout.strip().splitlines():
+        url_result = subprocess.run(
+            ["git", "remote", "get-url", remote],
+            cwd=repo,
+            capture_output=True,
+            text=True,
+        )
+        if url_result.returncode == 0 and url_result.stdout.strip():
+            return True
+
+    return False
+
+
 def sync_profile_repos(action: str) -> bool:
     """Sync all profile repos that are git repositories (pull or push).
 
     Non-git directories in profiles/ are silently skipped.
+    Repos without a configured remote are skipped with a notice.
 
     Args:
         action: Either "pull" or "push"
@@ -142,6 +168,11 @@ def sync_profile_repos(action: str) -> bool:
     success = True
     for repo in repos:
         repo_rel_path = repo.relative_to(profiles_dir)
+
+        if not _has_remote(repo):
+            click.echo(f"Skipping profiles/{repo_rel_path} (no remote configured)")
+            continue
+
         if action == "pull":
             click.echo(f"Pulling profiles/{repo_rel_path}...")
             result = subprocess.call(["git", "pull"], cwd=repo)
