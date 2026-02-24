@@ -76,16 +76,16 @@
       ansible.builtin.stat:
         path: "{{ playbook_dir }}/.cache/skip-homebrew"
       register: skip_homebrew_marker
-  roles:
     - name: Install Homebrew
-      role: geerlingguy.mac.homebrew
+      tags: [brew]
+      ansible.builtin.include_role:
+        name: geerlingguy.mac.homebrew
       vars:
         homebrew_taps: []
-      tags: [brew]
       when:
         - ansible_facts['distribution'] | default('') == 'MacOSX'
         - not ((homebrew_binary_check.stat.exists | default(false)) and (skip_homebrew_marker.stat.exists | default(false)))
-
+  roles:
     - name: Install Homebrew packages (aggregated from all profiles)
       role: brew_packages
       tags: [brew]
@@ -156,7 +156,7 @@
 
 # Per-profile: custom tasks that need profile-specific context
 - name: Per-profile custom tasks
-  hosts: all
+  hosts: profiles_with_tasks
   serial: 1
   strategy: linear
   gather_facts: false

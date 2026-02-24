@@ -47,6 +47,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import yaml
+
 # Add the shared package to Python path for Ansible plugin usage
 # (Ansible plugins can't use pip dependencies directly)
 _packages_dir = Path(__file__).parent.parent.parent / "packages"
@@ -223,3 +225,18 @@ class InventoryModule(BaseInventoryPlugin):
             # Set user-defined variables from config.yml
             for key, value in profile.config.items():
                 self.inventory.set_variable(profile.host_name, key, value)
+
+        # Only profiles with non-empty tasks/main.yml run in per-profile play
+        self.inventory.add_group("profiles_with_tasks")
+        for profile in profiles:
+            tasks_file = profile.path / "tasks" / "main.yml"
+            if tasks_file.exists():
+                try:
+                    with open(tasks_file) as f:
+                        content = yaml.safe_load(f)
+                    if isinstance(content, list) and len(content) > 0:
+                        self.inventory.add_host(
+                            profile.host_name, group="profiles_with_tasks"
+                        )
+                except yaml.YAMLError:
+                    pass
