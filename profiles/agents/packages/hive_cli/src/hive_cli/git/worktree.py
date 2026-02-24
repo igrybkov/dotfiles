@@ -49,7 +49,7 @@ def sanitize_branch_name(branch: str) -> str:
     return sanitized.strip("-")
 
 
-def _expand_path(path_str: str, main_repo: Path) -> Path:
+def expand_path(path_str: str, main_repo: Path) -> Path:
     """Expand a path string, handling ~, env vars, and relative paths.
 
     Args:
@@ -65,7 +65,7 @@ def _expand_path(path_str: str, main_repo: Path) -> Path:
 
     # If relative, resolve against main_repo
     if not path.is_absolute():
-        path = main_repo / path
+        path = (main_repo / path).resolve()
 
     return path
 
@@ -118,7 +118,7 @@ def get_worktrees_base(main_repo: Path | None = None) -> Path:
         # collide, so the base already groups by repo name implicitly
         pass
 
-    return _expand_path(template, main_repo)
+    return expand_path(template, main_repo)
 
 
 def _find_existing_worktree(branch: str, main_repo: Path) -> Path | None:
@@ -160,7 +160,7 @@ def _compute_worktree_path(branch: str, main_repo: Path) -> Path:
         expanded = template.replace("{repo}", repo_name).replace(
             "{branch}", safe_branch
         )
-        return _expand_path(expanded, main_repo)
+        return expand_path(expanded, main_repo)
 
     base = get_worktrees_base(main_repo)
 

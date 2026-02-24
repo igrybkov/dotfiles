@@ -123,6 +123,40 @@ def get_agent_order() -> list[str]:
     return settings.agents.order
 
 
+def get_extra_dirs_args(agent_name: str) -> list[str]:
+    """Build CLI arguments for extra directories.
+
+    Reads extra_dirs from settings, resolves each path relative to the main
+    repo root (so relative paths work identically from worktrees), then
+    pairs each resolved path with the agent's extra_dirs_flag.
+
+    Args:
+        agent_name: Name of the agent (to look up extra_dirs_flag).
+
+    Returns:
+        List like [flag, path1, flag, path2, ...], or [] if no dirs or
+        the agent has no extra_dirs_flag configured.
+    """
+    from ..git import expand_path, get_main_repo
+
+    settings = get_settings()
+    dirs = settings.extra_dirs
+    if not dirs:
+        return []
+
+    agent_cfg = settings.agents.configs.get(agent_name, AgentConfig())
+    flag = agent_cfg.extra_dirs_flag
+    if not flag:
+        return []
+
+    main_repo = get_main_repo()
+    result: list[str] = []
+    for d in dirs:
+        resolved = expand_path(d, main_repo)
+        result.extend([flag, str(resolved)])
+    return result
+
+
 __all__ = [
     # Base
     "HiveBaseSettings",
@@ -165,4 +199,5 @@ __all__ = [
     # Helpers
     "get_agent_config",
     "get_agent_order",
+    "get_extra_dirs_args",
 ]

@@ -20,10 +20,13 @@ class AgentConfig(BaseModel):
     Attributes:
         resume_args: Arguments to add for resume functionality.
         skip_permissions_args: Arguments to add for skip-permissions mode.
+        extra_dirs_flag: CLI flag the agent uses for additional directories
+            (e.g., "--add-dir" for Claude, "--directory" for Cursor).
     """
 
     resume_args: Annotated[list[str], Field(default_factory=list)]
     skip_permissions_args: Annotated[list[str], Field(default_factory=list)]
+    extra_dirs_flag: str | None = None
 
 
 class AgentsConfig(HiveBaseSettings):
@@ -166,6 +169,8 @@ class HiveConfig(BaseModel):
         worktrees: Git worktree configuration.
         zellij: Zellij configuration.
         github: GitHub integration configuration.
+        extra_dirs: Additional directories to pass to the agent.
+            Relative paths are resolved against the main repo root.
     """
 
     agents: Annotated[AgentsConfig, Field(default_factory=AgentsConfig)]
@@ -173,3 +178,4 @@ class HiveConfig(BaseModel):
     worktrees: Annotated[WorktreesConfig, Field(default_factory=WorktreesConfig)]
     zellij: Annotated[ZellijConfig, Field(default_factory=ZellijConfig)]
     github: Annotated[GitHubConfig, Field(default_factory=GitHubConfig)]
+    extra_dirs: Annotated[list[str], Field(default_factory=list)]
