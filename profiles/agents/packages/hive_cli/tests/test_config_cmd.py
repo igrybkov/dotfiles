@@ -12,6 +12,7 @@ from hive_cli.commands.config_cmd import (
     _comment_out_yaml,
     _config_to_yaml,
     _create_bootstrap_header,
+    _generate_current_bootstrap_content,
     _get_default_yaml_content,
 )
 from hive_cli.config import load_config
@@ -191,6 +192,51 @@ class TestBootstrapCommand:
         assert result.exit_code == 0
         assert "Create a new config file" in result.output
 
+    def test_bootstrap_current_to_stdout(self, cli_runner: CycloptsTestRunner):
+        """Test that `hive config bootstrap --current` prints current config."""
+        result = cli_runner.invoke(app, ["config", "bootstrap", "--current"])
+
+        assert result.exit_code == 0
+        assert "---" in result.output
+        assert "Hive CLI Configuration" in result.output
+        assert "current effective configuration" in result.output
+        assert "# agents:" in result.output
+        assert "# worktrees:" in result.output
+
+    def test_bootstrap_current_short_flag(self, cli_runner: CycloptsTestRunner):
+        """Test that `hive config bootstrap -c` works as short form."""
+        result = cli_runner.invoke(app, ["config", "bootstrap", "-c"])
+
+        assert result.exit_code == 0
+        assert "current effective configuration" in result.output
+
+    def test_bootstrap_current_creates_file(
+        self, cli_runner: CycloptsTestRunner, tmp_path: Path
+    ):
+        """Test that `hive config bootstrap --current <file>` creates a file."""
+        config_path = tmp_path / "current.yml"
+
+        result = cli_runner.invoke(
+            app, ["config", "bootstrap", "--current", str(config_path)]
+        )
+
+        assert result.exit_code == 0
+        assert config_path.exists()
+        assert "Created config file" in result.output
+
+        content = config_path.read_text()
+        assert "current effective configuration" in content
+        assert "# agents:" in content
+
+    def test_bootstrap_current_header_differs_from_default(self):
+        """Test that --current header says 'current' not 'defaults'."""
+        default_header = _create_bootstrap_header()
+        current_header = _create_bootstrap_header(current=True)
+
+        assert "Values shown are defaults" in default_header
+        assert "Values shown are defaults" not in current_header
+        assert "current effective configuration" in current_header
+
 
 class TestHelperFunctions:
     """Tests for helper functions in config_cmd."""
@@ -243,3 +289,13 @@ class TestHelperFunctions:
         assert "Hive CLI Configuration" in header
         assert "Uncomment and modify" in header
         assert "Configuration precedence" in header
+
+    def test_generate_current_bootstrap_content_structure(self):
+        """Test that _generate_current_bootstrap_content has valid structure."""
+        content = _generate_current_bootstrap_content()
+
+        assert content.startswith("---\n")
+        assert "current effective configuration" in content
+        assert "# agents:" in content
+        assert "# worktrees:" in content
+        assert "# github:" in content
