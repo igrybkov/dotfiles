@@ -16,7 +16,7 @@ classifiers = [
 ]
 dependencies = [
   # Ansible core
-  "ansible~=13.3.0",
+  "ansible~=13.4.0",
   "ansible-runner~=2.4.2",
   # Cloud providers
   "boto3~=1.42.21",
