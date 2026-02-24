@@ -109,6 +109,12 @@
       changed_when: false
 
     # Set facts so they appear in hostvars for aggregated_profile_var lookup
+    - name: Set dotfiles facts for aggregation lookup
+      ansible.builtin.set_fact:
+        dotfiles_dir: "{{ dotfiles_dir }}"
+        dotfiles_copy_dir: "{{ dotfiles_copy_dir }}"
+        bin_dir: "{{ bin_dir }}"
+
     - name: Set SSH config facts for aggregation lookup
       ansible.builtin.set_fact:
         ssh_client_config: "{{ ssh_client_config }}"
