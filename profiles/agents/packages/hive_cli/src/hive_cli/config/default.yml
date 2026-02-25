@@ -12,32 +12,32 @@ agents:
     - copilot
 
   configs:
-    # Claude uses --continue flag
     claude:
       resume_args: ["--continue"]
       skip_permissions_args: ["--dangerously-skip-permissions"]
+      extra_dirs_flag: "--add-dir"
 
-    # Copilot uses --continue flag
     copilot:
       resume_args: ["--continue"]
       skip_permissions_args: ["--allow-all"]
+      extra_dirs_flag: "--add-dir"
 
-    # Codex uses resume subcommand with --last
     codex:
       resume_args: ["resume", "--last"]
       skip_permissions_args: ["--full-auto"]
+      extra_dirs_flag: "--add-dir"
 
-    # Gemini uses --resume with latest argument
     gemini:
       resume_args: ["--resume", "latest"]
       skip_permissions_args: ["-y"]
+      extra_dirs_flag: "--include-directories"
 
-    # Cursor agent CLI uses resume subcommand
+    # Cursor agent CLI - no extra dirs support
     agent:
       resume_args: ["resume"]
       skip_permissions_args: ["-f"]
 
-    # Cursor agent alternative name
+    # Cursor agent alternative name - no extra dirs support
     cursor-agent:
       resume_args: ["resume"]
       skip_permissions_args: ["-f"]
@@ -84,3 +84,7 @@ zellij:
 github:
   fetch_issues: true
   issue_limit: 20
+
+# Additional directories to pass to the agent via its extra_dirs_flag.
+# Relative paths resolve against the main repo root.
+extra_dirs: []

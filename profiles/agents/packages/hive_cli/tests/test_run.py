@@ -532,6 +532,114 @@ class TestRunRestart:
         assert "--restart" in result.output
 
 
+class TestRunExtraDirs:
+    """Tests for run command extra_dirs injection."""
+
+    def test_run_injects_extra_dirs(
+        self, cli_runner: CycloptsTestRunner, temp_git_repo, monkeypatch
+    ):
+        """Test that extra_dirs args are injected into agent command."""
+        config_file = temp_git_repo / ".hive.yml"
+        config_file.write_text("""
+extra_dirs:
+  - /abs/shared-lib
+""")
+
+        import subprocess as real_subprocess
+
+        with (
+            patch("shutil.which", return_value="/usr/bin/claude"),
+            patch(
+                "hive_cli.commands.exec_runner.get_git_root", return_value=temp_git_repo
+            ),
+            patch("hive_cli.git.get_main_repo", return_value=temp_git_repo),
+            patch(
+                "hive_cli.config.loader.find_config_files",
+                return_value=[config_file],
+            ),
+            patch.object(real_subprocess, "run") as mock_run,
+            patch("hive_cli.commands.exec_runner.os.execvpe"),
+        ):
+            reload_config()
+            mock_run.return_value.returncode = 0
+            cli_runner.invoke(app, ["run", "-a", "claude"])
+            agent_calls = [c for c in mock_run.call_args_list if c[0][0][0] == "claude"]
+            assert len(agent_calls) >= 1
+            call_args = agent_calls[0][0][0]
+            assert "--add-dir" in call_args
+            assert "/abs/shared-lib" in call_args
+
+    def test_run_extra_dirs_relative_resolves_to_main_repo(
+        self, cli_runner: CycloptsTestRunner, temp_git_repo, monkeypatch
+    ):
+        """Test that relative extra_dirs resolve against main repo root."""
+        sibling = temp_git_repo.parent / "sibling"
+        sibling.mkdir()
+
+        config_file = temp_git_repo / ".hive.yml"
+        config_file.write_text("""
+extra_dirs:
+  - ../sibling
+""")
+
+        import subprocess as real_subprocess
+
+        with (
+            patch("shutil.which", return_value="/usr/bin/claude"),
+            patch(
+                "hive_cli.commands.exec_runner.get_git_root", return_value=temp_git_repo
+            ),
+            patch("hive_cli.git.get_main_repo", return_value=temp_git_repo),
+            patch(
+                "hive_cli.config.loader.find_config_files",
+                return_value=[config_file],
+            ),
+            patch.object(real_subprocess, "run") as mock_run,
+            patch("hive_cli.commands.exec_runner.os.execvpe"),
+        ):
+            reload_config()
+            mock_run.return_value.returncode = 0
+            cli_runner.invoke(app, ["run", "-a", "claude"])
+            agent_calls = [c for c in mock_run.call_args_list if c[0][0][0] == "claude"]
+            assert len(agent_calls) >= 1
+            call_args = agent_calls[0][0][0]
+            assert "--add-dir" in call_args
+            assert str(sibling) in call_args
+
+    def test_run_no_extra_dirs_when_agent_has_no_flag(
+        self, cli_runner: CycloptsTestRunner, temp_git_repo, monkeypatch
+    ):
+        """Test that agents without extra_dirs_flag don't get extra dirs."""
+        config_file = temp_git_repo / ".hive.yml"
+        config_file.write_text("""
+agents:
+  configs:
+    gemini:
+      extra_dirs_flag: null
+extra_dirs:
+  - /some/dir
+""")
+
+        with (
+            patch("shutil.which", return_value="/usr/bin/gemini"),
+            patch(
+                "hive_cli.commands.exec_runner.get_git_root", return_value=temp_git_repo
+            ),
+            patch("hive_cli.git.get_main_repo", return_value=temp_git_repo),
+            patch(
+                "hive_cli.config.loader.find_config_files",
+                return_value=[config_file],
+            ),
+            patch("hive_cli.commands.exec_runner.os.execvpe") as mock_execvpe,
+        ):
+            reload_config()
+            cli_runner.invoke(app, ["run", "-a", "gemini"])
+            # No extra_dirs_flag → execvp (no dynamic runner needed)
+            mock_execvpe.assert_called_once()
+            call_args = mock_execvpe.call_args[0][1]
+            assert "/some/dir" not in call_args
+
+
 class TestRunHelp:
     """Tests for run command help."""
 

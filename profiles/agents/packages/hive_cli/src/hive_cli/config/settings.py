@@ -82,6 +82,7 @@ class HiveSettings(HiveBaseSettings):
     worktrees: Annotated[WorktreesConfig, Field(default_factory=WorktreesConfig)]
     zellij: Annotated[ZellijConfig, Field(default_factory=ZellijConfig)]
     github: Annotated[GitHubConfig, Field(default_factory=GitHubConfig)]
+    extra_dirs: Annotated[list[str], Field(default_factory=list)]
 
     @classmethod
     def settings_customise_sources(
