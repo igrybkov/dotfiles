@@ -2,5 +2,6 @@
 .hive.local.yml
 .hive.local.yaml
 
-# Cursor plans
+# Cursor IDE
+.cursor/mcp.json
 .cursor/plans/

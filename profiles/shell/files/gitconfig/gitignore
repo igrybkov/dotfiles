@@ -13,7 +13,6 @@ Thumbs.db
 # IDE specific settings
 .idea
 .vscode
-.cursor/mcp.json
 
 # Log files
 *.log
