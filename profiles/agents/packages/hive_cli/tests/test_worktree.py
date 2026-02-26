@@ -9,6 +9,7 @@ from hive_cli.config import reload_config
 from hive_cli.git.worktree import (
     WorktreeInfo,
     _path_to_name,
+    expand_path,
     get_worktree_path,
     get_worktrees_base,
     list_worktrees,
@@ -343,3 +344,36 @@ class TestWorktreeInfo:
         """Test default is_main is False."""
         info = WorktreeInfo(branch="feature", path=tmp_path)
         assert info.is_main is False
+
+
+class TestExpandPath:
+    """Tests for expand_path function."""
+
+    def test_absolute_path_unchanged(self, tmp_path):
+        """Absolute paths are returned as-is."""
+        result = expand_path("/absolute/path", tmp_path)
+        assert result == Path("/absolute/path")
+
+    def test_tilde_expansion(self, tmp_path):
+        """Tilde is expanded to home directory."""
+        result = expand_path("~/some/dir", tmp_path)
+        assert result == Path.home() / "some" / "dir"
+
+    def test_relative_path_resolves_against_main_repo(self, tmp_path):
+        """Relative paths resolve against the provided main_repo."""
+        main_repo = tmp_path / "main-repo"
+        main_repo.mkdir()
+        result = expand_path("../sibling", main_repo)
+        assert result == (main_repo / "../sibling").resolve()
+        assert result == tmp_path / "sibling"
+
+    def test_env_var_expansion(self, tmp_path, monkeypatch):
+        """Environment variables in paths are expanded."""
+        monkeypatch.setenv("MY_DIR", "expanded-dir")
+        result = expand_path("$MY_DIR/sub", tmp_path)
+        assert result == (tmp_path / "expanded-dir" / "sub").resolve()
+
+    def test_dot_relative_resolves_against_main_repo(self, tmp_path):
+        """Dot-relative paths resolve against main_repo."""
+        result = expand_path("./subdir", tmp_path)
+        assert result == (tmp_path / "subdir").resolve()

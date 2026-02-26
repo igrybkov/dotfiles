@@ -150,17 +150,25 @@ def _comment_out_yaml(content: str) -> str:
     return "\n".join(result)
 
 
-def _create_bootstrap_header() -> str:
+def _create_bootstrap_header(*, current: bool = False) -> str:
     """Create the header for a bootstrap config file.
+
+    Args:
+        current: If True, note that values are from the current effective config.
 
     Returns:
         Header comment string.
     """
-    return """# Hive CLI Configuration
+    values_line = (
+        "# Values shown are current effective configuration."
+        if current
+        else "# Values shown are defaults."
+    )
+    return f"""# Hive CLI Configuration
 # Documentation: https://github.com/anthropics/hive-cli
 #
 # Uncomment and modify options as needed.
-# Values shown are defaults.
+{values_line}
 #
 # Configuration precedence (highest to lowest):
 #   1. Environment variables (HIVE_*)
@@ -215,12 +223,36 @@ def _generate_bootstrap_content() -> str:
     return final_content
 
 
-def create_bootstrap_config(file_path: Path | str, *, force: bool = False) -> None:
+def _generate_current_bootstrap_content() -> str:
+    """Generate bootstrap content from the current effective configuration.
+
+    Returns:
+        Full bootstrap config string with header and commented-out current values.
+    """
+    config = load_config()
+    config_content = _config_to_yaml(config)
+
+    commented_content = _comment_out_yaml(config_content)
+
+    final_content = (
+        "---\n" + _create_bootstrap_header(current=True) + "\n" + commented_content
+    )
+
+    if not final_content.endswith("\n"):
+        final_content += "\n"
+
+    return final_content
+
+
+def create_bootstrap_config(
+    file_path: Path | str, *, force: bool = False, current: bool = False
+) -> None:
     """Create a bootstrap configuration file.
 
     Args:
         file_path: Path where to create the config file.
         force: If True, overwrite existing file.
+        current: If True, use current effective config instead of defaults.
     """
     path = Path(file_path).expanduser().resolve()
 
@@ -233,7 +265,12 @@ def create_bootstrap_config(file_path: Path | str, *, force: bool = False) -> No
     # Create parent directories if needed
     path.parent.mkdir(parents=True, exist_ok=True)
 
-    path.write_text(_generate_bootstrap_content())
+    content = (
+        _generate_current_bootstrap_content()
+        if current
+        else _generate_bootstrap_content()
+    )
+    path.write_text(content)
 
     success(f"Created config file: {path}")
     info("Edit with your preferred editor to customize settings.")
@@ -276,6 +313,13 @@ def bootstrap(
             help="Overwrite existing file.",
         ),
     ] = False,
+    current: Annotated[
+        bool,
+        Parameter(
+            name=["--current", "-c"],
+            help="Use current effective config instead of defaults.",
+        ),
+    ] = False,
 ):
     """Create a new config file with documented options.
 
@@ -286,13 +330,19 @@ def bootstrap(
     path with all options commented out and documented.
 
     Examples:
-        hive config bootstrap                           # Print to stdout
+        hive config bootstrap                           # Print defaults to stdout
+        hive config bootstrap --current                 # Print current config to stdout
         hive config bootstrap > .hive.yml               # Redirect to file
         hive config bootstrap .hive.yml                 # Create project config
         hive config bootstrap .hive.local.yml           # Create local overrides
         hive config bootstrap .hive.yml -f              # Overwrite existing
     """
     if file is None:
-        print(_generate_bootstrap_content(), end="")
+        content = (
+            _generate_current_bootstrap_content()
+            if current
+            else _generate_bootstrap_content()
+        )
+        print(content, end="")
     else:
-        create_bootstrap_config(str(file), force=force)
+        create_bootstrap_config(str(file), force=force, current=current)

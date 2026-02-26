@@ -11,6 +11,7 @@ from hive_cli.config import (
     deep_merge,
     find_config_files,
     find_global_config,
+    get_extra_dirs_args,
     get_xdg_config_home,
     load_config,
     reload_config,
@@ -444,3 +445,158 @@ class TestCaching:
             # After reload, returns new value
             config3 = reload_config()
             assert config3.agents.order == ["gemini"]
+
+
+class TestExtraDirsConfig:
+    """Tests for extra_dirs configuration."""
+
+    def test_default_extra_dirs_empty(self, tmp_path, monkeypatch):
+        """Default config has empty extra_dirs."""
+        monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+
+        load_config.cache_clear()
+        with patch("hive_cli.config.loader.find_config_files", return_value=[]):
+            config = load_config()
+
+        assert config.extra_dirs == []
+
+    def test_extra_dirs_from_file(self, tmp_path, monkeypatch):
+        """Loads extra_dirs from config file."""
+        monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+
+        config_file = tmp_path / ".hive.yml"
+        config_file.write_text("""
+extra_dirs:
+  - ../sibling-repo
+  - ~/Projects/shared-lib
+  - /absolute/path
+""")
+
+        load_config.cache_clear()
+        with patch(
+            "hive_cli.config.loader.find_config_files", return_value=[config_file]
+        ):
+            config = load_config()
+
+        assert config.extra_dirs == [
+            "../sibling-repo",
+            "~/Projects/shared-lib",
+            "/absolute/path",
+        ]
+
+    def test_extra_dirs_flag_in_agent_config(self, tmp_path, monkeypatch):
+        """Agent configs can specify extra_dirs_flag."""
+        monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+
+        config_file = tmp_path / ".hive.yml"
+        config_file.write_text("""
+agents:
+  configs:
+    claude:
+      extra_dirs_flag: "--add-dir"
+    agent:
+      extra_dirs_flag: "--directory"
+""")
+
+        load_config.cache_clear()
+        with patch(
+            "hive_cli.config.loader.find_config_files", return_value=[config_file]
+        ):
+            config = load_config()
+
+        assert config.agents.configs["claude"].extra_dirs_flag == "--add-dir"
+        assert config.agents.configs["agent"].extra_dirs_flag == "--directory"
+
+    def test_extra_dirs_flag_default_none(self):
+        """AgentConfig extra_dirs_flag defaults to None."""
+        config = AgentConfig()
+        assert config.extra_dirs_flag is None
+
+    def test_claude_extra_dirs_flag_from_defaults(self, tmp_path, monkeypatch):
+        """Claude gets --add-dir from default.yml config."""
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+        monkeypatch.delenv("HIVE_AGENTS_ORDER", raising=False)
+
+        load_config.cache_clear()
+        with patch("hive_cli.config.loader.find_config_files", return_value=[]):
+            config = load_config()
+
+        assert config.agents.configs["claude"].extra_dirs_flag == "--add-dir"
+
+
+class TestGetExtraDirsArgs:
+    """Tests for get_extra_dirs_args helper."""
+
+    def test_empty_when_no_dirs(self, tmp_path, monkeypatch):
+        """Returns empty list when no extra_dirs configured."""
+        monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+
+        load_config.cache_clear()
+        with patch("hive_cli.config.loader.find_config_files", return_value=[]):
+            result = get_extra_dirs_args("claude")
+
+        assert result == []
+
+    def test_empty_when_agent_has_no_flag(self, tmp_path, monkeypatch):
+        """Returns empty list when agent has no extra_dirs_flag."""
+        monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+
+        config_file = tmp_path / ".hive.yml"
+        config_file.write_text("""
+extra_dirs:
+  - /some/dir
+""")
+
+        load_config.cache_clear()
+        with patch(
+            "hive_cli.config.loader.find_config_files", return_value=[config_file]
+        ):
+            result = get_extra_dirs_args("unknown-agent")
+
+        assert result == []
+
+    def test_builds_flag_path_pairs(self, tmp_path, monkeypatch):
+        """Builds [flag, path, flag, path] pairs for absolute dirs."""
+        monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+
+        config_file = tmp_path / ".hive.yml"
+        config_file.write_text("""
+extra_dirs:
+  - /abs/dir1
+  - /abs/dir2
+""")
+
+        load_config.cache_clear()
+        with (
+            patch(
+                "hive_cli.config.loader.find_config_files", return_value=[config_file]
+            ),
+            patch("hive_cli.git.get_main_repo", return_value=tmp_path),
+        ):
+            result = get_extra_dirs_args("claude")
+
+        assert result == ["--add-dir", "/abs/dir1", "--add-dir", "/abs/dir2"]
+
+    def test_relative_paths_resolve_against_main_repo(self, tmp_path, monkeypatch):
+        """Relative paths are resolved against main repo root."""
+        monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+
+        main_repo = tmp_path / "main-repo"
+        main_repo.mkdir()
+
+        config_file = tmp_path / ".hive.yml"
+        config_file.write_text("""
+extra_dirs:
+  - ../sibling
+""")
+
+        load_config.cache_clear()
+        with (
+            patch(
+                "hive_cli.config.loader.find_config_files", return_value=[config_file]
+            ),
+            patch("hive_cli.git.get_main_repo", return_value=main_repo),
+        ):
+            result = get_extra_dirs_args("claude")
+
+        assert result == ["--add-dir", str(tmp_path / "sibling")]
