@@ -285,3 +285,6 @@
     - brew_upgrade_all | default(false)
     - brew_outdated_result.stdout_lines | default([]) | length > 0
   changed_when: brew_upgrade_result.stdout | length > 0
+  failed_when:
+    - brew_upgrade_result.rc != 0
+    - brew_upgrade_result.rc != 1 or 'Error' in brew_upgrade_result.stderr
