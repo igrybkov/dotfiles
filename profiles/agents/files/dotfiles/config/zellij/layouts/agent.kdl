@@ -18,7 +18,7 @@ layout {
         pane split_direction="vertical" {
             // Left: Agents 1-4 stacked
             pane stacked=true {
-                pane name="c1: Andrii" expanded=true {
+                pane name="c1: Anton" expanded=true {
                     command "fish"
                     args "-c" "env HIVE_PANE_ID=1 hive run --restart"
                 }
