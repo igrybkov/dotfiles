@@ -16,6 +16,7 @@ end
 set -gx PAGER bat
 
 # Modify PATH
+fish_add_path --global --move /Applications/Obsidian.app/Contents/MacOS
 fish_add_path --global --move "$HOME/.node_modules/bin"
 fish_add_path --global --move "$HOME/.local/bin"
 

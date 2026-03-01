@@ -53,6 +53,7 @@ path=(
   /usr/local/opt/mysql-client/bin
   /usr/local/{bin,sbin}
   /opt/homebrew/anaconda3/bin
+  /Applications/Obsidian.app/Contents/MacOS
   $path
 )
 

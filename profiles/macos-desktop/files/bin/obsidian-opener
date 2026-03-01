@@ -6,7 +6,7 @@ VAULT="$1"
 FILE="$2"
 
 if [[ -z "$VAULT" ]]; then
-  echo "Usage: obsidian <vault> [file]" >/dev/stderr
+  echo "Usage: obsidian-opener <vault> [file]" >/dev/stderr
   exit 1
 fi
 
