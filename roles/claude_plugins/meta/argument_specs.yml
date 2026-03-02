@@ -1,0 +1,51 @@
+---
+argument_specs:
+  main:
+    short_description: Install Claude Code plugins and register marketplaces
+    description:
+      - Registers custom plugin marketplaces with Claude Code
+      - Installs Claude Code plugins from official or custom marketplaces
+      - Expects pre-aggregated data from playbook
+    options:
+      claude_plugin_marketplaces:
+        description: List of custom marketplaces to register
+        type: list
+        elements: dict
+        default: []
+        options:
+          name:
+            description: Marketplace name (used for identification)
+            type: str
+            required: true
+          path:
+            description: Path to marketplace directory (must contain .claude-plugin/marketplace.json)
+            type: str
+            required: true
+          state:
+            description: Marketplace state
+            type: str
+            choices:
+              - present
+              - absent
+            default: present
+      claude_plugins:
+        description: List of Claude Code plugins to install
+        type: list
+        elements: dict
+        default: []
+        options:
+          name:
+            description: Plugin name (e.g. pyright-lsp, ansible-lsp)
+            type: str
+            required: true
+          marketplace:
+            description: Marketplace to install from (defaults to claude-plugins-official)
+            type: str
+            default: claude-plugins-official
+          state:
+            description: Plugin state
+            type: str
+            choices:
+              - present
+              - absent
+            default: present

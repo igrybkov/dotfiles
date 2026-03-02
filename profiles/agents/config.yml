@@ -22,6 +22,7 @@ brew_taps:
 
 # Core agent packages
 brew_packages:
+  - name: marksman
   - name: opencode
 
 cask_packages:
@@ -138,6 +139,11 @@ json_configs:
           - "Bash(realpath *)"
           - "Bash(basename *)"
           - "Bash(dirname *)"
+      enabledPlugins:
+        pyright-lsp@claude-plugins-official: true
+        typescript-lsp@claude-plugins-official: true
+        ansible-lsp@custom-lsp: true
+        marksman-lsp@custom-lsp: true
       planModeByDefault: true
       statusLine:
         type: command
@@ -178,6 +184,27 @@ yaml_configs:
           - agent
           - cursor-agent
           - copilot
+
+# npm packages for LSP language servers (used by Claude Code LSP plugins)
+npm_packages:
+  - name: "@ansible/ansible-language-server"
+  - name: pyright
+  - name: typescript-language-server
+  - name: typescript
+
+# Custom plugin marketplaces (via claude_plugins role)
+claude_plugin_marketplaces:
+  - name: custom-lsp
+    path: ~/.claude/marketplaces/custom-lsp
+
+# Claude Code plugins (via claude_plugins role)
+claude_plugins:
+  - name: pyright-lsp
+  - name: typescript-lsp
+  - name: ansible-lsp
+    marketplace: custom-lsp
+  - name: marksman-lsp
+    marketplace: custom-lsp
 
 # MCP servers - meta-mcp pattern for user customization
 # meta-mcp loads servers from ~/.meta-mcp/servers.json

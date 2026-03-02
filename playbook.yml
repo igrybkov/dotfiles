@@ -288,6 +288,16 @@
       vars:
         npm_packages: "{{ lookup('aggregated_profile_var', 'npm_packages') | community.general.lists_mergeby('name') }}"
 
+    - name: Install Claude Code plugins (aggregated from all profiles)
+      tags: [claude-plugins, coding-agents]
+      ansible.builtin.include_role:
+        name: claude_plugins
+        apply:
+          tags: [claude-plugins, coding-agents]
+      vars:
+        claude_plugin_marketplaces: "{{ lookup('aggregated_profile_var', 'claude_plugin_marketplaces') | community.general.lists_mergeby('name') }}"
+        claude_plugins: "{{ lookup('aggregated_profile_var', 'claude_plugins') | community.general.lists_mergeby('name') }}"
+
     - name: "[ Summary] Check for Mac App Store errors file"
       tags: [always]
       ansible.builtin.stat:

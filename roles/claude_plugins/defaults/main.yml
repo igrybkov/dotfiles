@@ -1,0 +1,21 @@
+---
+# Claude Code Plugins Role Defaults
+
+# List of custom marketplaces to register
+# Example:
+#   claude_plugin_marketplaces:
+#     - name: custom-lsp
+#       path: ~/.claude/marketplaces/custom-lsp
+claude_plugin_marketplaces: []
+
+# List of Claude Code plugins to manage
+# Example:
+#   claude_plugins:
+#     - name: pyright-lsp
+#       state: present
+#     - name: ansible-lsp
+#       marketplace: custom-lsp
+#       state: present
+#     - name: typescript-lsp
+#       state: absent
+claude_plugins: []

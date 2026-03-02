@@ -120,6 +120,70 @@
       },
       "default": []
     },
+    "claude_plugin_marketplaces": {
+      "description": "List of custom marketplaces to register",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "description": "Marketplace name (used for identification)",
+            "type": "string"
+          },
+          "path": {
+            "description": "Path to marketplace directory (must contain .claude-plugin/marketplace.json)",
+            "type": "string"
+          },
+          "state": {
+            "description": "Marketplace state",
+            "type": "string",
+            "enum": [
+              "present",
+              "absent"
+            ],
+            "default": "present"
+          }
+        },
+        "required": [
+          "name",
+          "path"
+        ],
+        "additionalProperties": false
+      },
+      "default": []
+    },
+    "claude_plugins": {
+      "description": "List of Claude Code plugins to install",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "marketplace": {
+            "description": "Marketplace to install from (defaults to claude-plugins-official)",
+            "type": "string",
+            "default": "claude-plugins-official"
+          },
+          "name": {
+            "description": "Plugin name (e.g. pyright-lsp, ansible-lsp)",
+            "type": "string"
+          },
+          "state": {
+            "description": "Plugin state",
+            "type": "string",
+            "enum": [
+              "present",
+              "absent"
+            ],
+            "default": "present"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "default": []
+    },
     "composer_packages": {
       "description": "List of composer packages to install",
       "type": "array",

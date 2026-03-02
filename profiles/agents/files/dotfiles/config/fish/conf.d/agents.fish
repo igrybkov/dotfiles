@@ -16,6 +16,9 @@
 # Requires: hive (installed via pipx), zellij (for zc* commands)
 # Optional: claude, agent (cursor), copilot, codex, gemini
 
+# Enable LSP tool for Claude Code (semantic code intelligence)
+set -gx ENABLE_LSP_TOOL 1
+
 # Check for hive at full path since ~/.local/bin may not be in PATH yet
 set -l _hive_bin ~/.local/bin/hive
 

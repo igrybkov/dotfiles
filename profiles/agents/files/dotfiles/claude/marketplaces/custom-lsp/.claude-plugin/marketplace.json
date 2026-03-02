@@ -1,0 +1,54 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "custom-lsp",
+  "description": "Custom LSP plugins for languages not covered by the official marketplace",
+  "owner": {
+    "name": "dotfiles",
+    "email": "dotfiles@localhost"
+  },
+  "plugins": [
+    {
+      "name": "ansible-lsp",
+      "description": "Ansible language server for playbook validation and module documentation",
+      "version": "1.0.0",
+      "author": {
+        "name": "dotfiles"
+      },
+      "source": "./plugins/ansible-lsp",
+      "category": "development",
+      "lspServers": {
+        "ansible": {
+          "command": "ansible-language-server",
+          "args": [
+            "--stdio"
+          ],
+          "extensionToLanguage": {
+            ".yml": "ansible",
+            ".yaml": "ansible"
+          }
+        }
+      }
+    },
+    {
+      "name": "marksman-lsp",
+      "description": "Markdown language server with wiki-link support for Obsidian-style notes",
+      "version": "1.0.0",
+      "author": {
+        "name": "dotfiles"
+      },
+      "source": "./plugins/marksman-lsp",
+      "category": "development",
+      "lspServers": {
+        "marksman": {
+          "command": "marksman",
+          "args": [
+            "server"
+          ],
+          "extensionToLanguage": {
+            ".md": "markdown"
+          }
+        }
+      }
+    }
+  ]
+}

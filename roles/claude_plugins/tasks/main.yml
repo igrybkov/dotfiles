@@ -1,0 +1,100 @@
+---
+# Claude Code Plugins Role - Main Tasks
+# Variables are passed from the playbook (pre-aggregated from all profiles)
+# Input validation is handled by argument_specs in meta/argument_specs.yml
+
+- name: "[🔌 claude_plugins] Skip if nothing configured"
+  ansible.builtin.meta: end_host
+  when:
+    - claude_plugins | default([]) | length == 0
+    - claude_plugin_marketplaces | default([]) | length == 0
+
+- name: "[🔌 claude_plugins] Check if claude CLI is installed"
+  ansible.builtin.command: which claude
+  register: claude_cli_check
+  changed_when: false
+  failed_when: false
+
+- name: "[🔌 claude_plugins] Claude CLI not found - skipping"  # noqa: ignore-errors
+  ansible.builtin.fail:
+    msg: |
+      Claude CLI not found in PATH.
+      Add 'claude-code' to cask_packages in your profile config.
+      Skipping plugins: {{ claude_plugins | map(attribute='name') | join(', ') }}
+  when: claude_cli_check.rc != 0
+  ignore_errors: true
+
+- name: "[🔌 claude_plugins] End role if claude not found"
+  ansible.builtin.meta: end_host
+  when: claude_cli_check.rc != 0
+
+# --- Marketplace management ---
+
+- name: "[🔌 claude_plugins] List registered marketplaces"
+  ansible.builtin.command: claude plugin marketplace list --json
+  register: claude_marketplaces_list
+  changed_when: false
+  failed_when: false
+
+- name: "[🔌 claude_plugins] Register custom marketplaces"
+  ansible.builtin.command: "claude plugin marketplace add {{ item.path }}"
+  loop: "{{ claude_plugin_marketplaces | default([]) }}"
+  when:
+    - item.state is not defined or item.state == "present"
+  register: claude_marketplace_add
+  failed_when: false
+  changed_when: claude_marketplace_add.rc == 0
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: "[🔌 claude_plugins] Update all marketplaces"
+  ansible.builtin.command: claude plugin marketplace update
+  changed_when: false
+  failed_when: false
+
+# --- Plugin management ---
+
+- name: "[🔌 claude_plugins] List installed plugins"
+  ansible.builtin.command: claude plugin list --json
+  register: claude_plugins_list
+  changed_when: false
+  failed_when: false
+
+- name: "[🔌 claude_plugins] Parse installed plugin names"
+  vars:
+    _stdout: "{{ claude_plugins_list.stdout | default('') }}"
+    _parsed: "{{ (_stdout | from_json) if _stdout | length > 0 else [] }}"
+  ansible.builtin.set_fact:
+    claude_plugins_installed: >-
+      {{ _parsed if _parsed is iterable and _parsed is not mapping else [] }}
+  when: claude_plugins_list.rc | default(1) == 0
+  failed_when: false
+
+- name: "[🔌 claude_plugins] Uninstall plugins (absent state)"
+  ansible.builtin.command: >-
+    claude plugin uninstall
+    {{ item.name }}@{{ item.marketplace | default('claude-plugins-official') }}
+  loop: "{{ claude_plugins }}"
+  when:
+    - item.state is defined
+    - item.state == "absent"
+    - (item.name ~ '@' ~ (item.marketplace | default('claude-plugins-official'))) in (claude_plugins_installed | default([]))
+  register: claude_plugin_uninstall
+  failed_when: false
+  changed_when: claude_plugin_uninstall.rc == 0
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: "[🔌 claude_plugins] Install plugins"
+  ansible.builtin.command: >-
+    claude plugin install
+    {{ item.name }}@{{ item.marketplace | default('claude-plugins-official') }}
+  loop: "{{ claude_plugins }}"
+  when:
+    - item.state is not defined or item.state == "present"
+    - (item.name ~ '@' ~ (item.marketplace | default('claude-plugins-official'))) not in (claude_plugins_installed | default([]))
+  register: claude_plugin_install
+  failed_when: false
+  changed_when: claude_plugin_install.rc == 0
+  loop_control:
+    label: "{{ item.name }}"
