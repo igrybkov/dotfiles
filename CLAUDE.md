@@ -138,6 +138,17 @@ Extract repeatable code into separate task files with `include_tasks` and loops:
     loop_var: symlink_dir
 ```
 
+**Tag propagation with `include_role`:** When using `include_role` in a `tasks:` block, you must set both `tags:` on the task (so it gets selected by `--tags`) and `apply: tags:` (so the included role's internal tasks inherit those tags). Without `apply:`, the role's tasks run untagged and get skipped.
+
+```yaml
+- name: Install npm packages
+  tags: [npm]
+  ansible.builtin.include_role:
+    name: npm
+    apply:
+      tags: [npm]
+```
+
 ### Role Patterns
 
 See [docs/architecture.md](docs/architecture.md#role-patterns) for the three playbook patterns (Bootstrap, Per-Profile, Aggregation).

@@ -80,6 +80,8 @@
       tags: [brew]
       ansible.builtin.include_role:
         name: geerlingguy.mac.homebrew
+        apply:
+          tags: [brew]
       vars:
         homebrew_taps: []
       when:
@@ -281,6 +283,8 @@
       tags: [npm]
       ansible.builtin.include_role:
         name: npm
+        apply:
+          tags: [npm]
       vars:
         npm_packages: "{{ lookup('aggregated_profile_var', 'npm_packages') | community.general.lists_mergeby('name') }}"
 
