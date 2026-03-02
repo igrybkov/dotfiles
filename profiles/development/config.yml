@@ -60,6 +60,7 @@ cask_packages:
 
 npm_packages:
   - name: "@google/gemini-cli"
+  - name: "@toon-format/cli"
   - name: eslint
   - name: gitignore-it
   - name: prettier
