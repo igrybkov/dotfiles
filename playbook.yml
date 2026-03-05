@@ -200,7 +200,7 @@
       tags: [ssh]
       vars:
         ssh_client_config: "{{ lookup('aggregated_profile_var', 'ssh_client_config') | community.general.lists_mergeby('host') }}"
-        ssh_client_config_block: "{{ lookup('aggregated_profile_var', 'ssh_client_config_block') }}"
+        ssh_client_config_block: "{{ lookup('aggregated_profile_var', 'ssh_client_config_block') | flatten }}"
 
     - name: Set up gitconfig (aggregated from all profiles)
       role: gitconfig

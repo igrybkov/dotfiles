@@ -209,12 +209,22 @@ class LookupModule(LookupBase):
         return sorted(hosts, key=get_priority)
 
     def _aggregate_list(self, var_name: str, hosts: list[str], hostvars: dict) -> list:
-        """Aggregate list variable from all hosts."""
+        """Aggregate list variable from all hosts.
+
+        Returns per-host values as separate sub-lists (nested) so that
+        downstream filters like ``community.general.lists_mergeby`` can
+        properly deduplicate across profiles.
+
+        Scalar values (strings, numbers) are collected into the result
+        directly (not wrapped) for backward compatibility with callers
+        that aggregate path-like variables.
+        """
         result = []
         for host in hosts:
             value = hostvars.get(host, {}).get(var_name, [])
             if isinstance(value, list):
-                result.extend(value)
+                if value:
+                    result.append(value)
             elif value:
                 result.append(value)
         return result
