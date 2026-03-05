@@ -75,7 +75,7 @@ mas_packages:
 Then run the relevant install command:
 
 ```bash
-dotfiles install brew        # Formulae
+dotfiles install brew        # Formulas
 dotfiles install cask        # Casks
 dotfiles install mas         # Mac App Store apps
 ```

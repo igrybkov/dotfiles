@@ -57,7 +57,7 @@
   when: brew_taps_missing | default([]) | length > 0
 
 # =============================================================================
-# FORMULAE - Get installed packages and group by state
+# FORMULAS - Get installed packages and group by state
 # =============================================================================
 
 - name: "[🍺 homebrew] Get list of installed formulas"
@@ -95,10 +95,10 @@
   when: brew_packages | length > 0
 
 # =============================================================================
-# FORMULAE - Uninstall first (before tap removal can succeed)
+# FORMULAS - Uninstall first (before tap removal can succeed)
 # =============================================================================
 
-- name: "[🍺 homebrew] Formulae to uninstall: {{ _installed_absent | join(', ') }}"
+- name: "[🍺 homebrew] Formulas to uninstall: {{ _installed_absent | join(', ') }}"
   tags: [brew-packages, brew]
   vars:
     _normalized_absent: "{{ brew_packages_absent_names | map('split', '/') | map('last') | map('lower') | list }}"
@@ -122,7 +122,7 @@
   when: _installed_absent | length > 0
 
 # =============================================================================
-# FORMULAE - Install packages
+# FORMULAS - Install packages
 # =============================================================================
 
 - name: "[🍺 homebrew] Compute missing packages (present state)"
@@ -137,7 +137,7 @@
     brew_packages_missing: "{{ _missing | map('first') | list }}"
   when: brew_packages | length > 0
 
-- name: "[🍺 homebrew] Formulae to install: {{ brew_packages_missing | join(', ') }}"
+- name: "[🍺 homebrew] Formulas to install: {{ brew_packages_missing | join(', ') }}"
   tags: [brew-packages, brew]
   ansible.builtin.debug:
     msg: "Installing {{ brew_packages_missing | length }} formula(s)"
@@ -154,7 +154,7 @@
     - brew_install_result.rc != 0
     - "'already installed' not in (brew_install_result.stderr | default(''))"
 
-- name: "[🍺 homebrew] Formulae to ensure latest: {{ brew_packages_latest_names | join(', ') }}"
+- name: "[🍺 homebrew] Formulas to ensure latest: {{ brew_packages_latest_names | join(', ') }}"
   tags: [brew-packages, brew]
   ansible.builtin.debug:
     msg: "Ensuring {{ brew_packages_latest_names | length }} formula(s) at latest version"
