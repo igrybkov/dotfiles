@@ -73,7 +73,7 @@ The `dotfiles` role (`roles/dotfiles/tasks/main.yml`):
 
 The Python CLI implements secure sudo authentication:
 
-- Sudo tags (defined in `SUDO_TAGS`): `mas`, `chsh`
+- Sudo tags (defined in `SUDO_TAGS`): `mas`, `chsh`, `brew`, `cask`
 - For sudo tasks: prompts once, stores in environment variable, uses askpass script
 - Bypasses Touch ID entirely, preventing multiple biometric prompts
 

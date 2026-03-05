@@ -621,8 +621,9 @@ class TestSudoTags:
         """Test that SUDO_TAGS is defined with expected values."""
         assert "mas" in SUDO_TAGS
         assert "chsh" in SUDO_TAGS
+        assert "brew" in SUDO_TAGS
+        assert "cask" in SUDO_TAGS
         assert "dotfiles" not in SUDO_TAGS
-        assert "brew" not in SUDO_TAGS
 
 
 class TestProfileBootstrap:

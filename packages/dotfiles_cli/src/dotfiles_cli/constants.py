@@ -17,7 +17,7 @@ def get_dotfiles_dir() -> str:
 
 
 # Tags that require sudo password
-SUDO_TAGS: set[str] = {"mas", "chsh"}
+SUDO_TAGS: set[str] = {"mas", "chsh", "brew", "cask"}
 
 # Tags that require vault password (use vault_secret lookup)
 VAULT_TAGS: set[str] = {"mcp-servers"}

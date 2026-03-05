@@ -299,7 +299,18 @@ def install(
                         )
                         return 1
 
-            envvars["ANSIBLE_BECOME_PASS"] = become_password
+            # Use askpass script to pass sudo password non-interactively.
+            # This bypasses Touch ID prompts by using sudo's -A flag.
+            # Password is stored in memory (env var) rather than on disk.
+            askpass_script = Path(DOTFILES_DIR) / "bin" / "askpass.sh"
+
+            envvars.update(
+                {
+                    "_DOTFILES_BECOME_PASS": become_password,
+                    "SUDO_ASKPASS": str(askpass_script),
+                    "ANSIBLE_BECOME_FLAGS": "-A",
+                }
+            )
 
         if logfile == LOGFILE_AUTO:
             logfile = generate_logfile_name()
