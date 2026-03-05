@@ -8,8 +8,9 @@
     mas_errors: []
 
 - name: "[🍎 mas] Check installed Mac App Store packages"
-  become: false
-  ansible.builtin.command: mas list
+  ansible.builtin.command:
+    cmd: mas list
+  timeout: 30
   register: mas_installed
   changed_when: false
   ignore_errors: true
@@ -20,8 +21,8 @@
   when: mas_installed.failed | default(false)
 
 - name: "[🍎 mas] Install Mac App Store packages"
-  become: false
   ansible.builtin.command: "mas install {{ item.id }}"
+  timeout: 120
   loop: "{{ mas_packages }}"
   when:
     - mas_installed.failed is not defined or not mas_installed.failed
@@ -41,8 +42,8 @@
     label: "{{ item.item.name | default(item.item.id | default('unknown')) }}"
 
 - name: "[🍎 mas] Uninstall Mac App Store packages"
-  become: true
   ansible.builtin.command: "mas uninstall {{ item.id }}"
+  timeout: 60
   loop: "{{ mas_packages }}"
   when:
     - mas_installed.failed is not defined or not mas_installed.failed
@@ -71,8 +72,8 @@
   when: item.name is defined and item.state is defined and item.state == "absent"
 
 - name: "[🍎 mas] Upgrade Mac App Store packages"
-  become: true
   ansible.builtin.command: mas upgrade
+  timeout: 300
   register: mas_upgrade_result
   when: mas_upgrade_all | default(false)
   changed_when: mas_upgrade_result.stdout | default('') | length > 0
