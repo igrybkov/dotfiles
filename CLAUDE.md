@@ -83,7 +83,7 @@ See [docs/architecture.md](docs/architecture.md) for details on dotfile symlinki
 ### Adding a new Homebrew package
 
 Edit the appropriate profile's `config.yml` (e.g., `profiles/shell/config.yml` for CLI tools, `profiles/development/config.yml` for dev tools) or `profiles/{profile}/config.yml`:
-- `brew_packages`: for formulae
+- `brew_packages`: for formulas
 - `cask_packages`: for casks
 - `brew_taps`: for taps
 - `mas_packages`: for Mac App Store apps (with `name` and `id`)

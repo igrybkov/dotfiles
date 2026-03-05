@@ -319,7 +319,7 @@ profile:
 # Homebrew Packages
 # ============================================================================
 
-# Homebrew formulae
+# Homebrew formulas
 # brew_packages:
 #   - name: neovim                    # Simple package
 #   - name: tmux

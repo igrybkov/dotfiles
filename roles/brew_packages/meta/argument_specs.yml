@@ -3,7 +3,7 @@ argument_specs:
   main:
     short_description: Install Homebrew packages
     description:
-      - Installs Homebrew taps, formulae, and casks
+      - Installs Homebrew taps, formulas, and casks
       - Expects pre-aggregated data from playbook
     options:
       brew_taps:
@@ -25,7 +25,7 @@ argument_specs:
             default: present
 
       brew_packages:
-        description: List of Homebrew formulae to install
+        description: List of Homebrew formulas to install
         type: list
         elements: dict
         default: []

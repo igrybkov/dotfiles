@@ -72,7 +72,7 @@ The `profiles/private/` directory is git-ignored by default and will never be co
 - Encrypted `secrets.yml` files (vault-encrypted)
 - Public SSH keys referenced via `op read`
 - Generic configuration templates
-- Public package lists (brew formulae, casks)
+- Public package lists (brew formulas, casks)
 
 ## Pre-commit Security Scanning
 

@@ -1,6 +1,6 @@
 ---
 # Homebrew Role - Main Tasks
-# This role installs Homebrew taps, formulae, and casks
+# This role installs Homebrew taps, formulas, and casks
 #
 # Variables are passed from the playbook (pre-aggregated from all profiles)
 # Input validation is handled by argument_specs in meta/argument_specs.yml
@@ -11,8 +11,8 @@
 #
 # Task ordering is important:
 # 1. Add taps first (so packages from new taps can be installed)
-# 2. Uninstall packages (formulae and casks with state: absent)
-# 3. Install packages (formulae and casks)
+# 2. Uninstall packages (formulas and casks with state: absent)
+# 3. Install packages (formulas and casks)
 # 4. Remove taps last (after packages from those taps are uninstalled)
 
 # =============================================================================
@@ -42,6 +42,12 @@
          | list }}
   when: brew_taps_present | default([]) | length > 0
 
+- name: "[🍺 homebrew] Taps to add: {{ brew_taps_missing | map(attribute='name') | join(', ') }}"
+  tags: [brew-packages, taps, brew]
+  ansible.builtin.debug:
+    msg: "Adding {{ brew_taps_missing | length }} tap(s)"
+  when: brew_taps_missing | default([]) | length > 0
+
 - name: "[🍺 homebrew] Add missing Homebrew taps"
   tags: [brew-packages, taps, brew]
   community.general.homebrew_tap:
@@ -54,17 +60,17 @@
 # FORMULAE - Get installed packages and group by state
 # =============================================================================
 
-- name: "[🍺 homebrew] Get list of installed formulae"
+- name: "[🍺 homebrew] Get list of installed formulas"
   tags: [brew-packages, brew]
   ansible.builtin.command: brew list --formula -1
-  register: brew_installed_formulae
+  register: brew_installed_formulas
   changed_when: false
   when: brew_packages | length > 0
 
 - name: "[🍺 homebrew] Group packages by state and version"
   tags: [brew-packages, brew]
   ansible.builtin.set_fact:
-    _brew_installed_set: "{{ brew_installed_formulae.stdout_lines | default([]) | map('lower') | list }}"
+    _brew_installed_set: "{{ brew_installed_formulas.stdout_lines | default([]) | map('lower') | list }}"
     brew_packages_absent: "{{ brew_packages | selectattr('state', 'defined') | selectattr('state', 'equalto', 'absent') | list }}"
     brew_packages_with_version: "{{ brew_packages | selectattr('version', 'defined') | list }}"
     brew_packages_latest: "{{ brew_packages | selectattr('state', 'defined') | selectattr('state', 'equalto', 'latest') | rejectattr('version', 'defined') | list }}"
@@ -92,13 +98,23 @@
 # FORMULAE - Uninstall first (before tap removal can succeed)
 # =============================================================================
 
+- name: "[🍺 homebrew] Formulae to uninstall: {{ _installed_absent | join(', ') }}"
+  tags: [brew-packages, brew]
+  vars:
+    _normalized_absent: "{{ brew_packages_absent_names | map('split', '/') | map('last') | map('lower') | list }}"
+    _absent_pairs: "{{ brew_packages_absent_names | zip(_normalized_absent) | list }}"
+    _installed_absent: "{{ _absent_pairs | selectattr(1, 'in', _brew_installed_set) | map('first') | list }}"
+  ansible.builtin.debug:
+    msg: "Uninstalling {{ _installed_absent | length }} formula(s)"
+  when: _installed_absent | length > 0
+
 - name: "[🍺 homebrew] Uninstall Homebrew packages (absent state)"
   tags: [brew-packages, brew]
   vars:
     # Normalize names: "tap/formula" -> "formula"
     _normalized_absent: "{{ brew_packages_absent_names | map('split', '/') | map('last') | map('lower') | list }}"
     _absent_pairs: "{{ brew_packages_absent_names | zip(_normalized_absent) | list }}"
-    # Only uninstall packages that are actually installed (skip non-existent formulae)
+    # Only uninstall packages that are actually installed (skip non-existent formulas)
     _installed_absent: "{{ _absent_pairs | selectattr(1, 'in', _brew_installed_set) | map('first') | list }}"
   community.general.homebrew:
     name: "{{ _installed_absent }}"
@@ -121,6 +137,12 @@
     brew_packages_missing: "{{ _missing | map('first') | list }}"
   when: brew_packages | length > 0
 
+- name: "[🍺 homebrew] Formulae to install: {{ brew_packages_missing | join(', ') }}"
+  tags: [brew-packages, brew]
+  ansible.builtin.debug:
+    msg: "Installing {{ brew_packages_missing | length }} formula(s)"
+  when: brew_packages_missing | default([]) | length > 0
+
 - name: "[🍺 homebrew] Install missing Homebrew packages (present state)"
   tags: [brew-packages, brew]
   ansible.builtin.command:
@@ -131,6 +153,12 @@
   failed_when:
     - brew_install_result.rc != 0
     - "'already installed' not in (brew_install_result.stderr | default(''))"
+
+- name: "[🍺 homebrew] Formulae to ensure latest: {{ brew_packages_latest_names | join(', ') }}"
+  tags: [brew-packages, brew]
+  ansible.builtin.debug:
+    msg: "Ensuring {{ brew_packages_latest_names | length }} formula(s) at latest version"
+  when: brew_packages_latest_names | default([]) | length > 0
 
 - name: "[🍺 homebrew] Install Homebrew packages (latest state)"
   tags: [brew-packages, brew]
@@ -202,6 +230,12 @@
     cask_packages_to_uninstall: "{{ _installed | map('first') | list }}"
   when: cask_packages | length > 0
 
+- name: "[🍺 homebrew] Casks to uninstall: {{ cask_packages_to_uninstall | join(', ') }}"
+  tags: [brew-packages, cask, brew]
+  ansible.builtin.debug:
+    msg: "Uninstalling {{ cask_packages_to_uninstall | length }} cask(s)"
+  when: cask_packages_to_uninstall | default([]) | length > 0
+
 - name: "[🍺 homebrew] Uninstall Homebrew casks (absent state)"
   tags: [brew-packages, cask, brew]
   community.general.homebrew_cask:
@@ -225,6 +259,12 @@
     cask_packages_missing: "{{ _missing | map('first') | list }}"
   when: cask_packages | length > 0
 
+- name: "[🍺 homebrew] Casks to install: {{ cask_packages_missing | join(', ') }}"
+  tags: [brew-packages, cask, brew]
+  ansible.builtin.debug:
+    msg: "Installing {{ cask_packages_missing | length }} cask(s)"
+  when: cask_packages_missing | default([]) | length > 0
+
 - name: "[🍺 homebrew] Install missing Homebrew casks (present state)"
   tags: [brew-packages, cask, brew]
   ansible.builtin.command:
@@ -235,6 +275,12 @@
   failed_when:
     - cask_install_result.rc != 0
     - "'already installed' not in (cask_install_result.stderr | default(''))"
+
+- name: "[🍺 homebrew] Casks to ensure latest: {{ cask_packages_latest_names | join(', ') }}"
+  tags: [brew-packages, cask, brew]
+  ansible.builtin.debug:
+    msg: "Ensuring {{ cask_packages_latest_names | length }} cask(s) at latest version"
+  when: cask_packages_latest_names | default([]) | length > 0
 
 - name: "[🍺 homebrew] Install Homebrew casks (latest state)"
   tags: [brew-packages, cask, brew]
@@ -258,6 +304,12 @@
 # TAPS - Remove taps (must happen after uninstalling packages from them)
 # =============================================================================
 
+- name: "[🍺 homebrew] Taps to remove: {{ brew_taps_absent | map(attribute='name') | join(', ') }}"
+  tags: [brew-packages, taps, brew]
+  ansible.builtin.debug:
+    msg: "Removing {{ brew_taps_absent | length }} tap(s)"
+  when: brew_taps_absent | default([]) | length > 0
+
 - name: "[🍺 homebrew] Remove Homebrew taps"
   tags: [brew-packages, taps, brew]
   community.general.homebrew_tap:
@@ -276,6 +328,14 @@
   register: brew_outdated_result
   changed_when: false
   when: brew_upgrade_all | default(false)
+
+- name: "[🍺 homebrew] Packages to upgrade: {{ brew_outdated_result.stdout_lines | join(', ') }}"
+  tags: [brew-packages]
+  ansible.builtin.debug:
+    msg: "Upgrading {{ brew_outdated_result.stdout_lines | length }} package(s)"
+  when:
+    - brew_upgrade_all | default(false)
+    - brew_outdated_result.stdout_lines | default([]) | length > 0
 
 - name: "[🍺 homebrew] Upgrade Homebrew packages"
   tags: [brew-packages]

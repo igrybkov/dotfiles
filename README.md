@@ -78,7 +78,7 @@ After installation, `dotfiles` is available globally from any directory.
 <details>
 <summary><strong>What just happened?</strong></summary>
 
-- Homebrew formulae and casks were installed
+- Homebrew formulas and casks were installed
 - Dotfiles were symlinked to your home directory and `~/.config/`
 - SSH config was generated from your profile settings
 - Git config blocks were written per profile
@@ -245,8 +245,8 @@ Run specific parts of the setup using tags:
 | Tag | Description |
 |-----|-------------|
 | `all` | Run everything |
-| `brew` | Install Homebrew formulae |
-| `brew-packages` | Install Homebrew formulae (alias for `brew`) |
+| `brew` | Install Homebrew formulas |
+| `brew-packages` | Install Homebrew formulas (alias for `brew`) |
 | `cask` | Install Homebrew casks |
 | `taps` | Configure Homebrew taps |
 | `mas` | Install Mac App Store apps |

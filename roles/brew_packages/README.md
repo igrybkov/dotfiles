@@ -5,7 +5,7 @@ Ansible role to manage Homebrew packages, casks, and taps on macOS.
 ## Description
 
 This role manages the installation and removal of:
-- Homebrew formulae (packages)
+- Homebrew formulas (packages)
 - Homebrew casks (GUI applications)
 - Homebrew taps (third-party repositories)
 
@@ -38,7 +38,7 @@ brew_taps:
 
 ### `brew_packages`
 
-List of Homebrew formulae to install. Each item must be a dict with a `name` key.
+List of Homebrew formulas to install. Each item must be a dict with a `name` key.
 
 ```yaml
 brew_packages:

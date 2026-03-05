@@ -52,7 +52,7 @@ This generates a complete profile directory with `config.yml`, dotfile directori
 Edit `profiles/common/config.yml` (shared across all machines) or `profiles/{profile}/config.yml` (profile-specific):
 
 ```yaml
-# Homebrew formulae
+# Homebrew formulas
 brew_packages:
   - name: ripgrep
   - name: fd
