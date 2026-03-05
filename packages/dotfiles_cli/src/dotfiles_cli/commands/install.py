@@ -259,6 +259,8 @@ def install(
         if timing:
             envvars["ANSIBLE_CALLBACKS_ENABLED"] = "timer,profile_tasks,profile_roles"
 
+        become_extravars: dict[str, str] = {}
+
         if set(tags) & SUDO_TAGS or "all" in tags:
             max_attempts = 3
             become_password = None
@@ -299,18 +301,10 @@ def install(
                         )
                         return 1
 
-            # Use askpass script to pass sudo password non-interactively.
-            # This bypasses Touch ID prompts by using sudo's -A flag.
-            # Password is stored in memory (env var) rather than on disk.
-            askpass_script = Path(DOTFILES_DIR) / "bin" / "askpass.sh"
-
-            envvars.update(
-                {
-                    "_DOTFILES_BECOME_PASS": become_password,
-                    "SUDO_ASKPASS": str(askpass_script),
-                    "ANSIBLE_BECOME_FLAGS": "-A",
-                }
-            )
+            # Pass become password via ansible-runner's extravars mechanism.
+            # ansible-runner writes extravars to a temp file and passes via
+            # `-e @file`, so the password is not visible in process listings.
+            become_extravars = {"ansible_become_password": become_password}
 
         if logfile == LOGFILE_AUTO:
             logfile = generate_logfile_name()
@@ -408,6 +402,7 @@ def install(
                 private_data_dir=tmpdir,
                 project_dir=DOTFILES_DIR,
                 envvars=envvars,
+                extravars=become_extravars if become_extravars else None,
                 playbook="playbook.yml",
                 limit=limit_str,
                 tags=",".join(tags) if tags else None,
