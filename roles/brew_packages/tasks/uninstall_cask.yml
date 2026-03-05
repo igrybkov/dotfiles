@@ -1,0 +1,49 @@
+---
+# Uninstall a single Homebrew cask, handling apps that require elevated permissions.
+#
+# Brew may internally call sudo to remove app bundles from /Applications,
+# which hangs in non-interactive sessions. We set SUDO_ASKPASS=/bin/false
+# so sudo fails immediately instead of blocking. If that happens, we remove
+# the app bundle with become (sudo) and retry.
+#
+# Input: cask_name (string) - the cask token to uninstall
+
+- name: "[🍺 homebrew] Uninstall cask: {{ cask_name }}"
+  ansible.builtin.command:
+    cmd: "brew uninstall --cask --force {{ cask_name }}"
+  environment:
+    SUDO_ASKPASS: /bin/false
+  register: cask_uninstall_result
+  changed_when: cask_uninstall_result.rc == 0
+  failed_when: false
+
+- name: "[🍺 homebrew] Remove app requiring elevated permissions: {{ cask_name }}"
+  when:
+    - cask_uninstall_result.rc != 0
+    - "'Permission denied' in cask_uninstall_result.stderr"
+  block:
+    - name: "[🍺 homebrew] Get app artifacts: {{ cask_name }}"
+      ansible.builtin.command:
+        cmd: "brew info --cask --json=v2 {{ cask_name }}"
+      register: cask_info_result
+      changed_when: false
+
+    - name: "[🍺 homebrew] Remove app bundles: {{ cask_name }}"
+      become: true
+      ansible.builtin.file:
+        path: "/Applications/{{ item }}"
+        state: absent
+      loop: >-
+        {{ (cask_info_result.stdout | from_json).casks
+           | map(attribute='artifacts') | flatten
+           | selectattr('app', 'defined')
+           | map(attribute='app') | flatten | list }}
+
+    - name: "[🍺 homebrew] Clean up cask metadata: {{ cask_name }}"
+      ansible.builtin.command:
+        cmd: "brew uninstall --cask --force {{ cask_name }}"
+      register: cask_retry_result
+      changed_when: cask_retry_result.rc == 0
+      failed_when:
+        - cask_retry_result.rc != 0
+        - "'not installed' not in (cask_retry_result.stderr | default(''))"
