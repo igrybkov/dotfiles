@@ -27,6 +27,7 @@ cask_packages:
   - name: elgato-stream-deck
   - name: firefox
   - name: focus
+    state: absent
   - name: ghostty
   - name: google-chrome
   - name: handy
