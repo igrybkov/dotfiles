@@ -51,6 +51,14 @@ agent_folders:
   - ~/.claude/agents
   - ~/.cursor/agents
 
+# Agent instructions destinations - assembled from files/AGENT.md/ fragments across profiles
+agent_instructions_destinations:
+  - path: ~/.claude/CLAUDE.md
+  - path: ~/.cursor/rules/agent-instructions.mdc
+    frontmatter:
+      description: Global agent instructions assembled from dotfiles profiles
+      alwaysApply: true
+
 # JSON config settings (via json_config role)
 # Settings are recursively merged with existing file content
 json_configs:

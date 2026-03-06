@@ -295,7 +295,7 @@
         apply:
           tags: [agent-instructions, coding-agents]
       vars:
-        agent_instructions_destinations: "{{ lookup('aggregated_profile_var', 'agent_instructions_destinations') | flatten | unique }}"
+        agent_instructions_destinations: "{{ lookup('aggregated_profile_var', 'agent_instructions_destinations') | flatten }}"
 
     - name: Install Claude Code plugins (aggregated from all profiles)
       tags: [claude-plugins, coding-agents]

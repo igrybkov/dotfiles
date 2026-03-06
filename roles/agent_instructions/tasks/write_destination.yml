@@ -24,7 +24,7 @@
 - name: "[📋 agent-instructions] Write {{ _destination.path }}"
   ansible.builtin.copy:
     # yamllint disable-line rule:indentation
-    content: "{% if _destination.frontmatter is defined %}---\n{% for key, value in _destination.frontmatter.items() %}{{ key }}: {{ value }}\n{% endfor %}---\n\n{% endif %}{% for result in _fragment_contents.results | default([]) %}{% if not loop.first %}\n{% endif %}{{ result.content | b64decode }}{% endfor %}"
+    content: "{% if _destination.frontmatter is defined %}---\n{% for key, value in _destination.frontmatter.items() %}{{ key }}: {{ value | to_json }}\n{% endfor %}---\n\n{% endif %}{% for result in _fragment_contents.results | default([]) %}{% if not loop.first %}\n{% endif %}{{ result.content | b64decode }}{% endfor %}"
     dest: "{{ _destination.path | expanduser }}"
     mode: "0644"
 # yamllint enable rule:line-length
