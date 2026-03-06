@@ -75,6 +75,7 @@
   when: item.name is defined and item.state is defined and item.state == "absent"
 
 - name: "[🍎 mas] Upgrade Mac App Store packages"
+  become: true
   ansible.builtin.command: mas upgrade
   async: 300
   poll: 10

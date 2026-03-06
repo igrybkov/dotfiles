@@ -319,6 +319,13 @@
         all_mas_errors: "{{ lookup('file', playbook_dir + '/.cache/mas_errors.json') | from_json }}"
       when: mas_errors_file.stat.exists
 
+    - name: "[ Summary] Clean up Mac App Store errors file"
+      tags: [always]
+      ansible.builtin.file:
+        path: "{{ playbook_dir }}/.cache/mas_errors.json"
+        state: absent
+      when: mas_errors_file.stat.exists
+
     - name: "[ Summary] Report Mac App Store errors"
       tags: [always]
       ansible.builtin.fail:
