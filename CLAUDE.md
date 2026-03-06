@@ -12,6 +12,10 @@ See [docs/architecture.md](docs/architecture.md) for the full architecture docum
 
 **Important:** When searching for configuration (MCP servers, packages, etc.), always search `profiles/private/` explicitly since it's gitignored and won't appear in normal grep/glob results. Use `Bash` with `grep -r` or specify the path directly.
 
+**Private profiles are git repos:** Each directory under `profiles/private/` is its own git repository. When modifying files there, treat them as separate repos — stage, commit, and push changes independently from the main dotfiles repo.
+
+**Before committing or pushing**, run `./dotfiles sync --status` to see which repos have uncommitted/unpushed changes. This checks the main repo and all profile repos in parallel and shows branch, ahead/behind, staged/modified/untracked counts.
+
 ## Common Development Commands
 
 ### Running the dotfiles CLI
