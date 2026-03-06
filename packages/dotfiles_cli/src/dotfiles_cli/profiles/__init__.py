@@ -17,6 +17,8 @@ from .config import (
     interactive_settings_config,
 )
 from .git import (
+    RepoStatus,
+    get_all_repo_statuses,
     get_profile_repos,
     get_repos_with_unpushed_changes,
     sync_profile_repos,
@@ -40,6 +42,8 @@ __all__ = [
     "interactive_profile_config",
     "interactive_settings_config",
     # Git
+    "RepoStatus",
+    "get_all_repo_statuses",
     "get_profile_repos",
     "get_repos_with_unpushed_changes",
     "sync_profile_repos",

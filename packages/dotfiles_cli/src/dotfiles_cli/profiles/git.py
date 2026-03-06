@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import subprocess
 from pathlib import Path
 
@@ -88,6 +89,115 @@ def get_repos_with_unpushed_changes() -> tuple[list[str], list[str]]:
         return uncommitted, unpushed
 
     return asyncio.run(check_all_repos())
+
+
+@dataclasses.dataclass
+class RepoStatus:
+    """Status information for a single git repository."""
+
+    name: str
+    branch: str
+    dirty: bool
+    untracked: int
+    staged: int
+    modified: int
+    ahead: int
+    behind: int
+    has_remote: bool
+    last_commit: str
+
+
+async def _get_detailed_repo_status(name: str, repo_path: Path) -> RepoStatus:
+    """Get detailed status for a single repo asynchronously."""
+    branch_task = _run_git_command(
+        ["git", "rev-parse", "--abbrev-ref", "HEAD"], repo_path
+    )
+    status_task = _run_git_command(["git", "status", "--porcelain"], repo_path)
+    tracking_task = _run_git_command(
+        ["git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"],
+        repo_path,
+    )
+    log_task = _run_git_command(
+        ["git", "log", "-1", "--format=%s", "--date=short"], repo_path
+    )
+
+    branch_r, status_r, tracking_r, log_r = await asyncio.gather(
+        branch_task, status_task, tracking_task, log_task
+    )
+
+    branch = branch_r.stdout.strip() if branch_r.returncode == 0 else "unknown"
+
+    # Parse porcelain status
+    staged = 0
+    modified = 0
+    untracked = 0
+    for line in status_r.stdout.splitlines():
+        if not line:
+            continue
+        index_status = line[0]
+        worktree_status = line[1]
+        if index_status == "?":
+            untracked += 1
+        else:
+            if index_status not in (" ", "?"):
+                staged += 1
+            if worktree_status not in (" ", "?"):
+                modified += 1
+
+    dirty = bool(status_r.stdout.strip())
+
+    # Check ahead/behind
+    ahead = 0
+    behind = 0
+    has_remote = tracking_r.returncode == 0
+    if has_remote:
+        ahead_behind = await _run_git_command(
+            ["git", "rev-list", "--left-right", "--count", "@{u}...HEAD"],
+            repo_path,
+        )
+        if ahead_behind.returncode == 0:
+            parts = ahead_behind.stdout.strip().split()
+            if len(parts) == 2:
+                behind = int(parts[0])
+                ahead = int(parts[1])
+
+    last_commit = log_r.stdout.strip() if log_r.returncode == 0 else ""
+
+    return RepoStatus(
+        name=name,
+        branch=branch,
+        dirty=dirty,
+        untracked=untracked,
+        staged=staged,
+        modified=modified,
+        ahead=ahead,
+        behind=behind,
+        has_remote=has_remote,
+        last_commit=last_commit,
+    )
+
+
+def get_all_repo_statuses() -> list[RepoStatus]:
+    """Get detailed status for all repos (main + profiles) asynchronously.
+
+    Returns:
+        List of RepoStatus for each repository
+    """
+    profiles_dir = Path(DOTFILES_DIR) / "profiles"
+
+    async def check_all() -> list[RepoStatus]:
+        repos = [("dotfiles", Path(DOTFILES_DIR))]
+        for repo in get_profile_repos():
+            rel = repo.relative_to(profiles_dir)
+            repos.append((f"profiles/{rel}", repo))
+
+        return list(
+            await asyncio.gather(
+                *[_get_detailed_repo_status(name, path) for name, path in repos]
+            )
+        )
+
+    return asyncio.run(check_all())
 
 
 def get_profile_repos() -> list[Path]:

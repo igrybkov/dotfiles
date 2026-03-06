@@ -6,7 +6,7 @@ import subprocess
 
 import click
 
-from ..profiles import sync_profile_repos
+from ..profiles import get_all_repo_statuses, sync_profile_repos
 
 
 @click.command()
@@ -25,9 +25,66 @@ def push():
     sync_profile_repos("push")
 
 
+def _print_status():
+    """Check and display git status for all repositories."""
+    statuses = get_all_repo_statuses()
+
+    for status in statuses:
+        parts = []
+
+        # Branch
+        parts.append(status.branch)
+
+        # Sync status
+        sync_parts = []
+        if not status.has_remote:
+            sync_parts.append("no remote")
+        else:
+            if status.ahead:
+                sync_parts.append(f"{status.ahead} ahead")
+            if status.behind:
+                sync_parts.append(f"{status.behind} behind")
+        if sync_parts:
+            parts.append(", ".join(sync_parts))
+
+        # Working tree status
+        change_parts = []
+        if status.staged:
+            change_parts.append(f"{status.staged} staged")
+        if status.modified:
+            change_parts.append(f"{status.modified} modified")
+        if status.untracked:
+            change_parts.append(f"{status.untracked} untracked")
+        if change_parts:
+            parts.append(", ".join(change_parts))
+
+        # Status indicator
+        if status.dirty or status.ahead:
+            indicator = click.style("*", fg="yellow")
+        else:
+            indicator = click.style("ok", fg="green")
+
+        name = click.style(status.name, bold=True)
+        detail = " | ".join(parts)
+        click.echo(f"  {indicator} {name}: {detail}")
+
+        if status.last_commit:
+            commit_msg = status.last_commit[:60]
+            if len(status.last_commit) > 60:
+                commit_msg += "..."
+            click.echo(f"      last: {commit_msg}")
+
+
 @click.command()
-def sync():
+@click.option(
+    "--status", "show_status", is_flag=True, help="Show git status for all repos."
+)
+def sync(show_status):
     """Pull the latest changes and then push local changes."""
+    if show_status:
+        _print_status()
+        return
+
     # Pull latest changes from main repo
     pull_result = subprocess.call(["git", "pull"])
     if pull_result != 0:
