@@ -1,0 +1,30 @@
+---
+# Write assembled agent instructions to a single destination file
+# Variables:
+#   _destination: dict with 'path' and optional 'frontmatter'
+#   _agent_instruction_sources: list of fragment sources (sorted by priority)
+
+- name: "[📋 agent-instructions] Ensure directory exists for {{ _destination.path }}"
+  ansible.builtin.file:
+    path: "{{ (_destination.path | expanduser) | dirname }}"
+    state: directory
+    mode: "0755"
+
+- name: "[📋 agent-instructions] Sort fragments by priority then filename"
+  ansible.builtin.set_fact:
+    _sorted_sources: "{{ _agent_instruction_sources | sort(attribute='priority,filename') }}"
+
+- name: "[📋 agent-instructions] Read fragment contents"
+  ansible.builtin.slurp:
+    path: "{{ item.path }}"
+  register: _fragment_contents
+  loop: "{{ _sorted_sources }}"
+
+# yamllint disable rule:line-length
+- name: "[📋 agent-instructions] Write {{ _destination.path }}"
+  ansible.builtin.copy:
+    # yamllint disable-line rule:indentation
+    content: "{% if _destination.frontmatter is defined %}---\n{% for key, value in _destination.frontmatter.items() %}{{ key }}: {{ value }}\n{% endfor %}---\n\n{% endif %}{% for result in _fragment_contents.results | default([]) %}{% if not loop.first %}\n{% endif %}{{ result.content | b64decode }}{% endfor %}"
+    dest: "{{ _destination.path | expanduser }}"
+    mode: "0644"
+# yamllint enable rule:line-length

@@ -1,0 +1,34 @@
+---
+# Agent Instructions Role - Main Tasks
+# Collects AGENT.md fragments from all profiles and assembles them into
+# destination files (e.g., ~/.claude/CLAUDE.md, ~/.cursor/rules/agent-instructions.mdc).
+# Similar to how the gitconfig role aggregates gitignore files.
+
+- name: "[📋 agent-instructions] Get sorted profile hosts"
+  ansible.builtin.set_fact:
+    _sorted_hosts: "{{ lookup('aggregated_profile_var', '_hosts') }}"
+
+# ==============================================================================
+# Collect AGENT.md fragments from all profiles
+# ==============================================================================
+
+- name: "[📋 agent-instructions] Initialize fragment sources list"
+  ansible.builtin.set_fact:
+    _agent_instruction_sources: []
+
+- name: "[📋 agent-instructions] Collect fragments from each profile"
+  ansible.builtin.include_tasks: collect_fragments.yml
+  loop: "{{ _sorted_hosts }}"
+  loop_control:
+    loop_var: _profile_host
+
+# ==============================================================================
+# Assemble and write to each destination
+# ==============================================================================
+
+- name: "[📋 agent-instructions] Write assembled instructions to each destination"
+  ansible.builtin.include_tasks: write_destination.yml
+  loop: "{{ agent_instructions_destinations }}"
+  loop_control:
+    loop_var: _destination
+  when: _agent_instruction_sources | length > 0

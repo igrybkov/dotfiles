@@ -1,0 +1,32 @@
+---
+# Collect AGENT.md fragments from a single profile
+# Variables: _profile_host (the profile hostname from inventory)
+
+- name: "[📋 agent-instructions] Get profile info for {{ _profile_host }}"
+  ansible.builtin.set_fact:
+    _ai_profile_dir: "{{ hostvars[_profile_host].agent_instructions_dir }}"
+    _ai_profile_name: "{{ hostvars[_profile_host].profile_name }}"
+    _ai_profile_priority: "{{ hostvars[_profile_host].profile_priority | default(1000) }}"
+
+- name: "[📋 agent-instructions] Find fragment files for {{ _ai_profile_name }}"
+  ansible.builtin.find:
+    paths: "{{ _ai_profile_dir }}"
+    patterns: "*.md"
+    file_type: file
+  register: _found_fragments
+  failed_when: false
+
+# yamllint disable rule:line-length
+- name: "[📋 agent-instructions] Add fragments for {{ _ai_profile_name }}"
+  ansible.builtin.set_fact:
+    _agent_instruction_sources: >-
+      {{ _agent_instruction_sources + [
+        {
+          'path': item.path,
+          'profile': _ai_profile_name,
+          'priority': _ai_profile_priority | int,
+          'filename': item.path | basename
+        }
+      ] }}
+  loop: "{{ _found_fragments.files | default([]) | sort(attribute='path') }}"
+# yamllint enable rule:line-length

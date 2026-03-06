@@ -288,6 +288,15 @@
       vars:
         npm_packages: "{{ lookup('aggregated_profile_var', 'npm_packages') | community.general.lists_mergeby('name') }}"
 
+    - name: Assemble agent instructions (aggregated from all profiles)
+      tags: [agent-instructions, coding-agents]
+      ansible.builtin.include_role:
+        name: agent_instructions
+        apply:
+          tags: [agent-instructions, coding-agents]
+      vars:
+        agent_instructions_destinations: "{{ lookup('aggregated_profile_var', 'agent_instructions_destinations') | flatten | unique }}"
+
     - name: Install Claude Code plugins (aggregated from all profiles)
       tags: [claude-plugins, coding-agents]
       ansible.builtin.include_role:

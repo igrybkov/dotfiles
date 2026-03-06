@@ -1,0 +1,15 @@
+---
+argument_specs:
+  main:
+    short_description: Assemble agent instructions from profile fragments
+    description:
+      - Collects AGENT.md fragments from all profiles
+      - Concatenates them (sorted by priority) into destination files
+      - Supports optional YAML frontmatter for formats like Cursor .mdc
+    options:
+      agent_instructions_destinations:
+        description: >-
+          List of destination files to write assembled instructions to.
+          Each entry has a path and optional frontmatter (for .mdc format).
+        type: list
+        elements: dict

@@ -1,0 +1,7 @@
+---
+agent_instructions_destinations:
+  - path: ~/.claude/CLAUDE.md
+  - path: ~/.cursor/rules/agent-instructions.mdc
+    frontmatter:
+      description: Global agent instructions assembled from dotfiles profiles
+      alwaysApply: true

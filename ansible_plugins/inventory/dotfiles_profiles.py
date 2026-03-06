@@ -11,6 +11,7 @@ Each profile creates:
     - dotfiles_dir: Path to profile's dotfiles directory
     - dotfiles_copy_dir: Path to profile's dotfiles-copy directory
     - bin_dir: Path to profile's bin directory (scripts symlinked to ~/.local/bin)
+    - agent_instructions_dir: Path to profile's AGENT.md fragments directory
     - skills_dir: Path to profile's skills directory (for AI agent skills)
     - agents_dir: Path to profile's agents directory (for AI agent definitions)
     - packages_dir: Path to profile's packages directory (pipx local packages)
@@ -183,6 +184,12 @@ class InventoryModule(BaseInventoryPlugin):
                 profile.host_name,
                 "bin_dir",
                 f"{profile_abs_path}/files/bin",
+            )
+            # Profile agent instructions path (AGENT.md fragments)
+            self.inventory.set_variable(
+                profile.host_name,
+                "agent_instructions_dir",
+                f"{profile_abs_path}/files/AGENT.md",
             )
             # Profile skills and agents paths (for AI agent configuration)
             self.inventory.set_variable(

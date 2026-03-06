@@ -20,6 +20,13 @@
       },
       "default": []
     },
+    "agent_instructions_destinations": {
+      "description": "List of destination files to write assembled instructions to. Each entry has a path and optional frontmatter (for .mdc format).",
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
     "bin_dir": {
       "description": "Path to profile's bin scripts directory",
       "type": "string"
@@ -499,6 +506,10 @@
           },
           "git_repo": {
             "description": "Git repository URL to clone for the server",
+            "type": "string"
+          },
+          "git_subfolder": {
+            "description": "Subdirectory within the git repo for post_clone commands. Used for monorepo support where multiple servers share the same git_dest.",
             "type": "string"
           },
           "git_version": {

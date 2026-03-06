@@ -59,6 +59,12 @@ argument_specs:
             description: Destination path for the cloned repository
             type: path
             required: false
+          git_subfolder:
+            description: >
+              Subdirectory within the git repo for post_clone commands.
+              Used for monorepo support where multiple servers share the same git_dest.
+            type: str
+            required: false
           git_version:
             description: Git version (branch, tag, or commit) to checkout
             type: str
