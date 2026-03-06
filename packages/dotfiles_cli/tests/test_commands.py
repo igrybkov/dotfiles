@@ -39,17 +39,11 @@ class TestCLIStructure:
 class TestPullCommand:
     """Test the pull command."""
 
-    def test_pull_executes_git_pull(self, cli_runner, mock_subprocess):
-        """Test pull command executes git pull."""
-        with patch("dotfiles_cli.commands.git.sync_profile_repos"):
-            result = cli_runner.invoke(cli, ["pull"])
-
-        assert result.exit_code == 0
-        mock_subprocess["call"].assert_called_once_with(["git", "pull"])
-
-    def test_pull_syncs_profile_repos(self, cli_runner, mock_subprocess):
-        """Test pull command syncs profile repos."""
-        with patch("dotfiles_cli.commands.git.sync_profile_repos") as mock_sync:
+    def test_pull_calls_sync_all_repos(self, cli_runner):
+        """Test pull command calls _sync_all_repos with pull action."""
+        with patch(
+            "dotfiles_cli.commands.git._sync_all_repos", return_value=True
+        ) as mock_sync:
             result = cli_runner.invoke(cli, ["pull"])
 
         assert result.exit_code == 0
@@ -57,32 +51,20 @@ class TestPullCommand:
 
     def test_pull_handles_git_error(self, cli_runner):
         """Test pull command handles git errors."""
-        with (
-            patch("subprocess.call", return_value=1),
-            patch("dotfiles_cli.commands.git.sync_profile_repos"),
-        ):
+        with patch("dotfiles_cli.commands.git._sync_all_repos", return_value=False):
             _result = cli_runner.invoke(cli, ["pull"])
 
         # Pull command doesn't check return code, just passes it through
-        # The actual git error would be visible in output
 
 
 class TestPushCommand:
     """Test the push command."""
 
-    def test_push_executes_git_push(self, cli_runner, mock_subprocess):
-        """Test push command executes git push to main."""
-        with patch("dotfiles_cli.commands.git.sync_profile_repos"):
-            result = cli_runner.invoke(cli, ["push"])
-
-        assert result.exit_code == 0
-        mock_subprocess["call"].assert_called_once_with(
-            ["git", "push", "origin", "main"]
-        )
-
-    def test_push_syncs_profile_repos(self, cli_runner, mock_subprocess):
-        """Test push command syncs profile repos."""
-        with patch("dotfiles_cli.commands.git.sync_profile_repos") as mock_sync:
+    def test_push_calls_sync_all_repos(self, cli_runner):
+        """Test push command calls _sync_all_repos with push action."""
+        with patch(
+            "dotfiles_cli.commands.git._sync_all_repos", return_value=True
+        ) as mock_sync:
             result = cli_runner.invoke(cli, ["push"])
 
         assert result.exit_code == 0
@@ -92,31 +74,23 @@ class TestPushCommand:
 class TestSyncCommand:
     """Test the sync command."""
 
-    def test_sync_pulls_and_pushes(self, cli_runner, mock_subprocess):
+    def test_sync_pulls_and_pushes(self, cli_runner):
         """Test sync command performs pull and push."""
-        with patch("dotfiles_cli.commands.git.sync_profile_repos"):
+        with patch(
+            "dotfiles_cli.commands.git._sync_all_repos", return_value=True
+        ) as mock_sync:
             result = cli_runner.invoke(cli, ["sync"])
 
         assert result.exit_code == 0
+        # Should call with pull first, then push
+        assert mock_sync.call_args_list == [call("pull"), call("push")]
 
-        # Should call git pull and push
-        calls = mock_subprocess["call"].call_args_list
-        assert call(["git", "pull"]) in calls
-        assert call(["git", "push", "origin", "main"]) in calls
-
-    def test_sync_fails_on_pull_error(self, cli_runner):
-        """Test sync aborts if git pull fails."""
-        with (
-            patch("subprocess.call", return_value=1) as mock_call,
-            patch("dotfiles_cli.commands.git.sync_profile_repos"),
-        ):
+    def test_sync_warns_on_failure(self, cli_runner):
+        """Test sync reports warnings when repos fail."""
+        with patch("dotfiles_cli.commands.git._sync_all_repos", return_value=False):
             result = cli_runner.invoke(cli, ["sync"])
 
-        # The sync command returns early but Click doesn't convert return values to exit codes
-        # However, the error message should be in output and push should not be called
-        assert "git pull failed" in result.output
-        # Should only have one call (the failed pull), no push call
-        assert mock_call.call_count == 1
+        assert "failed" in result.output
 
 
 class TestEditCommand:
@@ -517,8 +491,7 @@ class TestInstallCommand:
                 "dotfiles_cli.types.AnsibleTagListType._get_all_supported_tags",
                 return_value=["all", "brew", "cask", "dotfiles"],
             ),
-            patch("subprocess.call", return_value=0),
-            patch("dotfiles_cli.commands.git.sync_profile_repos"),
+            patch("dotfiles_cli.commands.git._sync_all_repos", return_value=True),
             patch("dotfiles_cli.commands.upgrade.upgrade", return_value=0),
         ):
             result = cli_runner.invoke(cli, ["install", "--sync", "dotfiles"])
@@ -537,14 +510,11 @@ class TestInstallCommand:
                 "dotfiles_cli.types.AnsibleTagListType._get_all_supported_tags",
                 return_value=["all", "brew", "cask", "dotfiles"],
             ),
-            patch("subprocess.call", return_value=1),
-            patch("dotfiles_cli.commands.git.sync_profile_repos"),
+            patch("dotfiles_cli.commands.git._sync_all_repos", return_value=False),
         ):
             result = cli_runner.invoke(cli, ["install", "--sync", "dotfiles"])
 
-        # Sync returns error code 1, but Click doesn't propagate it unless we use ctx.exit
-        # The error message should be in the output
-        assert "sync failed" in result.output or "git pull failed" in result.output
+        assert "sync failed" in result.output or "failed to pull" in result.output
 
     def test_install_cleans_up_old_logs(
         self, cli_runner, mock_ansible_runner, temp_dotfiles_dir, mock_getpass

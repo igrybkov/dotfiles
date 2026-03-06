@@ -1,6 +1,6 @@
 """Integration tests for the CLI."""
 
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 
 from dotfiles_cli.app import cli
@@ -153,7 +153,7 @@ class TestInstallWorkflow:
                 "dotfiles_cli.types.AnsibleTagListType._get_all_supported_tags",
                 return_value=["all", "brew", "cask", "dotfiles"],
             ),
-            patch("dotfiles_cli.commands.git.sync_profile_repos"),
+            patch("dotfiles_cli.commands.git._sync_all_repos", return_value=True),
             patch("dotfiles_cli.commands.upgrade.upgrade", return_value=0),
         ):
             result = cli_runner.invoke(cli, ["install", "--sync", "dotfiles"])
@@ -166,17 +166,15 @@ class TestInstallWorkflow:
 class TestSyncWorkflow:
     """Integration tests for sync workflow."""
 
-    def test_sync_full_workflow(self, cli_runner, mock_subprocess):
+    def test_sync_full_workflow(self, cli_runner):
         """Test sync performs pull and push."""
-        with patch("dotfiles_cli.commands.git.sync_profile_repos"):
+        with patch(
+            "dotfiles_cli.commands.git._sync_all_repos", return_value=True
+        ) as mock_sync:
             result = cli_runner.invoke(cli, ["sync"])
 
         assert result.exit_code == 0
-
-        # Verify git pull and push were called
-        calls = [str(call) for call in mock_subprocess["call"].call_args_list]
-        assert any("git" in call and "pull" in call for call in calls)
-        assert any("git" in call and "push" in call for call in calls)
+        assert mock_sync.call_args_list == [call("pull"), call("push")]
 
 
 class TestProfileSelectionWorkflow:
@@ -376,18 +374,15 @@ class TestErrorHandling:
         )
 
     def test_sync_aborts_on_pull_failure(self, cli_runner):
-        """Test sync aborts when git pull fails."""
-        with (
-            patch("subprocess.call", return_value=1) as mock_call,
-            patch("dotfiles_cli.commands.git.sync_profile_repos"),
-        ):
+        """Test sync aborts when pull fails."""
+        with patch(
+            "dotfiles_cli.commands.git._sync_all_repos", return_value=False
+        ) as mock_sync:
             result = cli_runner.invoke(cli, ["sync"])
 
-        # The sync command returns error code but Click doesn't convert return values to exit codes
-        # Check for error message and that push was not called
-        assert "git pull failed" in result.output
-        # Should only have one call (the failed pull), no push call
-        assert mock_call.call_count == 1
+        assert "failed" in result.output
+        # Should only call pull (which failed), not push
+        mock_sync.assert_called_once_with("pull")
 
     def test_edit_fails_when_no_editor(self, cli_runner):
         """Test edit fails gracefully when no editor available."""
@@ -541,7 +536,7 @@ class TestEndToEndScenarios:
                 "dotfiles_cli.commands.install.validate_sudo_password",
                 return_value=True,
             ),
-            patch("dotfiles_cli.commands.git.sync_profile_repos"),
+            patch("dotfiles_cli.commands.git._sync_all_repos", return_value=True),
             patch("dotfiles_cli.commands.upgrade.upgrade", return_value=0),
         ):
             # Step 1: Install with all tags and sync
@@ -553,12 +548,9 @@ class TestEndToEndScenarios:
         assert "Running sync before install" in result.output
         assert "Running with profiles: alpha, bravo" in result.output
 
-    def test_update_and_push_scenario(self, cli_runner, mock_subprocess):
+    def test_update_and_push_scenario(self, cli_runner):
         """Test updating and pushing changes scenario."""
-        with (
-            patch("dotfiles_cli.commands.git.sync_profile_repos"),
-            patch("dotfiles_cli.commands.upgrade.upgrade", return_value=0),
-        ):
+        with patch("dotfiles_cli.commands.git._sync_all_repos", return_value=True):
             # Pull latest
             result1 = cli_runner.invoke(cli, ["pull"])
             assert result1.exit_code == 0

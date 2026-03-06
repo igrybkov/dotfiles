@@ -233,34 +233,58 @@ def get_profile_repos() -> list[Path]:
     return repos
 
 
-def _has_remote(repo: Path) -> bool:
+async def _has_remote(repo: Path) -> bool:
     """Check if a git repository has at least one remote with a URL configured."""
-    result = subprocess.run(
-        ["git", "remote"],
-        cwd=repo,
-        capture_output=True,
-        text=True,
-    )
+    result = await _run_git_command(["git", "remote"], repo)
     if result.returncode != 0 or not result.stdout.strip():
         return False
 
     # Verify at least one remote has a URL (a remote can exist without a URL)
     for remote in result.stdout.strip().splitlines():
-        url_result = subprocess.run(
-            ["git", "remote", "get-url", remote],
-            cwd=repo,
-            capture_output=True,
-            text=True,
-        )
+        url_result = await _run_git_command(["git", "remote", "get-url", remote], repo)
         if url_result.returncode == 0 and url_result.stdout.strip():
             return True
 
     return False
 
 
+async def _sync_single_repo(
+    action: str, repo: Path, profiles_dir: Path
+) -> tuple[str, bool]:
+    """Sync a single profile repo. Returns (display_name, success)."""
+    repo_rel_path = repo.relative_to(profiles_dir)
+    display_name = f"profiles/{repo_rel_path}"
+
+    if not await _has_remote(repo):
+        click.echo(f"Skipping {display_name} (no remote configured)")
+        return display_name, True
+
+    if action == "pull":
+        click.echo(f"Pulling {display_name}...")
+        result = await _run_git_command(["git", "pull"], repo)
+    else:  # push
+        branch_result = await _run_git_command(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"], repo
+        )
+        branch = (
+            branch_result.stdout.strip() if branch_result.returncode == 0 else "main"
+        )
+        click.echo(f"Pushing {display_name}...")
+        result = await _run_git_command(["git", "push", "origin", branch], repo)
+
+    if result.returncode != 0:
+        click.echo(f"Warning: git {action} failed for {display_name}", err=True)
+        if result.stderr.strip():
+            click.echo(f"  {result.stderr.strip()}", err=True)
+        return display_name, False
+
+    return display_name, True
+
+
 def sync_profile_repos(action: str) -> bool:
     """Sync all profile repos that are git repositories (pull or push).
 
+    Runs all repos in parallel for better performance.
     Non-git directories in profiles/ are silently skipped.
     Repos without a configured remote are skipped with a notice.
 
@@ -275,37 +299,11 @@ def sync_profile_repos(action: str) -> bool:
         return True
 
     profiles_dir = Path(DOTFILES_DIR) / "profiles"
-    success = True
-    for repo in repos:
-        repo_rel_path = repo.relative_to(profiles_dir)
 
-        if not _has_remote(repo):
-            click.echo(f"Skipping profiles/{repo_rel_path} (no remote configured)")
-            continue
+    async def sync_all() -> bool:
+        results = await asyncio.gather(
+            *[_sync_single_repo(action, repo, profiles_dir) for repo in repos]
+        )
+        return all(success for _, success in results)
 
-        if action == "pull":
-            click.echo(f"Pulling profiles/{repo_rel_path}...")
-            result = subprocess.call(["git", "pull"], cwd=repo)
-        else:  # push
-            click.echo(f"Pushing profiles/{repo_rel_path}...")
-            # Get the default branch name for this repo
-            branch_result = subprocess.run(
-                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-                cwd=repo,
-                capture_output=True,
-                text=True,
-            )
-            branch = (
-                branch_result.stdout.strip()
-                if branch_result.returncode == 0
-                else "main"
-            )
-            result = subprocess.call(["git", "push", "origin", branch], cwd=repo)
-
-        if result != 0:
-            click.echo(
-                f"Warning: git {action} failed for profiles/{repo_rel_path}", err=True
-            )
-            success = False
-
-    return success
+    return asyncio.run(sync_all())

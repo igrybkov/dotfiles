@@ -2,27 +2,75 @@
 
 from __future__ import annotations
 
-import subprocess
+import asyncio
+from pathlib import Path
 
 import click
 
-from ..profiles import get_all_repo_statuses, sync_profile_repos
+from ..constants import DOTFILES_DIR
+from ..profiles import get_all_repo_statuses
+from ..profiles.git import _run_git_command, _sync_single_repo, get_profile_repos
+
+
+def _sync_all_repos(action: str) -> bool:
+    """Run git action on main repo and all profile repos in parallel.
+
+    Args:
+        action: Either "pull" or "push"
+
+    Returns:
+        True if all repos synced successfully, False otherwise
+    """
+    repos = get_profile_repos()
+    profiles_dir = Path(DOTFILES_DIR) / "profiles"
+    main_repo = Path(DOTFILES_DIR)
+
+    async def run_all() -> bool:
+        # Build tasks for all repos (main + profiles)
+        tasks = []
+
+        # Main repo task
+        if action == "pull":
+            click.echo("Pulling dotfiles...")
+            tasks.append(_run_git_command(["git", "pull"], main_repo))
+        else:
+            click.echo("Pushing dotfiles...")
+            tasks.append(_run_git_command(["git", "push", "origin", "main"], main_repo))
+
+        # Profile repo tasks
+        profile_tasks = [
+            _sync_single_repo(action, repo, profiles_dir) for repo in repos
+        ]
+
+        # Run main repo and all profile repos concurrently
+        main_result, *profile_results = await asyncio.gather(tasks[0], *profile_tasks)
+
+        success = True
+        if main_result.returncode != 0:
+            click.echo(f"Error: git {action} failed for dotfiles", err=True)
+            if main_result.stderr.strip():
+                click.echo(f"  {main_result.stderr.strip()}", err=True)
+            success = False
+
+        for _, profile_ok in profile_results:
+            if not profile_ok:
+                success = False
+
+        return success
+
+    return asyncio.run(run_all())
 
 
 @click.command()
 def pull():
     """Pull the latest changes from the remote repository."""
-    subprocess.call(["git", "pull"])
-    # Also pull profile repos (if they are git repositories)
-    sync_profile_repos("pull")
+    _sync_all_repos("pull")
 
 
 @click.command()
 def push():
     """Push the latest changes to the remote repository."""
-    subprocess.call(["git", "push", "origin", "main"])
-    # Also push profile repos (if they are git repositories)
-    sync_profile_repos("push")
+    _sync_all_repos("push")
 
 
 def _print_status():
@@ -85,24 +133,14 @@ def sync(show_status):
         _print_status()
         return
 
-    # Pull latest changes from main repo
-    pull_result = subprocess.call(["git", "pull"])
-    if pull_result != 0:
-        click.echo("Error: git pull failed", err=True)
-        return pull_result
+    # Pull all repos in parallel
+    if not _sync_all_repos("pull"):
+        click.echo("Warning: some repos failed to pull", err=True)
+        return 1
 
-    # Pull profile repos (if they are git repositories)
-    if not sync_profile_repos("pull"):
-        click.echo("Warning: some profile repos failed to pull", err=True)
-
-    # Push changes to main repo
-    push_result = subprocess.call(["git", "push", "origin", "main"])
-    if push_result != 0:
-        click.echo("Error: git push failed", err=True)
-        return push_result
-
-    # Push profile repos (if they are git repositories)
-    if not sync_profile_repos("push"):
-        click.echo("Warning: some profile repos failed to push", err=True)
+    # Push all repos in parallel
+    if not _sync_all_repos("push"):
+        click.echo("Warning: some repos failed to push", err=True)
+        return 1
 
     return 0
