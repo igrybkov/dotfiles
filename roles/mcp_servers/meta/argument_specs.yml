@@ -39,6 +39,10 @@ argument_specs:
             description: Environment variables (supports vault and 1Password secrets)
             type: dict
             required: false
+          type:
+            description: "Server type (e.g., http) included in config output"
+            type: str
+            required: false
           url:
             description: HTTP endpoint URL for the MCP server (HTTP/SSE transport)
             type: str

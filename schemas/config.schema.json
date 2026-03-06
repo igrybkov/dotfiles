@@ -541,6 +541,10 @@
             "description": "Transport type for URL-based servers (e.g., sse, streamable-http)",
             "type": "string"
           },
+          "type": {
+            "description": "Server type (e.g., http) included in config output",
+            "type": "string"
+          },
           "url": {
             "description": "HTTP endpoint URL for the MCP server (HTTP/SSE transport)",
             "type": "string"

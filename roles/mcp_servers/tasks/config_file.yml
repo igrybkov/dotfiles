@@ -51,6 +51,9 @@
           {%- set server_config = {} -%}
           {%- if server.url is defined -%}
             {# URL-based server (HTTP/SSE transport) #}
+            {%- if server.type is defined -%}
+              {%- set _ = server_config.update({'type': server.type}) -%}
+            {%- endif -%}
             {%- set _ = server_config.update({'url': server.url}) -%}
             {%- if server.transport is defined -%}
               {%- set _ = server_config.update({'transport': server.transport}) -%}
