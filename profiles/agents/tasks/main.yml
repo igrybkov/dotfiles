@@ -1,0 +1,7 @@
+---
+# Agents profile custom tasks
+
+- name: "[🔌 agents] Install plannotator CLI"
+  tags: [claude-plugins]
+  ansible.builtin.include_tasks:
+    file: plannotator.yml

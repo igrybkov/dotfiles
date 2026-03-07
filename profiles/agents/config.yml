@@ -152,6 +152,7 @@ json_configs:
         typescript-lsp@claude-plugins-official: true
         ansible-lsp@custom-lsp: true
         marksman-lsp@custom-lsp: true
+        plannotator@plannotator: true
       planModeByDefault: true
       statusLine:
         type: command
@@ -204,6 +205,8 @@ npm_packages:
 claude_plugin_marketplaces:
   - name: custom-lsp
     path: ~/.claude/marketplaces/custom-lsp
+  - name: plannotator
+    path: backnotprop/plannotator
 
 # Claude Code plugins (via claude_plugins role)
 claude_plugins:
@@ -213,6 +216,8 @@ claude_plugins:
     marketplace: custom-lsp
   - name: marksman-lsp
     marketplace: custom-lsp
+  - name: plannotator
+    marketplace: plannotator
 
 # MCP servers - meta-mcp pattern for user customization
 # meta-mcp loads servers from ~/.meta-mcp/servers.json
