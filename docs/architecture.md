@@ -33,7 +33,7 @@ In order of precedence:
 
 The main playbook runs four plays in sequence:
 
-1. **Gather Facts** (`all` hosts): Collects minimal facts using `linear` strategy (bypasses Mitogen's slow fact gathering)
+1. **Gather Facts** (`localhost` only): Collects minimal facts using `linear` strategy (bypasses Mitogen's slow fact gathering). Per-profile tasks must access these via `hostvars['localhost']['ansible_facts']`
 2. **Bootstrap** (`localhost`): One-time setup — macOS settings, Homebrew installation, brew_packages
 3. **Setup dependencies per profile** (`all` hosts): Per-profile tasks — dotfiles, pipx, mcp_servers
 4. **Finalize** (`localhost`): Aggregation + run-once — mas, ssh_config, gitconfig, pip, gem, composer, chsh, docker, gh_extensions, mise

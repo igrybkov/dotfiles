@@ -82,6 +82,20 @@ mise x -- uv run pytest                       # Run tests in UV environment
 
 See [docs/architecture.md](docs/architecture.md) for details on dotfile symlinking, sudo authentication, shell integration, and the aggregation pattern.
 
+### Ansible Facts in Per-Profile Tasks
+
+Facts are gathered **only on `localhost`** (first play). Per-profile tasks run on profile hosts (e.g., `agents-profile`), so Ansible facts like `ansible_system`, `ansible_architecture`, `ansible_env` are **not directly available**. To access them, reference localhost's facts:
+
+```yaml
+# Wrong — will fail with "undefined" error
+"{{ ansible_architecture }}"
+
+# Correct — reference localhost's gathered facts
+"{{ hostvars['localhost']['ansible_facts']['architecture'] }}"
+```
+
+For `HOME` paths, prefer `~` which Ansible modules expand natively, instead of `ansible_env.HOME`.
+
 ## Adding New Components
 
 ### Adding a new Homebrew package
