@@ -17,14 +17,14 @@
 
 - name: "[🔌 plannotator] Set platform variables"
   ansible.builtin.set_fact:
-    _plannotator_os: "{{ 'darwin' if ansible_system == 'Darwin' else 'linux' }}"
-    _plannotator_arch: "{{ 'arm64' if ansible_architecture == 'arm64' else 'x64' }}"
+    _plannotator_os: "{{ 'darwin' if hostvars['localhost']['ansible_facts']['system'] == 'Darwin' else 'linux' }}"
+    _plannotator_arch: "{{ 'arm64' if hostvars['localhost']['ansible_facts']['architecture'] == 'arm64' else 'x64' }}"
     _plannotator_version: "{{ (_plannotator_release.json.tag_name | default('v0.0.0'))[1:] }}"
   when: _plannotator_check.rc != 0
 
 - name: "[🔌 plannotator] Ensure ~/.local/bin exists"
   ansible.builtin.file:
-    path: "{{ ansible_env.HOME }}/.local/bin"
+    path: "~/.local/bin"
     state: directory
     mode: "0755"
   when: _plannotator_check.rc != 0
@@ -32,6 +32,6 @@
 - name: "[🔌 plannotator] Download binary"
   ansible.builtin.get_url:
     url: "https://github.com/backnotprop/plannotator/releases/download/v{{ _plannotator_version }}/plannotator-{{ _plannotator_os }}-{{ _plannotator_arch }}"
-    dest: "{{ ansible_env.HOME }}/.local/bin/plannotator"
+    dest: "~/.local/bin/plannotator"
     mode: "0755"
   when: _plannotator_check.rc != 0
