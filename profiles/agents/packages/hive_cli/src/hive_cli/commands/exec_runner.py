@@ -215,6 +215,7 @@ def run_in_worktree(
                         layout_has_base_name=layout_has_base_name,
                     )
 
+                console.clear()
                 runner(command)
                 console.print(f"\n[dim]{restart_message}[/]")
                 if restart_confirmation:
@@ -240,6 +241,8 @@ def run_in_worktree(
         _update_zellij_pane_name(
             pane_name_prefix, selected_branch, layout_has_base_name=layout_has_base_name
         )
+
+        console.clear()
 
         if use_execvp and run_command is None:
             # Direct exec, replacing current process (only if no custom runner)
