@@ -22,6 +22,14 @@ us-east-1 = 'va'
 [python]
 format = 'via [${symbol}${pyenv_prefix}($virtualenv )]($style)'
 
+[shell]
+disabled = false
+fish_indicator = ""
+bash_indicator = "bash"
+zsh_indicator = "zsh"
+nu_indicator = "nu"
+style = "dimmed"
+
 #[custom.git_email]
 #description = 'Shows prompt from gitconfig emailprompt section for current user.email'
 #command = "git config --get \"emailprompt.$(git config user.email).prompt\" 2>/dev/null"
