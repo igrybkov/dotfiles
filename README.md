@@ -14,7 +14,7 @@ Ansible-based macOS environment setup with profile-based configuration managemen
 
 Automated macOS development environment setup powered by Ansible. One command installs Homebrew packages, symlinks dotfiles, configures SSH and Git per profile, manages secrets with Ansible Vault, and applies macOS system settings. The profile system lets you separate work, personal, and private configurations — and keep private profiles in their own git repos.
 
-This repo ships with an opinionated set of packages and tools across four topical profiles (`shell`, `neovim`, `development`, `macos-desktop`). **Fork it and make it yours** — swap in your own packages, dotfiles, and profiles.
+This repo ships with an opinionated set of packages and tools across four topical profiles (`shell`, `neovim`, `development`, `macos-desktop`). Clone it and customize to your needs — swap in your own packages, dotfiles, and profiles.
 
 ## Features
 
@@ -54,10 +54,10 @@ Everything else — Homebrew, Python, Ansible, mise, uv — is installed automat
 
 ## Quick Start
 
-1. **Fork and clone:**
+1. **Clone the repo:**
 
    ```bash
-   git clone https://github.com/<your-username>/dotfiles.git ~/.dotfiles
+   git clone git@github.com:igrybkov/dotfiles.git ~/.dotfiles
    cd ~/.dotfiles
    ```
 
@@ -91,7 +91,7 @@ After installation, `dotfiles` is available globally from any directory.
 
 ## Customization
 
-This repo is designed to be forked and customized. The built-in profiles (`shell`, `neovim`, `development`, `macos-desktop`) contain the author's preferred tools — replace them with your own.
+The built-in profiles (`shell`, `neovim`, `development`, `macos-desktop`) can be customized to your needs — edit the config files to add or remove packages and dotfiles.
 
 ### Adding packages
 
