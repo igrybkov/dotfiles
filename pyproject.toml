@@ -60,6 +60,7 @@ testpaths = [
   "packages/dotfiles_profile_discovery/tests",
   "packages/symlink_dotfiles/tests",
   "profiles/agents/packages/hive_cli/tests",
+  "tests",
 ]
 norecursedirs = [ ".git", ".venv", "node_modules", "__pycache__" ]
 python_files = "test_*.py"
