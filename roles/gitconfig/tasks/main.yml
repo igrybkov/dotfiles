@@ -16,6 +16,7 @@
   ansible.builtin.set_fact:
     _gitconfig_fragments: []
     _gitignore_sources: []
+    _allowed_signers_entries: []
 
 - name: "[🔧 gitconfig] Collect fragments from each profile"
   ansible.builtin.include_tasks: collect_profile_fragments.yml
@@ -55,6 +56,13 @@
 
 - name: "[🔧 gitconfig] Aggregate gitignore files"
   ansible.builtin.include_tasks: aggregate_gitignore.yml
+
+# ==============================================================================
+# Aggregate allowed signers from all profiles
+# ==============================================================================
+
+- name: "[🔧 gitconfig] Aggregate allowed signers"
+  ansible.builtin.include_tasks: aggregate_allowed_signers.yml
 
 # ==============================================================================
 # Clean up legacy files

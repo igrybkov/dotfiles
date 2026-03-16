@@ -46,4 +46,12 @@
         }
       ] }}
   when: _gitignore_stat.stat.exists | default(false)
+
+- name: "[🔧 gitconfig] Collect allowed signers from {{ _profile_name }}"
+  ansible.builtin.set_fact:
+    _allowed_signers_entries: >-
+      {{ _allowed_signers_entries +
+        (hostvars[_profile_host].git_allowed_signers | default([]) | map('combine', {'profile': _profile_name, 'priority': _profile_priority | int}) | list)
+      }}
+  when: hostvars[_profile_host].git_allowed_signers is defined
 # yamllint enable rule:line-length
