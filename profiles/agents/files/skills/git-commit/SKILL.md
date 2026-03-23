@@ -1,6 +1,6 @@
 ---
 name: git-commit
-description: Create git commits split by feature/logical unit with automatic task ID detection from branch names. Use when user asks to commit changes, create commits, or split changes into multiple commits.
+description: Create well-organized git commits with automatic task ID detection. Defaults to a single commit; only splits when changes are genuinely unrelated. Use when user asks to commit changes or create commits.
 allowed-tools:
   - Bash(git status:*)
   - Bash(git diff:*)
@@ -14,7 +14,7 @@ allowed-tools:
 
 # Commit Code Skill
 
-Create well-organized git commits split by logical units with automatic task ID prefixing.
+Create well-organized git commits with automatic task ID prefixing. **Default to a single commit.** Only split into multiple commits when changes are genuinely unrelated.
 
 ## Workflow
 
@@ -27,8 +27,8 @@ Create well-organized git commits split by logical units with automatic task ID 
    - For small/focused changes: read diff for specific files with `git diff -- <file>`
    - For config/simple changes: may not need diff at all
    - Avoid running `git diff` without file paths on large changesets
-4. **Group changes** - Organize files by logical feature/purpose
-5. **Create commits** - Make separate commits for each logical unit
+4. **Decide whether to split** - Default is a single commit. Only split if changes are genuinely unrelated (see Grouping Strategy)
+5. **Create commit(s)** - Stage and commit, preferring one commit unless splitting is clearly warranted
 
 ## Task ID Detection
 
@@ -77,17 +77,28 @@ Use conventional commit format:
 
 ## Grouping Strategy
 
-Split commits by:
-- **Feature boundaries** - Related functionality together
-- **Layer boundaries** - Frontend/backend separately when logical
-- **File type** - Config changes, dependencies, code changes
+**One commit is the default.** Most changesets belong in a single commit. Do not look for ways to split — only split when you have a clear reason.
 
-Do NOT split:
+### When NOT to split (keep in one commit)
+
+- **Tests and the code they test** - ALWAYS commit tests together with the implementation they cover. Never use the `test` type for tests that accompany a feature or fix — use `feat` or `fix` and include the tests in the same commit.
+- A feature and its associated config/type/schema changes
+- A refactor that touches multiple files for the same reason
 - Tightly coupled changes that would break if separated
-- Single logical change across multiple files
-- **Tests and the code they test** - Always commit tests together with the implementation they cover (e.g., `auth.py` and `test_auth.py` in one commit)
+- Any single logical change that spans multiple files
+
+### When to split (multiple commits)
+
+Only split when ALL of these are true:
+- Changes serve **completely different purposes** (e.g., an unrelated bug fix + a new feature)
+- Each commit could be **independently reverted** without breaking the other
+- A reviewer would naturally **review them as separate units**
+
+If in doubt, use a single commit.
 
 ## Example Workflow
+
+### Typical case: single commit
 
 ```bash
 # 1. Gather metadata (run these in PARALLEL - single message, multiple tool calls)
@@ -96,15 +107,23 @@ git log main..HEAD --oneline --max-count=10
 git status                          # → lists modified files
 
 # 2. Inspect specific files as needed (based on status output)
-git diff -- src/auth/service.ts     # Only diff files you need to understand
-git diff --staged -- src/auth/types.ts
+git diff -- src/auth/service.ts
+git diff -- src/auth/service.test.ts
 
-# 3. Stage and commit logically grouped changes
-git add src/auth/*.ts
+# 3. All changes are part of the same feature → single commit (tests included!)
+git add src/auth/service.ts src/auth/service.test.ts src/auth/types.ts
 git commit -m "PROJ-123: feat(auth): implement user authentication service"
+```
 
-git add src/components/LoginForm.tsx
-git commit -m "PROJ-123: feat(ui): add login form component"
+### Rare case: multiple commits (genuinely unrelated changes)
+
+```bash
+# Only split when changes are truly independent — e.g., a bug fix AND an unrelated feature
+git add src/billing/invoice.ts
+git commit -m "PROJ-456: fix(billing): correct tax calculation rounding"
+
+git add src/auth/service.ts src/auth/service.test.ts
+git commit -m "PROJ-123: feat(auth): implement user authentication service"
 ```
 
 ## Important Notes
@@ -113,4 +132,4 @@ git commit -m "PROJ-123: feat(ui): add login form component"
 - Use `git add -p` for partial file staging when needed
 - Never force push or amend pushed commits without explicit permission
 - Never push the branch unless explicitly asked
-- If changes are too intertwined to split, create a single well-described commit
+- When in doubt, prefer fewer commits over more — a single well-described commit is almost always better than over-split small ones
