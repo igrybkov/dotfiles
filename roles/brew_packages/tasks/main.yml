@@ -149,7 +149,10 @@
     cmd: "brew install {{ brew_packages_missing | join(' ') }}"
   register: brew_install_result
   when: brew_packages_missing | default([]) | length > 0
-  changed_when: brew_install_result.rc == 0
+  changed_when:
+    - brew_install_result.rc == 0
+    - "'already installed' not in (brew_install_result.stderr | default(''))"
+    - "'the latest version is already installed' not in (brew_install_result.stderr | default(''))"
   failed_when:
     - brew_install_result.rc != 0
     - "'already installed' not in (brew_install_result.stderr | default(''))"
@@ -273,7 +276,10 @@
     cmd: "brew install --adopt --cask {{ cask_packages_missing | join(' ') }}"
   register: cask_install_result
   when: cask_packages_missing | default([]) | length > 0
-  changed_when: cask_install_result.rc == 0
+  changed_when:
+    - cask_install_result.rc == 0
+    - "'already installed' not in (cask_install_result.stderr | default(''))"
+    - "'the latest version is already installed' not in (cask_install_result.stderr | default(''))"
   failed_when:
     - cask_install_result.rc != 0
     - "'already installed' not in (cask_install_result.stderr | default(''))"

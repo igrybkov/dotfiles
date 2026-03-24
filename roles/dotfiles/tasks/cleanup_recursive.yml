@@ -55,7 +55,8 @@
           set -o pipefail
           find . -maxdepth {{ max_depth | default(10) }} -mindepth 1 -type d -empty \
             -not -path './projects/*' \
-            -not -path './session-env/*' 2>/dev/null | head -100
+            -not -path './session-env/*' \
+            -not -path './plugins/*' 2>/dev/null | head -100
         chdir: "{{ cleanup_dir }}"
         executable: /bin/bash
       register: empty_dirs

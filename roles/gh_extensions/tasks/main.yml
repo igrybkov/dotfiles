@@ -37,7 +37,7 @@
     gh_extensions_installed: >-
       {{
         gh_extensions_installed | default([]) +
-        [item.split()[0] | trim]
+        [item.split() | select('match', '.*/.*') | first]
       }}
   loop: "{{ gh_extensions_list.stdout_lines | default([]) }}"
   when: gh_extensions_list.stdout_lines is defined
@@ -72,17 +72,32 @@
   loop_control:
     label: "{{ item.name }}"
 
-- name: "[🔌 gh_extensions] Install or upgrade extensions (latest state)"
+- name: "[🔌 gh_extensions] Install missing extensions (latest state)"
   ansible.builtin.command:
-    cmd: "gh extension install {{ item.name }} --force"
+    cmd: "gh extension install {{ item.name }}"
   loop: "{{ gh_extensions }}"
   when:
     - item.state is defined
     - item.state == "latest"
+    - item.name not in (gh_extensions_installed | default([]))
   register: gh_extension_install_latest
   failed_when: false
+  changed_when: gh_extension_install_latest.rc == 0
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: "[🔌 gh_extensions] Upgrade extensions to latest version"
+  ansible.builtin.command:
+    cmd: "gh extension upgrade {{ item.name | split('/') | last }}"
+  loop: "{{ gh_extensions }}"
+  when:
+    - item.state is defined
+    - item.state == "latest"
+    - item.name in (gh_extensions_installed | default([]))
+  register: gh_extension_upgrade
+  failed_when: false
   changed_when: >
-    gh_extension_install_latest.rc == 0
-    and ("already up to date" not in (gh_extension_install_latest.stdout | default("")))
+    gh_extension_upgrade.rc == 0
+    and ("already up to date" not in (gh_extension_upgrade.stderr | default("") + gh_extension_upgrade.stdout | default("")))
   loop_control:
     label: "{{ item.name }}"
