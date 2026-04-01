@@ -32,7 +32,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-  "ansible-lint~=26.3.0",
+  "ansible-lint~=26.4.0",
   "cyclopts~=4.10.0",
   "docopt~=0.6.2",
   "molecule~=26.3.0",
