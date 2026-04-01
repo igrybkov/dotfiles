@@ -1,9 +1,8 @@
 ---
 # Hive CLI Configuration
-# Documentation: https://github.com/anthropics/hive-cli
 #
 # Uncomment and modify options as needed.
-# Values shown are defaults.
+# Values shown are defaults unless noted otherwise.
 #
 # Configuration precedence (highest to lowest):
 #   1. Environment variables (HIVE_*)
@@ -13,72 +12,93 @@
 #   5. Package defaults
 
 # agents:
-#  order:
-#    - claude
+#   # Priority order for agent auto-detection
+#   order:
+#     - claude
 #     - gemini
 #     - codex
-#    - agent
+#     - agent
 #     - copilot
-
+#
+#   # Per-agent configuration
 #   configs:
-#     # Claude uses --continue flag
 #     claude:
 #       resume_args: ["--continue"]
-
-#     # Copilot uses --continue flag
+#       skip_permissions_args: ["--dangerously-skip-permissions"]
+#       extra_dirs_flag: "--add-dir"
+#
 #     copilot:
 #       resume_args: ["--continue"]
-
-#     # Codex uses resume subcommand with --last
+#       skip_permissions_args: ["--allow-all"]
+#       extra_dirs_flag: "--add-dir"
+#
 #     codex:
 #       resume_args: ["resume", "--last"]
-
-#     # Gemini uses --resume with latest argument
+#       skip_permissions_args: ["--full-auto"]
+#       extra_dirs_flag: "--add-dir"
+#
 #     gemini:
 #       resume_args: ["--resume", "latest"]
-
-#     # Cursor agent CLI uses resume subcommand
+#       skip_permissions_args: ["-y"]
+#       extra_dirs_flag: "--include-directories"
+#
 #     agent:
 #       resume_args: ["resume"]
-
-#     # Cursor agent alternative name
+#       skip_permissions_args: ["-f"]
+#
 #     cursor-agent:
 #       resume_args: ["resume"]
+#       skip_permissions_args: ["-f"]
 
-resume:
-  enabled: false
+# resume:
+#   enabled: false
 
 worktrees:
   enabled: true
-  # parent_dir: ".worktrees"
-  # use_home: false
+  # parent_dir: "~/.worktrees/{repo}/{branch}"  # Supports ~, {repo}, {branch}
   resume: true
-#   copy_files: []
-#   symlink_files: []
-
-#   post_create:
-#     - command: "mise trust"
-#       if_exists: "mise.toml"
-
-#     - command: "mise install"
-#       if_exists: "mise.toml"
-
-#     - command: "pnpm install --frozen-lockfile"
-#       if_exists: "pnpm-lock.yaml"
-
-#     - command: "yarn install --frozen-lockfile"
-#       if_exists: "yarn.lock"
-
-#     - command: "npm install"
-#       if_exists: "package-lock.json"
-
-#     - command: "uv sync"
-#       if_exists: "pyproject.toml"
+  # skip_permissions: false
+  #
+  # # Files to symlink from main repo into each new worktree (relative paths)
+  # symlink_files: []
+  #   # - .env
+  #   # - .env.local
+  #
+  # # Files to copy from main repo into each new worktree (relative paths)
+  # copy_files: []
+  #   # - .some-local-config
+  #
+  # # Auto-select a branch in the worktree picker after a timeout.
+  # # Any keypress cancels the timer.
+  # auto_select:
+  #   enabled: false
+  #   branch: "-"    # Use "-" for repo's default branch
+  #   timeout: 3.0   # Seconds before auto-selection
+  #
+  # # Commands to run after creating a worktree.
+  # # Each entry has a "command" and optional "if_exists" condition.
+  # post_create:
+  #   - command: "mise trust"
+  #     if_exists: "mise.toml"
+  #   - command: "mise install"
+  #     if_exists: "mise.toml"
+  #   - command: "pnpm install --frozen-lockfile"
+  #     if_exists: "pnpm-lock.yaml"
+  #   - command: "yarn install --frozen-lockfile"
+  #     if_exists: "yarn.lock"
+  #   - command: "npm install"
+  #     if_exists: "package-lock.json"
+  #   - command: "uv sync"
+  #     if_exists: "pyproject.toml"
 
 # zellij:
-#   # layout: "agent"  # Optional: set to use a custom layout, omit for default
+#   layout: "agent"              # Layout name, or omit for Zellij's default
 #   session_name: "{repo}-{agent}"
 
 # github:
 #   fetch_issues: true
 #   issue_limit: 20
+
+# # Additional directories to pass to the agent via its extra_dirs_flag.
+# # Relative paths resolve against the main repo root.
+# extra_dirs: []

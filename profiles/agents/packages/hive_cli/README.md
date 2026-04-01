@@ -153,27 +153,41 @@ agents:
     - agent      # Cursor agent CLI
     - copilot
 
-  # Per-agent resume behavior configuration
+  # Per-agent configuration
   configs:
-    # Default: uses ["--continue"] for resume
     claude:
       resume_args: ["--continue"]
+      skip_permissions_args: ["--dangerously-skip-permissions"]
+      extra_dirs_flag: "--add-dir"
 
-    # Codex uses subcommand style
+    copilot:
+      resume_args: ["--continue"]
+      skip_permissions_args: ["--allow-all"]
+      extra_dirs_flag: "--add-dir"
+
     codex:
       resume_args: ["resume", "--last"]
+      skip_permissions_args: ["--full-auto"]
+      extra_dirs_flag: "--add-dir"
 
-    # Gemini uses flag with argument
     gemini:
       resume_args: ["--resume", "latest"]
+      skip_permissions_args: ["-y"]
+      extra_dirs_flag: "--include-directories"
 
-    # Cursor agent uses subcommand
     agent:
       resume_args: ["resume"]
+      skip_permissions_args: ["-f"]
+
+    cursor-agent:
+      resume_args: ["resume"]
+      skip_permissions_args: ["-f"]
 
     # Add custom agents as needed
     my-custom-agent:
       resume_args: ["--restore"]
+      skip_permissions_args: ["--yes"]
+      extra_dirs_flag: "--dir"
 
 # Resume behavior defaults
 resume:
@@ -193,6 +207,24 @@ worktrees:
   # Default --resume flag for worktree sessions
   resume: false
 
+  # Default --skip-permissions flag for worktree sessions
+  skip_permissions: false
+
+  # Files to symlink from main repo into each new worktree (relative paths)
+  symlink_files:
+    - ".env"
+
+  # Files to copy from main repo into each new worktree (relative paths)
+  copy_files:
+    - ".env.local"
+
+  # Auto-select a branch in the worktree picker after a timeout.
+  # Any keypress cancels the timer.
+  auto_select:
+    enabled: false
+    branch: "-"    # Use "-" for repo's default branch
+    timeout: 3.0   # Seconds before auto-selection
+
   # Commands to run after creating a worktree
   # Each command can have an optional if_exists condition
   post_create:
@@ -211,14 +243,6 @@ worktrees:
     - command: "uv sync"
       if_exists: "pyproject.toml"
 
-  # Files to copy from main repo to new worktrees
-  copy_files:
-    - ".env.local"
-
-  # Files to symlink from main repo to new worktrees
-  symlink_files:
-    - ".env"
-
 # Zellij terminal multiplexer configuration
 zellij:
   # Layout name to use (optional, must exist in zellij config if specified)
@@ -236,6 +260,10 @@ github:
 
   # Maximum number of issues to fetch
   issue_limit: 20
+
+# Additional directories to pass to the agent via its extra_dirs_flag.
+# Relative paths resolve against the main repo root.
+extra_dirs: []
 ```
 
 ### Configuration Options
@@ -247,18 +275,28 @@ github:
 
 #### `agents.configs.<name>.resume_args`
 - **Type:** `list[string]`
-- **Default:** `["--continue"]` for most agents
+- **Default:** Varies per agent
 - **Description:** Arguments to prepend when using `--resume`. Set to `[]` to disable resume for an agent.
 
-**Built-in defaults:**
-| Agent | Resume Args |
-|-------|-------------|
-| claude | `["--continue"]` |
-| copilot | `["--continue"]` |
-| codex | `["resume", "--last"]` |
-| gemini | `["--resume", "latest"]` |
-| agent | `["resume"]` |
-| cursor-agent | `["resume"]` |
+#### `agents.configs.<name>.skip_permissions_args`
+- **Type:** `list[string]`
+- **Default:** Varies per agent
+- **Description:** Arguments to add when using `--skip-permissions` mode.
+
+#### `agents.configs.<name>.extra_dirs_flag`
+- **Type:** `string` (optional)
+- **Default:** Varies per agent (`null` if not supported)
+- **Description:** CLI flag the agent uses for additional directories (e.g., `--add-dir` for Claude, `--include-directories` for Gemini).
+
+**Built-in agent defaults:**
+| Agent | Resume Args | Skip Permissions Args | Extra Dirs Flag |
+|-------|-------------|----------------------|-----------------|
+| claude | `["--continue"]` | `["--dangerously-skip-permissions"]` | `--add-dir` |
+| copilot | `["--continue"]` | `["--allow-all"]` | `--add-dir` |
+| codex | `["resume", "--last"]` | `["--full-auto"]` | `--add-dir` |
+| gemini | `["--resume", "latest"]` | `["-y"]` | `--include-directories` |
+| agent | `["resume"]` | `["-f"]` | — |
+| cursor-agent | `["resume"]` | `["-f"]` | — |
 
 #### `resume.enabled`
 - **Type:** `boolean`
@@ -280,6 +318,29 @@ github:
 - **Default:** `false`
 - **Description:** Default `--resume` flag for worktree sessions (separate from `resume.enabled`).
 
+#### `worktrees.skip_permissions`
+- **Type:** `boolean`
+- **Default:** `false`
+- **Description:** Default `--skip-permissions` flag for worktree sessions.
+
+#### `worktrees.auto_select`
+
+Auto-select configuration for the worktree picker. When enabled, automatically selects a branch after a timeout. Any keypress cancels.
+
+- **`auto_select.enabled`** (`boolean`, default `false`): Enable auto-selection.
+- **`auto_select.branch`** (`string`, default `"-"`): Branch to auto-select. Use `"-"` for the repo's default branch.
+- **`auto_select.timeout`** (`float`, default `3.0`): Seconds before auto-selection (0 for instant).
+
+#### `worktrees.symlink_files`
+- **Type:** `list[string]`
+- **Default:** `[]`
+- **Description:** Files to symlink from main repo into each new worktree. Paths are relative to the repo root. Useful for files like `.env` that should stay in sync across worktrees.
+
+#### `worktrees.copy_files`
+- **Type:** `list[string]`
+- **Default:** `[]`
+- **Description:** Files to copy from main repo into each new worktree. Paths are relative to the repo root. Useful for files that need independent copies per worktree.
+
 #### `worktrees.post_create`
 - **Type:** `list[object]`
 - **Default:** See example above
@@ -292,16 +353,6 @@ Each item can be:
   - command: "pnpm install"
     if_exists: "pnpm-lock.yaml"
   ```
-
-#### `worktrees.copy_files`
-- **Type:** `list[string]`
-- **Default:** `[]`
-- **Description:** Files to copy from main repo to new worktrees.
-
-#### `worktrees.symlink_files`
-- **Type:** `list[string]`
-- **Default:** `[]`
-- **Description:** Files to symlink from main repo to new worktrees.
 
 #### `zellij.layout`
 - **Type:** `string` (optional)
@@ -323,6 +374,11 @@ Each item can be:
 - **Default:** `20`
 - **Description:** Maximum number of issues to fetch.
 
+#### `extra_dirs`
+- **Type:** `list[string]`
+- **Default:** `[]`
+- **Description:** Additional directories to pass to the agent via its `extra_dirs_flag`. Relative paths resolve against the main repo root.
+
 ### Environment Variables
 
 Environment variables use the `HIVE_` prefix and take precedence over config files:
@@ -334,6 +390,7 @@ Environment variables use the `HIVE_` prefix and take precedence over config fil
 | `HIVE_WORKTREES_ENABLED` | boolean | Enable worktrees feature |
 | `HIVE_WORKTREES_PARENT_DIR` | string | Directory template for worktrees |
 | `HIVE_WORKTREES_RESUME` | boolean | Default resume for worktree sessions |
+| `HIVE_WORKTREES_SKIP_PERMISSIONS` | boolean | Default skip-permissions for worktree sessions |
 | `HIVE_ZELLIJ_LAYOUT` | string | Zellij layout name |
 | `HIVE_ZELLIJ_SESSION_NAME` | string | Session name template |
 | `HIVE_GITHUB_FETCH_ISSUES` | boolean | Fetch GitHub issues |

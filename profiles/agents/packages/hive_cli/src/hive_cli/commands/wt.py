@@ -43,6 +43,7 @@ from ..utils import (
     open_in_editor,
     select_agent,
     select_editor,
+    setup_worktree_files,
     success,
     warn,
 )
@@ -545,6 +546,8 @@ def _create_worktree_flow(branch: str, main_repo: Path, agent_num: int) -> str |
     try:
         path = create_worktree(branch, main_repo)
         success(f"Created worktree at {path}")
+
+        setup_worktree_files(path, main_repo)
 
         info("Installing dependencies...")
         if install_dependencies(path):
@@ -1275,6 +1278,8 @@ def create(
     try:
         path = create_worktree(branch)
         success(f"Created worktree at {path}")
+
+        setup_worktree_files(path, get_main_repo())
 
         if install:
             info("Installing dependencies...")

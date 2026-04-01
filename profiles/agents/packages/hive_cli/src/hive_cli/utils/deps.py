@@ -13,6 +13,73 @@ from pathlib import Path
 from ..config import load_config
 
 
+def setup_worktree_files(worktree_path: Path, main_repo: Path) -> bool:
+    """Symlink and copy files from main repo to worktree.
+
+    Processes ``worktrees.symlink_files`` and ``worktrees.copy_files``
+    from configuration, creating symlinks or copies in the worktree
+    that point back to the main repository.
+
+    Args:
+        worktree_path: Path to the new worktree.
+        main_repo: Path to the main repository.
+
+    Returns:
+        True if all files were set up successfully.
+    """
+    config = load_config()
+    all_ok = True
+
+    for rel in config.worktrees.symlink_files:
+        if not _setup_file(worktree_path, main_repo, rel, copy=False):
+            all_ok = False
+
+    for rel in config.worktrees.copy_files:
+        if not _setup_file(worktree_path, main_repo, rel, copy=True):
+            all_ok = False
+
+    return all_ok
+
+
+def _setup_file(worktree_path: Path, main_repo: Path, rel: str, *, copy: bool) -> bool:
+    """Set up a single file (symlink or copy) in the worktree.
+
+    Args:
+        worktree_path: Path to the worktree.
+        main_repo: Path to the main repository.
+        rel: Relative path of the file.
+        copy: If True, copy the file; otherwise, create a symlink.
+
+    Returns:
+        True if successful.
+    """
+    from .terminal import warn
+
+    if Path(rel).is_absolute():
+        warn(f"Skipping absolute path: {rel}")
+        return False
+
+    source = main_repo / rel
+    target = worktree_path / rel
+
+    if not source.exists():
+        warn(f"Source does not exist, skipping: {source}")
+        return False
+
+    if target.exists() or target.is_symlink():
+        warn(f"Target already exists, skipping: {target}")
+        return False
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+
+    if copy:
+        shutil.copy2(source, target)
+    else:
+        target.symlink_to(source)
+
+    return True
+
+
 def run_post_create_commands(path: Path, quiet: bool = True) -> bool:
     """Run post_create commands from configuration.
 

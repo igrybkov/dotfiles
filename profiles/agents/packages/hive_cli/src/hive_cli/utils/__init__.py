@@ -6,6 +6,7 @@ from .deps import (
     ensure_mise_trusted,
     install_dependencies,
     run_post_create_commands,
+    setup_worktree_files,
 )
 from .editors import (
     EditorConfig,
@@ -55,6 +56,7 @@ __all__ = [
     "info",
     "install_dependencies",
     "run_post_create_commands",
+    "setup_worktree_files",
     "interactive_select",
     "is_interactive",
     "print_stderr",
