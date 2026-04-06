@@ -33,7 +33,10 @@ function __kubectl_add_alias
         end
         if test "$argo" = true; and type -q argo
             set -l argo_alias (string replace -r '^-' '' -- $alias_name)
-            alias "argo-$argo_alias" "argo $options"
+            # Create a function instead of alias to support archived workflow fallback
+            eval "function argo-$argo_alias --wraps 'argo $options' --description 'argo $options'
+                __argo_with_archive_fallback $options \$argv
+            end"
         end
     end
 end
