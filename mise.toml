@@ -1,5 +1,5 @@
 [tools]
-uv = "0.11.4"
+uv = "0.11.5"
 
 [settings]
 lockfile = true
