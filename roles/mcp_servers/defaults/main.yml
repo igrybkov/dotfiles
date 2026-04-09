@@ -53,3 +53,7 @@ mcp_default_config_files:
 
 # Base directory for git-cloned MCP servers
 mcp_servers_git_base: ~/.local/share/mcp-servers
+
+# Force re-run of post_clone commands even if marker exists and repo unchanged
+# Useful for retrying failed builds: --extra-vars mcp_force_post_clone=true
+mcp_force_post_clone: false

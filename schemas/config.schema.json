@@ -441,6 +441,11 @@
         "~/Library/Application Support/Claude/claude_desktop_config.json"
       ]
     },
+    "mcp_force_post_clone": {
+      "description": "Force re-run of post_clone commands for all git-based servers, even if the marker file exists and the repo has not changed. Useful for retrying failed builds. Pass via --extra-vars.",
+      "type": "boolean",
+      "default": false
+    },
     "mcp_servers": {
       "description": "List of MCP server configurations.\nEach server must have a name and either a command or url.",
       "type": "array",

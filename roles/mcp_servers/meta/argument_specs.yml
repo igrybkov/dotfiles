@@ -121,3 +121,11 @@ argument_specs:
         description: Base directory for git-cloned MCP servers
         type: path
         default: ~/.local/share/mcp-servers
+
+      mcp_force_post_clone:
+        description: >
+          Force re-run of post_clone commands for all git-based servers,
+          even if the marker file exists and the repo has not changed.
+          Useful for retrying failed builds. Pass via --extra-vars.
+        type: bool
+        default: false

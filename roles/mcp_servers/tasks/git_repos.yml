@@ -195,8 +195,38 @@
       ansible.builtin.set_fact:
         mcp_git_changed_dests: "{{ _changed_dests | from_json }}"
 
-    # Build list of servers needing post_clone: their resolved dest must be in changed set
-    - name: "[🤖 MCP] Normalize post-clone to list format (only for changed repos)"
+    # Check for missing post-clone markers to detect servers that need (re-)provisioning
+    - name: "[🤖 MCP] Check post-clone markers"
+      ansible.builtin.stat:
+        path: "{{ _chdir }}/.mcp_post_clone_done"
+      vars:
+        _dest: "{{ (item.git_dest | default(mcp_servers_git_base + '/' + item.name)) | expanduser }}"
+        _subfolder: "{{ item.git_subfolder | default('') }}"
+        _chdir: "{{ _dest + '/' + _subfolder if _subfolder else _dest }}"
+      loop: "{{ mcp_git_servers }}"
+      when: item.post_clone is defined
+      loop_control:
+        label: "{{ item.name }}"
+      register: mcp_post_clone_marker_check
+
+    - name: "[🤖 MCP] Identify servers missing post-clone markers"
+      vars:
+        _missing: |
+          {% set missing = [] %}
+          {% for result in mcp_post_clone_marker_check.results %}
+          {% if not result.skipped | default(false) and not result.stat.exists | default(false) %}
+          {% set dest = (result.item.git_dest | default(mcp_servers_git_base + '/' + result.item.name)) | expanduser %}
+          {% set subfolder = result.item.git_subfolder | default('') %}
+          {% set chdir = dest + '/' + subfolder if subfolder else dest %}
+          {% set _ = missing.append(chdir) %}
+          {% endif %}
+          {% endfor %}
+          {{ missing | to_json }}
+      ansible.builtin.set_fact:
+        mcp_post_clone_missing_markers: "{{ _missing | from_json }}"
+
+    # Build list of servers needing post_clone: repo changed, marker missing, or force flag
+    - name: "[🤖 MCP] Normalize post-clone to list format (servers needing build)"
       ansible.builtin.set_fact:
         mcp_git_servers_with_post_clone: >-
           {{
@@ -210,16 +240,35 @@
       loop: "{{ mcp_git_servers }}"
       when:
         - item.post_clone is defined
-        - _resolved_dest in mcp_git_changed_dests
+        - >-
+          _resolved_dest in mcp_git_changed_dests
+          or _resolved_chdir in mcp_post_clone_missing_markers
+          or mcp_force_post_clone | default(false) | bool
       vars:
         _resolved_dest: "{{ (item.git_dest | default(mcp_servers_git_base + '/' + item.name)) | expanduser }}"
+        _subfolder: "{{ item.git_subfolder | default('') }}"
+        _resolved_chdir: "{{ _resolved_dest + '/' + _subfolder if _subfolder else _resolved_dest }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    # Delete stale markers before running post-clone so that a successful run writes a fresh one
+    - name: "[🤖 MCP] Remove stale post-clone markers before rebuild"
+      when: mcp_git_servers_with_post_clone | default([]) | length > 0
+      ansible.builtin.file:
+        path: "{{ _chdir }}/.mcp_post_clone_done"
+        state: absent
+      vars:
+        _dest: "{{ (item.git_dest | default(mcp_servers_git_base + '/' + item.name)) | expanduser }}"
+        _subfolder: "{{ item.git_subfolder | default('') }}"
+        _chdir: "{{ _dest + '/' + _subfolder if _subfolder else _dest }}"
+      loop: "{{ mcp_git_servers_with_post_clone }}"
       loop_control:
         label: "{{ item.name }}"
 
     # post_clone commands run in git_subfolder within the repo (for monorepo support)
-    - name: "[🤖 MCP] Run post-clone commands"
+    - name: "[🤖 MCP] Run post-clone commands"  # noqa: command-instead-of-shell
       when: mcp_git_servers_with_post_clone | default([]) | length > 0
-      ansible.builtin.command:
+      ansible.builtin.shell:
         cmd: "{{ item.1 }}"
         chdir: "{{ _chdir }}"
       vars:
@@ -231,6 +280,23 @@
         label: "{{ item.0.name }}: {{ item.1 }}"
       # Post-clone commands run only for newly cloned/updated repos, expected to change state
       changed_when: true
+
+    # Write marker after all post-clone commands succeed
+    # If any command fails above, Ansible stops and this task never runs → marker stays missing
+    - name: "[🤖 MCP] Write post-clone success markers"
+      when: mcp_git_servers_with_post_clone | default([]) | length > 0
+      ansible.builtin.copy:
+        content: "post_clone completed successfully\n"
+        dest: "{{ _chdir }}/.mcp_post_clone_done"
+        mode: "0644"
+      vars:
+        _dest: "{{ (item.git_dest | default(mcp_servers_git_base + '/' + item.name)) | expanduser }}"
+        _subfolder: "{{ item.git_subfolder | default('') }}"
+        _chdir: "{{ _dest + '/' + _subfolder if _subfolder else _dest }}"
+      loop: "{{ mcp_git_servers_with_post_clone }}"
+      loop_control:
+        label: "{{ item.name }}"
+      changed_when: false
 
 # Handle absent state - remove cloned repos
 - name: "[🤖 MCP] Identify git servers to remove"
