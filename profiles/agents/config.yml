@@ -154,7 +154,7 @@ json_configs:
         ansible-lsp@custom-lsp: true
         marksman-lsp@custom-lsp: true
         plannotator@plannotator: true
-      planModeByDefault: true
+      defaultMode: "auto"
       statusLine:
         type: command
         command: ~/.claude/statusline-command.py
