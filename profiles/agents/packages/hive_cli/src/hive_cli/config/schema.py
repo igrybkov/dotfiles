@@ -20,12 +20,14 @@ class AgentConfig(BaseModel):
     Attributes:
         resume_args: Arguments to add for resume functionality.
         skip_permissions_args: Arguments to add for skip-permissions mode.
+        extra_args: Arguments always appended to the agent command.
         extra_dirs_flag: CLI flag the agent uses for additional directories
             (e.g., "--add-dir" for Claude, "--directory" for Cursor).
     """
 
     resume_args: Annotated[list[str], Field(default_factory=list)]
     skip_permissions_args: Annotated[list[str], Field(default_factory=list)]
+    extra_args: Annotated[list[str], Field(default_factory=list)]
     extra_dirs_flag: str | None = None
 
 

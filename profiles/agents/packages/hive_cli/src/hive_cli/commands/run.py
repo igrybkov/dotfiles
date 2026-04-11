@@ -234,12 +234,14 @@ def run(
         current_agent_name, current_cmd = result
 
         # Re-read skip-permissions (may be toggled by Ctrl+S in picker)
-        # Get skip-permissions args for current agent
+        # Get skip-permissions args and extra_args for current agent
         skip_perm_args: list[str] = []
-        if get_runtime_settings().skip_permissions:
-            current_agent_config = get_agent_config(current_agent_name)
-            if current_agent_config:
+        agent_extra_args: list[str] = []
+        current_agent_config = get_agent_config(current_agent_name)
+        if current_agent_config:
+            if get_runtime_settings().skip_permissions:
                 skip_perm_args = current_agent_config.skip_permissions_args
+            agent_extra_args = current_agent_config.extra_args
 
         extra_dir_args = get_extra_dirs_args(current_agent_name)
 
@@ -252,6 +254,7 @@ def run(
                     current_cmd[0],
                     *current_agent_config.resume_args,
                     *skip_perm_args,
+                    *agent_extra_args,
                     *extra_dir_args,
                     *args,
                 ]
@@ -265,12 +268,12 @@ def run(
                     return 0
                 # Resume failed, fall back to base command
 
-        # Build final command with skip-permissions and extra-dirs args
-        if skip_perm_args or extra_dir_args:
+        # Build final command with skip-permissions, extra_args, and extra-dirs
+        injected = [*skip_perm_args, *agent_extra_args, *extra_dir_args]
+        if injected:
             final_cmd = [
                 current_cmd[0],
-                *skip_perm_args,
-                *extra_dir_args,
+                *injected,
                 *current_cmd[1:],
             ]
         else:
@@ -281,20 +284,25 @@ def run(
         result = subprocess.run(final_cmd, env=child_env)
         return result.returncode
 
-    # Compute extra-dirs args for initial agent
+    # Compute extra-dirs args and extra_args for initial agent
     initial_extra_dirs = get_extra_dirs_args(detected.name)
     has_extra_dirs = bool(initial_extra_dirs)
+    init_agent_config = get_agent_config(detected.name)
+    initial_agent_extra_args = init_agent_config.extra_args if init_agent_config else []
+    has_agent_extra_args = bool(initial_agent_extra_args)
 
     # Use dynamic runner when:
     # - restart/restart_confirmation mode (needs restart loop)
     # - resume is enabled AND agent has resume_args (needs retry logic)
     # - skip-permissions is enabled (needs arg injection)
+    # - extra_args configured (needs arg injection per agent)
     # - extra_dirs configured (needs arg injection per agent)
     use_dynamic_runner = (
         restart
         or restart_confirmation
         or has_resume_args
         or has_skip_permissions
+        or has_agent_extra_args
         or has_extra_dirs
     )
 
@@ -304,13 +312,12 @@ def run(
     if auto_select_branch is None and config.worktrees.auto_select.enabled:
         auto_select_branch = config.worktrees.auto_select.branch
 
-    # Build initial command with skip-permissions and extra-dirs args if applicable
+    # Build initial command with skip-permissions, extra_args, and extra-dirs
     initial_skip_args: list[str] = []
     if rt.skip_permissions:
-        init_agent_config = get_agent_config(detected.name)
         if init_agent_config:
             initial_skip_args = init_agent_config.skip_permissions_args
-    injected_args = [*initial_skip_args, *initial_extra_dirs]
+    injected_args = [*initial_skip_args, *initial_agent_extra_args, *initial_extra_dirs]
     if injected_args:
         initial_cmd = [detected.command, *injected_args, *args]
     else:

@@ -372,6 +372,11 @@ Settings are merged in order (highest to lowest priority):
 | `agent` | `["resume"]` |
 | `cursor-agent` | `["resume"]` |
 
+**`agents.configs.<name>.extra_args`**
+- **Type:** `list[string]`
+- **Default:** `[]`
+- **Description:** Arguments always appended to the agent command. Useful for passing agent-specific flags (e.g., `["--model", "opus"]`).
+
 #### Resume Behavior
 
 **`resume.enabled`**
@@ -551,10 +556,11 @@ agents:
     - agent      # Cursor agent CLI
     - copilot
 
-  # Per-agent resume behavior configuration
+  # Per-agent configuration
   configs:
     claude:
       resume_args: ["--continue"]
+      extra_args: []              # Always appended to agent command
     codex:
       resume_args: ["resume", "--last"]
     gemini:

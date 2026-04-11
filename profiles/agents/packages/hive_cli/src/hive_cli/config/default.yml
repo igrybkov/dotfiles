@@ -15,32 +15,38 @@ agents:
     claude:
       resume_args: ["--continue"]
       skip_permissions_args: ["--dangerously-skip-permissions"]
+      extra_args: []
       extra_dirs_flag: "--add-dir"
 
     copilot:
       resume_args: ["--continue"]
       skip_permissions_args: ["--allow-all"]
+      extra_args: []
       extra_dirs_flag: "--add-dir"
 
     codex:
       resume_args: ["resume", "--last"]
       skip_permissions_args: ["--full-auto"]
+      extra_args: []
       extra_dirs_flag: "--add-dir"
 
     gemini:
       resume_args: ["--resume", "latest"]
       skip_permissions_args: ["-y"]
+      extra_args: []
       extra_dirs_flag: "--include-directories"
 
     # Cursor agent CLI - no extra dirs support
     agent:
       resume_args: ["resume"]
       skip_permissions_args: ["-f"]
+      extra_args: []
 
     # Cursor agent alternative name - no extra dirs support
     cursor-agent:
       resume_args: ["resume"]
       skip_permissions_args: ["-f"]
+      extra_args: []
 
 resume:
   enabled: false
