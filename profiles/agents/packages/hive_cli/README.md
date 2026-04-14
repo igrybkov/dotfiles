@@ -46,6 +46,7 @@ hive run -r --restart         # Resume with auto-restart
 ```
 
 **Options:**
+
 - `-a, --agent TEXT`: Specific agent to use (overrides auto-detection)
 - `-w, --worktree TEXT`: Run in worktree. Use `-` for interactive selection, or specify branch name
 - `-r, --resume`: Resume most recent conversation (falls back to new session if none)
@@ -65,6 +66,7 @@ HIVE_AGENT=gemini hive zellij             # Use Gemini via env var
 ```
 
 **Options:**
+
 - `-a, --agent TEXT`: Specific agent to use (overrides auto-detection)
 - `--restart`: Auto-restart Zellij after it exits
 - `--restart-delay FLOAT`: Delay in seconds between restarts (default: 0)
@@ -100,12 +102,14 @@ hive wt exec -c 'date' --restart --restart-delay 1  # Restart with delay
 ```
 
 **Options:**
+
 - `-c, --command TEXT`: Command to execute (shell string) [required]
 - `-w, --worktree TEXT`: Run in worktree. Use `-` for interactive selection, or specify branch name
 - `--restart`: Auto-restart after exit. Implies `-w=-` for interactive worktree selection
 - `--restart-delay FLOAT`: Delay in seconds between restarts (default: 0)
 
 **Restart behavior:**
+
 - `--restart` (no `-w`): Interactive worktree selection on EACH restart
 - `--restart -w feature-123`: Stay in that worktree, no re-selection between restarts
 - `--restart -w=-`: Explicit interactive selection on EACH restart
@@ -150,7 +154,7 @@ agents:
     - claude
     - gemini
     - codex
-    - agent      # Cursor agent CLI
+    - agent # Cursor agent CLI
     - copilot
 
   # Per-agent configuration
@@ -222,8 +226,8 @@ worktrees:
   # Any keypress cancels the timer.
   auto_select:
     enabled: false
-    branch: "-"    # Use "-" for repo's default branch
-    timeout: 3.0   # Seconds before auto-selection
+    branch: "-" # Use "-" for repo's default branch
+    timeout: 3.0 # Seconds before auto-selection
 
   # Commands to run after creating a worktree
   # Each command can have an optional if_exists condition
@@ -240,7 +244,7 @@ worktrees:
     - command: "npm ci"
       if_exists: "package-lock.json"
 
-    - command: "uv sync"
+    - command: "uv sync --frozen"
       if_exists: "pyproject.toml"
 
 # Zellij terminal multiplexer configuration
@@ -269,21 +273,25 @@ extra_dirs: []
 ### Configuration Options
 
 #### `agents.order`
+
 - **Type:** `list[string]`
 - **Default:** `["claude", "gemini", "codex", "agent", "copilot"]`
 - **Description:** Priority order for agent auto-detection. First available agent wins.
 
 #### `agents.configs.<name>.resume_args`
+
 - **Type:** `list[string]`
 - **Default:** Varies per agent
 - **Description:** Arguments to prepend when using `--resume`. Set to `[]` to disable resume for an agent.
 
 #### `agents.configs.<name>.skip_permissions_args`
+
 - **Type:** `list[string]`
 - **Default:** Varies per agent
 - **Description:** Arguments to add when using `--skip-permissions` mode.
 
 #### `agents.configs.<name>.extra_dirs_flag`
+
 - **Type:** `string` (optional)
 - **Default:** Varies per agent (`null` if not supported)
 - **Description:** CLI flag the agent uses for additional directories (e.g., `--add-dir` for Claude, `--include-directories` for Gemini).
@@ -299,26 +307,31 @@ extra_dirs: []
 | cursor-agent | `["resume"]` | `["-f"]` | — |
 
 #### `resume.enabled`
+
 - **Type:** `boolean`
 - **Default:** `false`
 - **Description:** Default value for `--resume` flag when not explicitly specified.
 
 #### `worktrees.enabled`
+
 - **Type:** `boolean`
 - **Default:** `true`
 - **Description:** Enable/disable worktree features. When `false`, `hive wt` commands will error.
 
 #### `worktrees.parent_dir`
+
 - **Type:** `string`
 - **Default:** `"~/.worktrees/{repo}/{branch}"`
 - **Description:** Directory template for worktrees. Supports `~` expansion and placeholders: `{repo}` (repo path name, e.g., `Projects--dotfiles`), `{branch}` (sanitized branch name). When `{repo}` is absent, a flat `{repo}--{branch}` directory is used automatically.
 
 #### `worktrees.resume`
+
 - **Type:** `boolean`
 - **Default:** `false`
 - **Description:** Default `--resume` flag for worktree sessions (separate from `resume.enabled`).
 
 #### `worktrees.skip_permissions`
+
 - **Type:** `boolean`
 - **Default:** `false`
 - **Description:** Default `--skip-permissions` flag for worktree sessions.
@@ -332,21 +345,25 @@ Auto-select configuration for the worktree picker. When enabled, automatically s
 - **`auto_select.timeout`** (`float`, default `3.0`): Seconds before auto-selection (0 for instant).
 
 #### `worktrees.symlink_files`
+
 - **Type:** `list[string]`
 - **Default:** `[]`
 - **Description:** Files to symlink from main repo into each new worktree. Paths are relative to the repo root. Useful for files like `.env` that should stay in sync across worktrees.
 
 #### `worktrees.copy_files`
+
 - **Type:** `list[string]`
 - **Default:** `[]`
 - **Description:** Files to copy from main repo into each new worktree. Paths are relative to the repo root. Useful for files that need independent copies per worktree.
 
 #### `worktrees.post_create`
+
 - **Type:** `list[object]`
 - **Default:** See example above
 - **Description:** Commands to run after creating a worktree.
 
 Each item can be:
+
 - A string: `"npm install"` (always runs)
 - An object with conditions:
   ```yaml
@@ -355,26 +372,31 @@ Each item can be:
   ```
 
 #### `zellij.layout`
+
 - **Type:** `string` (optional)
 - **Default:** `null` (uses Zellij's default layout)
 - **Description:** Zellij layout name to use. If not set, Zellij runs with its default layout.
 
 #### `zellij.session_name`
+
 - **Type:** `string`
 - **Default:** `"{repo}-{agent}"`
 - **Description:** Session name template. Supports `{repo}` (repository name) and `{agent}` (agent name) placeholders.
 
 #### `github.fetch_issues`
+
 - **Type:** `boolean`
 - **Default:** `true`
 - **Description:** Fetch GitHub issues in worktree picker for branch suggestions.
 
 #### `github.issue_limit`
+
 - **Type:** `integer`
 - **Default:** `20`
 - **Description:** Maximum number of issues to fetch.
 
 #### `extra_dirs`
+
 - **Type:** `list[string]`
 - **Default:** `[]`
 - **Description:** Additional directories to pass to the agent via its `extra_dirs_flag`. Relative paths resolve against the main repo root.
@@ -383,18 +405,18 @@ Each item can be:
 
 Environment variables use the `HIVE_` prefix and take precedence over config files:
 
-| Variable | Type | Description |
-|----------|------|-------------|
-| `HIVE_AGENTS_ORDER` | CSV | Agent priority order, e.g., `claude,gemini` |
-| `HIVE_RESUME_ENABLED` | boolean | Enable resume by default |
-| `HIVE_WORKTREES_ENABLED` | boolean | Enable worktrees feature |
-| `HIVE_WORKTREES_PARENT_DIR` | string | Directory template for worktrees |
-| `HIVE_WORKTREES_RESUME` | boolean | Default resume for worktree sessions |
+| Variable                          | Type    | Description                                    |
+| --------------------------------- | ------- | ---------------------------------------------- |
+| `HIVE_AGENTS_ORDER`               | CSV     | Agent priority order, e.g., `claude,gemini`    |
+| `HIVE_RESUME_ENABLED`             | boolean | Enable resume by default                       |
+| `HIVE_WORKTREES_ENABLED`          | boolean | Enable worktrees feature                       |
+| `HIVE_WORKTREES_PARENT_DIR`       | string  | Directory template for worktrees               |
+| `HIVE_WORKTREES_RESUME`           | boolean | Default resume for worktree sessions           |
 | `HIVE_WORKTREES_SKIP_PERMISSIONS` | boolean | Default skip-permissions for worktree sessions |
-| `HIVE_ZELLIJ_LAYOUT` | string | Zellij layout name |
-| `HIVE_ZELLIJ_SESSION_NAME` | string | Session name template |
-| `HIVE_GITHUB_FETCH_ISSUES` | boolean | Fetch GitHub issues |
-| `HIVE_GITHUB_ISSUE_LIMIT` | integer | Max issues to fetch |
+| `HIVE_ZELLIJ_LAYOUT`              | string  | Zellij layout name                             |
+| `HIVE_ZELLIJ_SESSION_NAME`        | string  | Session name template                          |
+| `HIVE_GITHUB_FETCH_ISSUES`        | boolean | Fetch GitHub issues                            |
+| `HIVE_GITHUB_ISSUE_LIMIT`         | integer | Max issues to fetch                            |
 
 **Legacy variables** (still supported, lower precedence than `HIVE_*`):
 
@@ -403,6 +425,7 @@ Environment variables use the `HIVE_` prefix and take precedence over config fil
 ### Example Configurations
 
 **Minimal project config:**
+
 ```yaml
 # .hive.yml
 agents:
@@ -410,6 +433,7 @@ agents:
 ```
 
 **TypeScript project:**
+
 ```yaml
 # .hive.yml
 worktrees:
@@ -421,24 +445,26 @@ worktrees:
 ```
 
 **Python project with uv:**
+
 ```yaml
 # .hive.yml
 worktrees:
   post_create:
     - command: "mise trust"
       if_exists: ".mise.toml"
-    - command: "uv sync"
+    - command: "uv sync --frozen"
       if_exists: "pyproject.toml"
 ```
 
 **Personal overrides (git-ignored):**
+
 ```yaml
 # .hive.local.yml
 resume:
-  enabled: true  # Always resume by default
+  enabled: true # Always resume by default
 
 github:
-  fetch_issues: false  # Don't fetch issues (faster)
+  fetch_issues: false # Don't fetch issues (faster)
 ```
 
 ## Architecture

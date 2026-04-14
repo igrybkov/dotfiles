@@ -54,15 +54,15 @@ resume:
 worktrees:
   enabled: true
   parent_dir: "~/.worktrees/{repo}/{branch}"
-  resume: true   # Enable resume for worktree runs (config-driven, not explicit flag)
+  resume: true # Enable resume for worktree runs (config-driven, not explicit flag)
   copy_files: []
   symlink_files: []
 
   # Auto-select: show picker but auto-proceed after timeout. Any key cancels.
   auto_select:
     enabled: false
-    branch: "-"    # Branch to auto-select. Use "-" for repo's default branch.
-    timeout: 3.0   # Seconds before auto-selection
+    branch: "-" # Branch to auto-select. Use "-" for repo's default branch.
+    timeout: 3.0 # Seconds before auto-selection
 
   post_create:
     - command: "mise trust"
@@ -80,7 +80,7 @@ worktrees:
     - command: "npm install"
       if_exists: "package-lock.json"
 
-    - command: "uv sync"
+    - command: "uv sync --frozen"
       if_exists: "pyproject.toml"
 
 zellij:

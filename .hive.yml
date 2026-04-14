@@ -88,7 +88,7 @@ worktrees:
   #     if_exists: "yarn.lock"
   #   - command: "npm install"
   #     if_exists: "package-lock.json"
-  #   - command: "uv sync"
+  #   - command: "uv sync --frozen"
   #     if_exists: "pyproject.toml"
 
 # zellij:
