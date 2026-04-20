@@ -171,6 +171,136 @@ Extract repeatable code into separate task files with `include_tasks` and loops:
 
 See [docs/architecture.md](docs/architecture.md#role-patterns) for the three playbook patterns (Bootstrap, Per-Profile, Aggregation).
 
+## Profile Capabilities
+
+This section documents what the repo already provides and how to extend each capability type. When looking for existing configuration, always check `profiles/private/` explicitly (it's gitignored — use `grep -r` or direct paths).
+
+### Profiles Overview
+
+| Profile | Priority | Purpose |
+|---------|----------|---------|
+| `macos` | 50 | macOS system-level settings |
+| `shell` | 100 | Core CLI tools (fish, zsh, git, fzf, ripgrep, zellij, tmux, mise, direnv) |
+| `neovim` | 110 | Neovim + NvChad configuration |
+| `development` | 120 | Dev tooling (terraform, docker, k9s, jupyter, uv, poetry, ruff) |
+| `macos-desktop` | 130 | GUI apps (Alfred, Obsidian, 1Password, browsers, fonts) |
+| `agents` | 300 | AI coding agent framework (see below) |
+| `private/*` | varies | Private profiles (work, personal, etc.) — gitignored, each is its own git repo |
+
+Private profiles are not listed here since they vary per machine. Run `./dotfiles profile list` to see all profiles available in the current environment.
+
+### Agentic Capabilities (agents profile)
+
+The `agents` profile is the primary extension point for AI coding setup. It manages:
+
+#### Skills
+Claude Code slash commands. Each skill lives at `profiles/agents/files/skills/{name}/SKILL.md`.
+
+**To add a skill:** Create `profiles/agents/files/skills/{name}/SKILL.md` with:
+```yaml
+---
+name: skill-name
+description: One line description shown in the skill picker.
+allowed-tools:
+  - Bash(git status:*)
+  - Read
+  - Glob
+---
+
+# Skill Name
+
+Workflow, usage patterns, examples...
+```
+Skills are symlinked to both `~/.claude/skills/` and `~/.cursor/skills/` (configured via `skill_folders` in `profiles/agents/config.yml`).
+
+**Existing skills (17):** agent-team, changelog, claude-api, claude-for-chrome, explain, fixup, git-commit, github, handoff, jira, omnifocus, personal-docs, pr, pr-triage, review, test, verify, wiki
+
+#### Sub-agents
+Specialized agents invoked by Claude Code's `Agent` tool. Each agent lives at `profiles/agents/files/agents/{name}.md`.
+
+**To add a sub-agent:** Create `profiles/agents/files/agents/{name}.md` with:
+```yaml
+---
+name: agent-name
+description: "Multi-line description with use cases and examples for when to invoke this agent."
+model: opus  # or sonnet, haiku
+color: green  # semantic color label
+---
+
+## Your Core Philosophy
+...
+```
+Agents are symlinked to both `~/.claude/agents/` and `~/.cursor/agents/`.
+
+**Existing agents (3):** `staff-software-engineer` (Opus/green), `qa-automation-engineer` (Sonnet/pink), `productivity-coach` (Opus/cyan)
+
+#### Global Agent Instructions
+The global `~/.claude/CLAUDE.md` is assembled from Markdown fragments in `profiles/agents/files/AGENT.md/` (and equivalent in other profiles). Fragments are named `{NN}-{section}.md` and concatenated in order.
+
+**To add instructions:** Create a new numbered fragment in `profiles/agents/files/AGENT.md/` or add a `AGENT.md/` directory to another profile.
+
+#### MCP Servers
+MCP servers are configured via `mcp_servers:` in a profile's `config.yml`. The `agents` profile provides two servers by default:
+- **meta-mcp** — loads additional servers from `~/.meta-mcp/servers.json` (used by private profiles to inject work/personal servers without modifying shared config)
+- **mcp-exec** — executes code via MCP tools
+
+**To add an MCP server:**
+```yaml
+# In profiles/{profile}/config.yml
+mcp_servers:
+  - name: my-server
+    command: uvx
+    args: ["my-mcp-package"]
+    env:
+      API_KEY: "{{ lookup('vault_secret', 'mcp_secrets.my_server.api_key') }}"
+```
+Private profile MCP servers (adobe, productivity, home-network) use Ansible Vault for secrets — see [docs/secrets.md](docs/secrets.md).
+
+### Global Gitignore
+
+Each profile can contribute patterns to the **global** git ignore list (i.e., `~/.config/git/ignore`, applied to all repos on the machine) via `profiles/{profile}/files/gitconfig/gitignore`. These are merged by the `gitconfig` role.
+
+When asked to "add X to the agent's gitignore", this almost always means adding X to `profiles/agents/files/gitconfig/gitignore` — **not** to `profiles/agents/.gitignore` (which controls what git ignores inside the dotfiles repo itself).
+
+The `agents` profile currently ignores: `.hive.local.yml`, `.hive.local.yaml`, `.cursor/mcp.json`, `.cursor/plans/`, `.claude/plans/`.
+
+**To add patterns:** Edit `profiles/agents/files/gitconfig/gitignore` (or create the file in any other profile).
+
+### Package Management
+
+Packages are declared in `config.yml` per profile. Available package managers:
+
+| Key | Manager | Example use |
+|-----|---------|-------------|
+| `brew_packages` | Homebrew formulas | CLI tools |
+| `cask_packages` | Homebrew casks | GUI apps |
+| `brew_taps` | Homebrew taps | Third-party repos |
+| `mas_packages` | Mac App Store (name + id) | App Store apps |
+| `npm` | npm global packages | JS/Node tools |
+| `pipx_packages` | pipx isolated envs | Python CLI tools |
+| `gem` | Ruby gems | Ruby tools |
+| `gh_extensions` | GitHub CLI extensions | gh subcommands |
+
+All keys accept a `state: absent` field to uninstall.
+
+### Configuration Merging
+
+Two roles allow profiles to contribute partial configuration to shared files:
+
+- **`json_configs`** — deep-merges JSON fragments into a target file (e.g., `~/.claude/settings.json`, `~/.cursor/cli-config.json`)
+- **`yaml_configs`** — merges YAML fragments into a target file (e.g., `~/.config/hive/hive.yml`, `~/.config/mise/config.toml`)
+
+This lets multiple profiles contribute to the same config file without overwriting each other.
+
+### Secret Management (Vault)
+
+Private profile secrets are encrypted with Ansible Vault in `profiles/private/{profile}/secrets.yml`. Reference them in config:
+```yaml
+env:
+  MY_TOKEN: "{{ lookup('vault_secret', 'mcp_secrets.service.token') }}"
+```
+See [docs/secrets.md](docs/secrets.md) for vault setup and usage.
+
 ## Detailed Documentation
 
 | Topic | Documentation |

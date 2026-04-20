@@ -1,4 +1,4 @@
-ƒ// Generic AI agent development layout
+// Generic AI agent development layout
 // Uses $AGENT environment variable to determine which agent to run
 // Multiple agent sessions + Neovim for real-time code watching
 
@@ -107,8 +107,32 @@ layout {
         }
     }
 
+    // Agent Teams tab - 4 tmux sessions for Claude agent teams
+    // tmux session = {zellij-session}-team-{N}-{branch} so per-branch state
+    // survives zellij restarts and re-attaches on next launch.
+    tab name="3. Teams" {
+        pane stacked=true {
+            pane name="team-1" expanded=true start_suspended=true {
+                command "hive"
+                args "wt" "exec" "--restart" "-w=-" "-c" "sh -c 'tmux new-session -A -s \"$ZELLIJ_SESSION_NAME-team-1-$(git branch --show-current | tr / -)\" \"env CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 claude --teammate-mode tmux\"'"
+            }
+            pane name="team-2" start_suspended=true {
+                command "hive"
+                args "wt" "exec" "--restart" "-w=-" "-c" "sh -c 'tmux new-session -A -s \"$ZELLIJ_SESSION_NAME-team-2-$(git branch --show-current | tr / -)\" \"env CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 claude --teammate-mode tmux\"'"
+            }
+            pane name="team-3" start_suspended=true {
+                command "hive"
+                args "wt" "exec" "--restart" "-w=-" "-c" "sh -c 'tmux new-session -A -s \"$ZELLIJ_SESSION_NAME-team-3-$(git branch --show-current | tr / -)\" \"env CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 claude --teammate-mode tmux\"'"
+            }
+            pane name="team-4" start_suspended=true {
+                command "hive"
+                args "wt" "exec" "--restart" "-w=-" "-c" "sh -c 'tmux new-session -A -s \"$ZELLIJ_SESSION_NAME-team-4-$(git branch --show-current | tr / -)\" \"env CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 claude --teammate-mode tmux\"'"
+            }
+        }
+    }
+
     // Shell + Logs tab
-    tab name="3. Shell" {
+    tab name="4. Shell" {
         pane split_direction="vertical" {
             // Left: Shells stacked
             pane size="50%" split_direction="horizontal" {
@@ -137,7 +161,7 @@ layout {
     }
 
     // Multi-agent workflow tools tab
-    tab name="4. Workflow" {
+    tab name="5. Workflow" {
         pane split_direction="horizontal" {
             // Top: Diff and merge preview side by side
             pane size="60%" split_direction="vertical" {
@@ -165,7 +189,7 @@ layout {
     }
 
     // Git operations tab
-    tab name="5. Git" {
+    tab name="6. Git" {
         pane split_direction="horizontal" {
             // Top: lazygit (70%)
             pane size="70%" name="lazygit" {
@@ -181,7 +205,7 @@ layout {
     }
 
     // Tests tab
-    tab name="6. Tests" {
+    tab name="7. Tests" {
         pane name="watch-tests" start_suspended=true {
             command "fish"
             args "-c" "hive wt exec -c 'watch-tests' --restart --restart-confirmation -w=-"
@@ -189,7 +213,7 @@ layout {
     }
 
     // Neovim tab - focused editing
-    tab name="7. Neovim" {
+    tab name="8. Neovim" {
         pane name="neovim" {
             command "fish"
             args "-c" "hive wt exec -c 'nvim' --restart -w=-"

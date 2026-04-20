@@ -39,6 +39,7 @@ brew_packages:
   - name: mise
   - name: pv
   - name: ripgrep
+  - name: tmux
   - name: watch
   - name: wget
   - name: yq

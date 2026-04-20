@@ -24,10 +24,13 @@ brew_taps:
 brew_packages:
   - name: marksman
   - name: opencode
+  - name: tmux
 
 cask_packages:
   - name: chatgpt
   - name: claude-code
+    state: absent # replaced with @latest
+  - name: claude-code@latest
   - name: copilot-cli
   - name: cursor # Optional - remove if not needed
   - name: codex # Optional - remove if not needed
@@ -155,6 +158,8 @@ json_configs:
         marksman-lsp@custom-lsp: true
         plannotator@plannotator: true
       defaultMode: "auto"
+      env:
+        CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: "1"
       statusLine:
         type: command
         command: ~/.claude/statusline-command.py

@@ -5,3 +5,6 @@
 # Cursor IDE
 .cursor/mcp.json
 .cursor/plans/
+
+# Claude Code
+.claude/plans/

@@ -2,6 +2,13 @@ if not type -q zellij
     return
 end
 
+# macOS $TMPDIR is very long (/var/folders/.../T/), which causes Zellij's
+# Unix socket path to exceed the 103-byte limit for longer session names.
+# Use a shorter socket directory to avoid this.
+if not set -q ZELLIJ_SOCKET_DIR
+    set -gx ZELLIJ_SOCKET_DIR /tmp/zellij
+end
+
 # Get the main repository path (not worktree)
 # Returns the main repo even when called from a worktree
 function __zellij_get_main_repo
