@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+    echo "Usage: kubectl-clone-context <source-context> <new-name> <namespace>"
+    echo ""
+    echo "  Clones an existing kubectl context with a new name and namespace."
+    echo ""
+    echo "Example:"
+    echo "  kubectl-clone-context my-cluster brand-brain-stage brand-brain-stage"
+    exit 1
+}
+
+[[ $# -ne 3 ]] && usage
+
+src="$1"
+dst="$2"
+ns="$3"
+
+cluster=$(kubectl config view -o jsonpath="{.contexts[?(@.name=='$src')].context.cluster}")
+user=$(kubectl config view -o jsonpath="{.contexts[?(@.name=='$src')].context.user}")
+
+if [[ -z "$cluster" || -z "$user" ]]; then
+    echo "Error: context '$src' not found" >&2
+    exit 1
+fi
+
+kubectl config set-context "$dst" --cluster="$cluster" --user="$user" --namespace="$ns"
+echo "Created context '$dst' (cluster=$cluster, user=$user, namespace=$ns)"
