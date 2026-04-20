@@ -40,7 +40,7 @@
   vars:
     _result: "{{ symlink_result.stdout | from_json }}"
     _conflicts: "{{ _result.conflicts }}"
-    _backup_dir: "~/dotfiles-backup-{{ ansible_date_time.iso8601_basic_short }}"
+    _backup_dir: "~/dotfiles-backup-{{ now(fmt='%Y%m%dT%H%M%S') }}"
   ansible.builtin.fail:
     msg: |
 
