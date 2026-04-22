@@ -18,22 +18,25 @@ from ..profiles.git import (
 )
 
 
-def _print_sync_summaries(results: list[SyncResult]) -> None:
+def _print_sync_summaries(action: str, results: list[SyncResult]) -> None:
     """Print the commits and file-change stats captured during a sync."""
-    printed_any = False
-    for result in results:
-        if not result.success or not result.commits:
-            continue
-        if printed_any:
+    to_print = [r for r in results if r.success and r.commits]
+    if not to_print:
+        return
+
+    heading = "Pulled:" if action == "pull" else "Pushed:"
+    click.echo("")
+    click.echo(click.style(heading, bold=True))
+    for i, result in enumerate(to_print):
+        if i > 0:
             click.echo("")
-        printed_any = True
-        click.echo(click.style(result.display_name, bold=True))
+        click.echo(f"  {click.style(result.display_name, bold=True)}")
         for line in result.commits.splitlines():
-            click.echo(f"  {line}")
+            click.echo(f"    {line}")
         if result.stat:
             click.echo("")
             for line in result.stat.splitlines():
-                click.echo(f"  {line}")
+                click.echo(f"    {line}")
 
 
 def _sync_all_repos(action: str) -> bool:
@@ -65,7 +68,7 @@ def _sync_all_repos(action: str) -> bool:
         return all(r.success for r in results), results
 
     success, results = asyncio.run(run_all())
-    _print_sync_summaries(results)
+    _print_sync_summaries(action, results)
     return success
 
 

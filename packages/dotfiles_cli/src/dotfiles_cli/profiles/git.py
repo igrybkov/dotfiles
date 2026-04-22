@@ -264,8 +264,8 @@ async def _capture_range_summary(repo: Path, rev_range: str) -> tuple[str, str]:
     stat_task = _run_git_command(["git", "diff", "--stat", rev_range], repo)
     log_r, stat_r = await asyncio.gather(log_task, stat_task)
     return (
-        log_r.stdout.strip() if log_r.returncode == 0 else "",
-        stat_r.stdout.strip() if stat_r.returncode == 0 else "",
+        log_r.stdout.rstrip() if log_r.returncode == 0 else "",
+        stat_r.stdout.rstrip() if stat_r.returncode == 0 else "",
     )
 
 
