@@ -290,10 +290,6 @@ class TestInstallCommand:
                 return_value=([], []),
             ),
             patch(
-                "dotfiles_cli.commands.install.validate_vault_password",
-                return_value=True,
-            ),
-            patch(
                 "dotfiles_cli.commands.install.validate_sudo_password",
                 return_value=True,
             ),
@@ -310,6 +306,94 @@ class TestInstallCommand:
 
         ansible_call = mock_ansible_runner["run"].call_args
         assert "all" in ansible_call[1]["tags"]
+
+    def test_install_sets_vault_identity_list(
+        self, cli_runner, mock_ansible_runner, temp_dotfiles_dir
+    ):
+        """When tags include mcp-servers, ANSIBLE_VAULT_IDENTITY_LIST is set."""
+        with (
+            patch("dotfiles_cli.constants.DOTFILES_DIR", str(temp_dotfiles_dir)),
+            patch(
+                "dotfiles_cli.commands.install.get_active_profiles",
+                return_value=Mock(resolve=lambda x: ["alpha"]),
+            ),
+            patch(
+                "dotfiles_cli.commands.install.get_all_profile_names",
+                return_value=["alpha"],
+            ),
+            patch(
+                "dotfiles_cli.commands.install.get_profile_roles_paths",
+                return_value=[],
+            ),
+            patch(
+                "dotfiles_cli.commands.install.get_profile_requirements_paths",
+                return_value=[],
+            ),
+            patch(
+                "dotfiles_cli.commands.install.get_repos_with_unpushed_changes",
+                return_value=([], []),
+            ),
+            patch(
+                "dotfiles_cli.commands.install.get_profiles_with_secrets",
+                return_value=["alpha"],
+            ),
+            patch(
+                "dotfiles_cli.commands.install.validate_sudo_password",
+                return_value=True,
+            ),
+            patch(
+                "dotfiles_cli.types.AnsibleTagListType._get_all_supported_tags",
+                return_value=["all", "mcp-servers"],
+            ),
+            patch("getpass.getpass", return_value="test_password"),
+        ):
+            result = cli_runner.invoke(cli, ["install", "mcp-servers"])
+
+        assert result.exit_code == 0, result.output
+        ansible_call = mock_ansible_runner["run"].call_args
+        envvars = ansible_call[1]["envvars"]
+        identity_list = envvars.get("ANSIBLE_VAULT_IDENTITY_LIST")
+        assert identity_list is not None
+        # Points at the bin shim, built from profiles with encrypted secrets.
+        assert "dotfiles-vault-client" in identity_list
+        assert identity_list.startswith("alpha@")
+
+    def test_install_skips_vault_identity_list_for_non_vault_tags(
+        self, cli_runner, mock_ansible_runner, temp_dotfiles_dir
+    ):
+        """Non-vault tags do not set ANSIBLE_VAULT_IDENTITY_LIST."""
+        with (
+            patch("dotfiles_cli.constants.DOTFILES_DIR", str(temp_dotfiles_dir)),
+            patch(
+                "dotfiles_cli.commands.install.get_active_profiles",
+                return_value=Mock(resolve=lambda x: ["alpha"]),
+            ),
+            patch(
+                "dotfiles_cli.commands.install.get_all_profile_names",
+                return_value=["alpha"],
+            ),
+            patch(
+                "dotfiles_cli.commands.install.get_profile_roles_paths",
+                return_value=[],
+            ),
+            patch(
+                "dotfiles_cli.commands.install.get_profile_requirements_paths",
+                return_value=[],
+            ),
+            patch(
+                "dotfiles_cli.commands.install.get_repos_with_unpushed_changes",
+                return_value=([], []),
+            ),
+            patch(
+                "dotfiles_cli.types.AnsibleTagListType._get_all_supported_tags",
+                return_value=["all", "dotfiles"],
+            ),
+        ):
+            result = cli_runner.invoke(cli, ["install", "dotfiles"])
+
+        assert result.exit_code == 0, result.output
+        envvars = mock_ansible_runner["run"].call_args[1]["envvars"]
+        assert "ANSIBLE_VAULT_IDENTITY_LIST" not in envvars
 
     def test_install_prompts_for_sudo_password(
         self, cli_runner, mock_ansible_runner, temp_dotfiles_dir

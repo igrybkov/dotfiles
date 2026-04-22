@@ -1,5 +1,6 @@
 """Vault and secrets management for the dotfiles CLI."""
 
+from .backend import VaultBackend, get_backend, reset_backend_cache
 from .password import (
     get_vault_password,
     get_vault_password_file,
@@ -16,6 +17,10 @@ from .operations import (
 )
 
 __all__ = [
+    # Backend abstraction
+    "VaultBackend",
+    "get_backend",
+    "reset_backend_cache",
     # Password management
     "get_vault_password",
     "get_vault_password_file",

@@ -7,7 +7,6 @@ import shutil
 import subprocess
 import threading
 from contextlib import contextmanager
-from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import ansible_runner
@@ -21,6 +20,7 @@ from ..constants import (
     SUDO_TAGS,
     VAULT_TAGS,
     get_env_file,
+    get_vault_client_script,
 )
 from ..profiles import (
     get_active_profiles,
@@ -38,10 +38,7 @@ from ..utils import (
     validate_sudo_password,
 )
 from ..vault import (
-    ensure_vault_password_permissions,
     get_profiles_with_secrets,
-    get_vault_password_file,
-    validate_vault_password,
 )
 
 
@@ -328,69 +325,19 @@ def install(
                 cmdline_args.append("--check")
                 click.echo("Running in dry-run mode (no changes will be made)")
 
-            vault_pass_file = Path(DOTFILES_DIR) / ".vault_password"
             needs_vault_password = len(set(tags) & VAULT_TAGS) > 0 or "all" in tags
 
-            vault_passwords: dict[str, str] = {}
-            vault_pass_files: dict[str, Path] = {}
-
             if needs_vault_password:
-                vault_password = None
-                if vault_pass_file.exists():
-                    ensure_vault_password_permissions(vault_pass_file)
-                    vault_password = vault_pass_file.read_text().strip()
-                else:
-                    try:
-                        vault_password = getpass.getpass("Vault password: ")
-                        if not vault_password:
-                            click.echo(
-                                "Error: Vault password cannot be empty.", err=True
-                            )
-                            return 1
-                    except (KeyboardInterrupt, EOFError):
-                        click.echo(
-                            "\nError: Vault password prompt cancelled.", err=True
-                        )
-                        return 1
-
-                    envvars["ANSIBLE_VAULT_PASSWORD"] = vault_password
-
-                vault_passwords["default"] = vault_password
-
-                click.echo("Validating vault password...")
-                if not validate_vault_password(vault_password):
-                    click.echo(
-                        "Error: Invalid vault password. Please check your password and try again.",
-                        err=True,
+                # Build ANSIBLE_VAULT_IDENTITY_LIST from profiles that have
+                # an encrypted secrets.yml. Ansible spawns our client script
+                # for each listed vault-id when it needs a password; the
+                # script reads from the OS backend.
+                vault_ids = get_profiles_with_secrets()
+                if vault_ids:
+                    client_script = str(get_vault_client_script())
+                    envvars["ANSIBLE_VAULT_IDENTITY_LIST"] = ",".join(
+                        f"{vid}@{client_script}" for vid in vault_ids
                     )
-                    return 1
-                click.echo("✓ Vault password validated")
-
-                profiles_with_secrets = get_profiles_with_secrets()
-                for profile in profiles_with_secrets:
-                    profile_pass_file = get_vault_password_file(profile)
-                    if profile_pass_file.exists():
-                        ensure_vault_password_permissions(profile_pass_file)
-                        vault_passwords[profile] = profile_pass_file.read_text().strip()
-                    else:
-                        try:
-                            profile_pass = getpass.getpass(
-                                f"Vault password for profile '{profile}': "
-                            )
-                            if profile_pass:
-                                vault_passwords[profile] = profile_pass
-                        except (KeyboardInterrupt, EOFError):
-                            click.echo(
-                                f"\nWarning: Skipping vault password for profile '{profile}'",
-                                err=True,
-                            )
-
-                for vault_id, password in vault_passwords.items():
-                    pass_file = Path(tmpdir) / f"vault_pass_{vault_id}"
-                    pass_file.write_text(password)
-                    pass_file.chmod(0o600)
-                    vault_pass_files[vault_id] = pass_file
-                    cmdline_args.extend(["--vault-id", f"{vault_id}@{pass_file}"])
 
             # Include localhost for Bootstrap and Finalize plays
             # Convert hyphens to underscores for Ansible group names (Ansible doesn't allow hyphens in group names)

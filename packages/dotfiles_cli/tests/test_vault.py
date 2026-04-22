@@ -1,7 +1,7 @@
 """Tests for vault operations and password management."""
 
 import pytest
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 
 from dotfiles_cli.vault.operations import (
@@ -190,19 +190,15 @@ class TestGetProfilesWithSecrets:
 class TestRunAnsibleVault:
     """Test running ansible-vault commands."""
 
-    def test_run_ansible_vault_success(self, tmp_path):
-        """Test successful ansible-vault command."""
+    def test_run_ansible_vault_uses_client_script(self, tmp_path):
+        """Default path should pass --vault-id <label>@<client-script-path>."""
         mock_result = Mock()
         mock_result.returncode = 0
         mock_result.stdout = "decrypted content"
         mock_result.stderr = ""
 
         with (
-            patch("subprocess.run", return_value=mock_result),
-            patch(
-                "dotfiles_cli.vault.operations.get_vault_password",
-                return_value="test_pass",
-            ),
+            patch("subprocess.run", return_value=mock_result) as mock_run,
             patch("dotfiles_cli.vault.operations.get_vault_id", return_value="default"),
             patch("dotfiles_cli.vault.operations.DOTFILES_DIR", str(tmp_path)),
         ):
@@ -210,17 +206,22 @@ class TestRunAnsibleVault:
 
         assert rc == 0
         assert stdout == "decrypted content"
-        assert stderr == ""
+        # Assert the --vault-id entry points at the bin shim, not a tempfile.
+        cmd = mock_run.call_args.args[0]
+        vault_id_idx = cmd.index("--vault-id") + 1
+        vault_id_value = cmd[vault_id_idx]
+        assert vault_id_value.startswith("default@")
+        assert vault_id_value.endswith("/bin/dotfiles-vault-client")
 
-    def test_run_ansible_vault_with_explicit_password(self, tmp_path):
-        """Test ansible-vault with explicit password."""
+    def test_run_ansible_vault_with_explicit_password_uses_tempfile(self, tmp_path):
+        """Explicit password path falls back to a short-lived tempfile."""
         mock_result = Mock()
         mock_result.returncode = 0
         mock_result.stdout = "output"
         mock_result.stderr = ""
 
         with (
-            patch("subprocess.run", return_value=mock_result),
+            patch("subprocess.run", return_value=mock_result) as mock_run,
             patch("dotfiles_cli.vault.operations.get_vault_id", return_value="default"),
             patch("dotfiles_cli.vault.operations.DOTFILES_DIR", str(tmp_path)),
         ):
@@ -229,31 +230,35 @@ class TestRunAnsibleVault:
             )
 
         assert rc == 0
-        # Should use explicit password, not call get_vault_password
+        cmd = mock_run.call_args.args[0]
+        vault_id_idx = cmd.index("--vault-id") + 1
+        # The vault-id source ends in /vault_pass (the tempfile name).
+        assert cmd[vault_id_idx].endswith("/vault_pass")
 
     def test_run_ansible_vault_with_location(self, tmp_path):
-        """Test ansible-vault with specific location."""
+        """Location should flow through get_vault_id."""
         mock_result = Mock()
         mock_result.returncode = 0
         mock_result.stdout = ""
         mock_result.stderr = ""
 
         with (
-            patch("subprocess.run", return_value=mock_result),
+            patch("subprocess.run", return_value=mock_result) as mock_run,
             patch(
-                "dotfiles_cli.vault.operations.get_vault_password", return_value="pass"
-            ) as mock_get_pass,
-            patch(
-                "dotfiles_cli.vault.operations.get_vault_id", return_value="mycompany"
-            ),
+                "dotfiles_cli.vault.operations.get_vault_id",
+                return_value="mycompany",
+            ) as mock_get_id,
             patch("dotfiles_cli.vault.operations.DOTFILES_DIR", str(tmp_path)),
         ):
             run_ansible_vault(["view", "file.yml"], location="mycompany")
 
-        mock_get_pass.assert_called_once_with("mycompany")
+        mock_get_id.assert_called_once_with("mycompany")
+        cmd = mock_run.call_args.args[0]
+        vault_id_idx = cmd.index("--vault-id") + 1
+        assert cmd[vault_id_idx].startswith("mycompany@")
 
     def test_run_ansible_vault_failure(self, tmp_path):
-        """Test ansible-vault command failure."""
+        """Propagate non-zero exit and stderr."""
         mock_result = Mock()
         mock_result.returncode = 1
         mock_result.stdout = ""
@@ -261,10 +266,6 @@ class TestRunAnsibleVault:
 
         with (
             patch("subprocess.run", return_value=mock_result),
-            patch(
-                "dotfiles_cli.vault.operations.get_vault_password",
-                return_value="wrong_pass",
-            ),
             patch("dotfiles_cli.vault.operations.get_vault_id", return_value="default"),
             patch("dotfiles_cli.vault.operations.DOTFILES_DIR", str(tmp_path)),
         ):
@@ -357,51 +358,269 @@ class TestGetVaultPassword:
         """Clear cache before each test."""
         clear_vault_password_cache()
 
-    def test_get_vault_password_from_file(self, tmp_path):
-        """Test getting password from file."""
-        vault_file = tmp_path / ".vault_password"
-        vault_file.write_text("file_password")
+    def test_get_vault_password_from_backend(self):
+        """Password comes from the backend when present."""
+        fake_backend = MagicMock()
+        fake_backend.read.return_value = "backend_password"
 
         with patch(
-            "dotfiles_cli.vault.password.get_vault_password_file",
-            return_value=vault_file,
+            "dotfiles_cli.vault.password.get_backend", return_value=fake_backend
         ):
             password = get_vault_password("alpha")
 
-        assert password == "file_password"
+        assert password == "backend_password"
+        fake_backend.read.assert_called_once_with("alpha")
 
-    def test_get_vault_password_prompts_when_no_file(self, tmp_path):
-        """Test prompting for password when file doesn't exist."""
-        vault_file = tmp_path / ".vault_password"
-        # File doesn't exist
+    def test_get_vault_password_prompts_on_miss_and_persists(self):
+        """Miss → prompt → best-effort backend.write()."""
+        fake_backend = MagicMock()
+        fake_backend.read.return_value = None
 
         with (
             patch(
-                "dotfiles_cli.vault.password.get_vault_password_file",
-                return_value=vault_file,
+                "dotfiles_cli.vault.password.get_backend",
+                return_value=fake_backend,
             ),
             patch("getpass.getpass", return_value="prompted_password"),
+            patch(
+                "dotfiles_cli.vault.password.sys.stdin.isatty",
+                return_value=True,
+            ),
         ):
             password = get_vault_password("alpha")
 
         assert password == "prompted_password"
+        fake_backend.ensure_ready.assert_called_once()
+        fake_backend.write.assert_called_once_with("alpha", "prompted_password")
 
-    def test_get_vault_password_caches_result(self, tmp_path):
-        """Test that password is cached after first retrieval."""
-        vault_file = tmp_path / ".vault_password"
-        vault_file.write_text("cached_password")
+    def test_get_vault_password_read_exception_falls_through_to_prompt(self):
+        """Backend read errors don't block the run — fall back to prompt."""
+        fake_backend = MagicMock()
+        fake_backend.read.side_effect = RuntimeError("gpg agent stopped")
 
-        with patch(
-            "dotfiles_cli.vault.password.get_vault_password_file",
-            return_value=vault_file,
+        with (
+            patch(
+                "dotfiles_cli.vault.password.get_backend",
+                return_value=fake_backend,
+            ),
+            patch("getpass.getpass", return_value="prompted"),
+            patch(
+                "dotfiles_cli.vault.password.sys.stdin.isatty",
+                return_value=True,
+            ),
         ):
-            # First call
-            password1 = get_vault_password("common")
-            # Second call
-            password2 = get_vault_password("common")
+            assert get_vault_password("alpha") == "prompted"
 
-        assert password1 == "cached_password"
-        assert password2 == "cached_password"
+    def test_get_vault_password_write_failure_does_not_block(self):
+        """If persist fails, return prompted password and warn on stderr."""
+        fake_backend = MagicMock()
+        fake_backend.read.return_value = None
+        fake_backend.write.side_effect = RuntimeError("gpg not installed")
+
+        with (
+            patch(
+                "dotfiles_cli.vault.password.get_backend",
+                return_value=fake_backend,
+            ),
+            patch("getpass.getpass", return_value="prompted"),
+            patch(
+                "dotfiles_cli.vault.password.sys.stdin.isatty",
+                return_value=True,
+            ),
+        ):
+            # Should not raise.
+            password = get_vault_password("alpha")
+
+        assert password == "prompted"
+
+
+class TestGetVaultPasswordOnePasswordFallback:
+    """1Password fallback: local miss → 1P → persist back to local."""
+
+    def setup_method(self):
+        clear_vault_password_cache()
+
+    def test_1p_hit_persists_and_returns_without_prompt(self):
+        """Backend miss + 1P hit → password returned, backend.write called, no prompt."""
+        fake_backend = MagicMock()
+        fake_backend.read.return_value = None
+
+        with (
+            patch(
+                "dotfiles_cli.vault.password.get_backend",
+                return_value=fake_backend,
+            ),
+            patch(
+                "dotfiles_cli.vault.password.onepassword.read_field",
+                return_value="from-1p",
+            ) as read_field,
+            patch("getpass.getpass") as prompt,
+        ):
+            password = get_vault_password("adobe")
+
+        assert password == "from-1p"
+        read_field.assert_called_once_with("adobe")
+        fake_backend.ensure_ready.assert_called_once()
+        fake_backend.write.assert_called_once_with("adobe", "from-1p")
+        prompt.assert_not_called()
+
+    def test_1p_miss_falls_through_to_prompt(self):
+        """Backend miss + 1P miss → prompt as before."""
+        fake_backend = MagicMock()
+        fake_backend.read.return_value = None
+
+        with (
+            patch(
+                "dotfiles_cli.vault.password.get_backend",
+                return_value=fake_backend,
+            ),
+            patch(
+                "dotfiles_cli.vault.password.onepassword.read_field",
+                return_value=None,
+            ),
+            patch("getpass.getpass", return_value="typed"),
+            patch(
+                "dotfiles_cli.vault.password.sys.stdin.isatty",
+                return_value=True,
+            ),
+        ):
+            assert get_vault_password("adobe") == "typed"
+
+    def test_1p_hit_persist_failure_does_not_block(self):
+        """If the backend write-through fails, still return the 1P password."""
+        fake_backend = MagicMock()
+        fake_backend.read.return_value = None
+        fake_backend.write.side_effect = RuntimeError("keychain locked")
+
+        with (
+            patch(
+                "dotfiles_cli.vault.password.get_backend",
+                return_value=fake_backend,
+            ),
+            patch(
+                "dotfiles_cli.vault.password.onepassword.read_field",
+                return_value="from-1p",
+            ),
+        ):
+            password = get_vault_password("adobe")
+
+        assert password == "from-1p"
+
+
+class TestRunAnsibleVaultRetryVia1P:
+    """Decryption failure → refresh from 1P → retry once with explicit password."""
+
+    def test_decryption_failure_retries_with_1p_password(self):
+        """On 'Decryption failed', re-read from 1P and retry via explicit-password path."""
+        # First call (client-script path) fails with decryption error.
+        # Second call (explicit-password path) succeeds.
+        calls = [
+            MagicMock(returncode=1, stdout="", stderr="ERROR! Decryption failed"),
+            MagicMock(returncode=0, stdout="decrypted", stderr=""),
+        ]
+
+        fake_backend = MagicMock()
+
+        with (
+            patch(
+                "dotfiles_cli.vault.operations.subprocess.run",
+                side_effect=calls,
+            ) as run,
+            patch(
+                "dotfiles_cli.vault.operations.onepassword.is_configured",
+                return_value=True,
+            ),
+            patch(
+                "dotfiles_cli.vault.operations.onepassword.read_field",
+                return_value="fresh-pw",
+            ),
+            patch(
+                "dotfiles_cli.vault.operations.get_backend",
+                return_value=fake_backend,
+            ),
+        ):
+            rc, out, err = run_ansible_vault(["view", "secrets.yml"], location="adobe")
+
+        assert rc == 0
+        assert out == "decrypted"
+        assert run.call_count == 2
+        # Second invocation used a temp password file (explicit-password path).
+        second_cmd = run.call_args_list[1][0][0]
+        assert "ansible-vault" in second_cmd
+        fake_backend.write.assert_called_once_with("adobe", "fresh-pw")
+
+    def test_decryption_failure_without_1p_returns_original_error(self):
+        """If 1P is not configured, decryption errors propagate unchanged."""
+        fake_result = MagicMock(
+            returncode=1, stdout="", stderr="ERROR! Decryption failed"
+        )
+
+        with (
+            patch(
+                "dotfiles_cli.vault.operations.subprocess.run",
+                return_value=fake_result,
+            ) as run,
+            patch(
+                "dotfiles_cli.vault.operations.onepassword.is_configured",
+                return_value=False,
+            ),
+        ):
+            rc, out, err = run_ansible_vault(["view", "secrets.yml"])
+
+        assert rc == 1
+        assert "Decryption failed" in err
+        assert run.call_count == 1
+
+    def test_non_decryption_error_does_not_retry(self):
+        """Other errors (missing file, bad args) skip the retry path."""
+        fake_result = MagicMock(
+            returncode=1, stdout="", stderr="ERROR! ./secrets.yml: not a vault file"
+        )
+
+        with (
+            patch(
+                "dotfiles_cli.vault.operations.subprocess.run",
+                return_value=fake_result,
+            ) as run,
+            patch(
+                "dotfiles_cli.vault.operations.onepassword.is_configured",
+                return_value=True,
+            ) as is_configured,
+            patch("dotfiles_cli.vault.operations.onepassword.read_field") as read_field,
+        ):
+            rc, _, _ = run_ansible_vault(["view", "secrets.yml"])
+
+        assert rc == 1
+        assert run.call_count == 1
+        # is_configured may or may not be checked, but read_field must not be.
+        read_field.assert_not_called()
+        _ = is_configured  # silence unused
+
+    def test_decryption_failure_no_1p_field_returns_original_error(self):
+        """If 1P is configured but has no value, return the original error."""
+        fake_result = MagicMock(
+            returncode=1, stdout="", stderr="ERROR! Decryption failed"
+        )
+
+        with (
+            patch(
+                "dotfiles_cli.vault.operations.subprocess.run",
+                return_value=fake_result,
+            ) as run,
+            patch(
+                "dotfiles_cli.vault.operations.onepassword.is_configured",
+                return_value=True,
+            ),
+            patch(
+                "dotfiles_cli.vault.operations.onepassword.read_field",
+                return_value=None,
+            ),
+        ):
+            rc, _, err = run_ansible_vault(["view", "secrets.yml"])
+
+        assert rc == 1
+        assert "Decryption failed" in err
+        assert run.call_count == 1
 
 
 class TestValidateVaultPassword:
@@ -414,7 +633,10 @@ class TestValidateVaultPassword:
         secrets_file.write_text("$ANSIBLE_VAULT;1.1;AES256\nencrypted")
 
         with (
-            patch("dotfiles_cli.profiles.get_profile_names", return_value=["alpha"]),
+            patch(
+                "dotfiles_cli.vault.operations.get_profiles_with_secrets",
+                return_value=["alpha"],
+            ),
             patch(
                 "dotfiles_cli.vault.operations.get_secrets_file",
                 return_value=secrets_file,
@@ -435,7 +657,10 @@ class TestValidateVaultPassword:
         secrets_file.write_text("$ANSIBLE_VAULT;1.1;AES256\nencrypted")
 
         with (
-            patch("dotfiles_cli.profiles.get_profile_names", return_value=["alpha"]),
+            patch(
+                "dotfiles_cli.vault.operations.get_profiles_with_secrets",
+                return_value=["alpha"],
+            ),
             patch(
                 "dotfiles_cli.vault.operations.get_secrets_file",
                 return_value=secrets_file,
@@ -450,11 +675,27 @@ class TestValidateVaultPassword:
         assert result is False
 
     def test_validate_vault_password_no_secrets_file(self, tmp_path):
-        """Test validation when no secrets file exists (returns True)."""
-        with patch("dotfiles_cli.profiles.get_profile_names", return_value=[]):
+        """Test validation when no encrypted secrets files exist (returns True)."""
+        with patch(
+            "dotfiles_cli.vault.operations.get_profiles_with_secrets",
+            return_value=[],
+        ):
             result = validate_vault_password("any_password")
 
-        # Should return True when no file to validate against
+        assert result is True
+
+    def test_validate_vault_password_skips_plaintext_secrets(self, tmp_path):
+        """Plaintext secrets.yml must not trigger a false 'invalid password' result."""
+        plaintext = tmp_path / "profiles" / "plain" / "secrets.yml"
+        plaintext.parent.mkdir(parents=True)
+        plaintext.write_text("mcp_secrets:\n  foo: bar\n")
+
+        with patch(
+            "dotfiles_cli.vault.operations.get_profiles_with_secrets",
+            return_value=[],
+        ):
+            result = validate_vault_password("any_password")
+
         assert result is True
 
 

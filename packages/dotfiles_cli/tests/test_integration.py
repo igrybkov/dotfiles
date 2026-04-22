@@ -233,21 +233,23 @@ class TestProfileSelectionWorkflow:
 class TestVaultWorkflow:
     """Integration tests for vault operations."""
 
-    def test_vault_password_from_file(self, tmp_path):
-        """Test vault password retrieval from file."""
+    def test_vault_password_from_backend(self):
+        """Vault password retrieval delegates to the backend."""
+        from unittest.mock import MagicMock
+
         from dotfiles_cli.vault.password import get_vault_password
 
-        vault_file = tmp_path / ".vault_password"
-        vault_file.write_text("my_secret_password")
-        vault_file.chmod(0o600)
+        fake_backend = MagicMock()
+        fake_backend.read.return_value = "my_secret_password"
 
         with patch(
-            "dotfiles_cli.vault.password.get_vault_password_file",
-            return_value=vault_file,
+            "dotfiles_cli.vault.password.get_backend",
+            return_value=fake_backend,
         ):
             password = get_vault_password("alpha")
 
         assert password == "my_secret_password"
+        fake_backend.read.assert_called_once_with("alpha")
 
     def test_vault_encrypt_decrypt_workflow(self, tmp_path):
         """Test encrypting and decrypting with vault."""

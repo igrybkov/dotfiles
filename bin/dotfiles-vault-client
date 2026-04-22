@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# dotfiles-vault-client — Ansible vault client-script protocol entrypoint.
+#
+# Called by ansible-vault / ansible-playbook with `--vault-id LABEL`. Prints
+# the matching vault password on stdout, or exits 2 if not available.
+#
+# Also the macOS keychain ACL trust anchor (this file's absolute path is
+# what `security add-generic-password -T` references). Python is the actual
+# caller of Security framework APIs via the Security CLI, so the effective
+# ACL scope is the Python interpreter — run `dotfiles secret keychain retrust`
+# after uv/mise/python upgrades.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DOTFILES_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+VENV_BIN="${DOTFILES_DIR}/.venv/bin/dotfiles-vault-client"
+if [[ -x "${VENV_BIN}" ]]; then
+    exec "${VENV_BIN}" "$@"
+fi
+
+VENV_PYTHON="${DOTFILES_DIR}/.venv/bin/python"
+if [[ -x "${VENV_PYTHON}" ]]; then
+    exec "${VENV_PYTHON}" -m dotfiles_cli.vault.vault_client "$@"
+fi
+
+# Last-resort fallback for fresh checkouts without .venv.
+exec env -u VIRTUAL_ENV mise x -- uv run --managed-python \
+    --directory="${DOTFILES_DIR}" \
+    python -m dotfiles_cli.vault.vault_client "$@"

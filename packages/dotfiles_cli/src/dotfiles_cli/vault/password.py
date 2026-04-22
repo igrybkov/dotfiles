@@ -1,8 +1,18 @@
-"""Vault password management."""
+"""Vault password resolution.
+
+Delegates to the OS-specific backend (`backend.get_backend()`) for storage.
+On a miss with a TTY, prompts the user and best-effort persists to the
+backend so the next run is non-interactive.
+
+The legacy disk-backed helpers (`get_vault_password_file`,
+`write_vault_password_file`, `ensure_vault_password_permissions`) are kept
+for the install flow + Phase 4 one-shot migration, then removed.
+"""
 
 from __future__ import annotations
 
 import getpass
+import sys
 from pathlib import Path
 
 import click
@@ -12,28 +22,23 @@ from ..constants import (
     get_dotfiles_dir,
     get_vault_password_file as get_global_vault_password_file,
 )
-
-# Cached vault passwords for the session (keyed by location)
-_vault_password_cache: dict[str, str] = {}
+from .backend import get_backend
+from .backends import onepassword
 
 
 def clear_vault_password_cache() -> None:
-    """Clear the vault password cache."""
-    global _vault_password_cache
-    _vault_password_cache = {}
+    """No-op. Retained for backwards-compat with callers (e.g. secret rekey).
+
+    The backend handles its own caching (gpg-agent, keychain session), and
+    the CLI lives for seconds; there's nothing to clear.
+    """
 
 
 def ensure_vault_password_permissions(password_file: Path) -> None:
     """Ensure vault password file has correct permissions (600).
 
-    Checks if the file has the correct permissions and attempts to fix them
-    if they're wrong. Raises an error with instructions if unable to fix.
-
-    Args:
-        password_file: Path to the vault password file
-
-    Raises:
-        click.ClickException: If permissions are wrong and cannot be fixed
+    Legacy helper for the install flow reading existing disk files during
+    the transition. Removed once install.py is refactored (Phase 3).
     """
     if not password_file.exists():
         return
@@ -42,7 +47,6 @@ def ensure_vault_password_permissions(password_file: Path) -> None:
     if current_mode == VAULT_PASSWORD_FILE_MODE:
         return
 
-    # Permissions are wrong, try to fix them
     try:
         password_file.chmod(VAULT_PASSWORD_FILE_MODE)
         click.echo(
@@ -62,27 +66,17 @@ def ensure_vault_password_permissions(password_file: Path) -> None:
 def write_vault_password_file(password_file: Path, password: str) -> None:
     """Write password to vault password file with correct permissions.
 
-    Creates or overwrites the file with mode 600.
-
-    Args:
-        password_file: Path to the vault password file
-        password: The password to write
+    Legacy helper retained for the Phase 4 migration command (reads disk,
+    writes to backend, offers to delete). Removed after migration lands.
     """
     password_file.write_text(password)
     password_file.chmod(VAULT_PASSWORD_FILE_MODE)
 
 
 def get_vault_password_file(location: str) -> Path:
-    """Get the vault password file path for a profile.
+    """Return the profile-specific or global .vault_password file path.
 
-    First checks for a profile-specific password file, then falls back
-    to the global password file.
-
-    Args:
-        location: Profile name
-
-    Returns:
-        Path to the .vault_password file
+    Legacy helper — callers should move to `get_backend().read(location)`.
     """
     profile_password_file = (
         Path(get_dotfiles_dir()) / "profiles" / location / ".vault_password"
@@ -93,74 +87,93 @@ def get_vault_password_file(location: str) -> Path:
 
 
 def get_vault_id(location: str) -> str:
-    """Get the vault ID for a profile.
-
-    Args:
-        location: Profile name
-
-    Returns:
-        Vault ID string (profile name)
-    """
+    """Vault ID for a profile — the profile name."""
     return location
 
 
 def get_vault_password(location: str = "common") -> str:
-    """Get vault password for a profile from file or prompt (cached for session).
+    """Return the vault password for `location`, reading from the backend.
 
-    Args:
-        location: Profile name
-
-    Returns:
-        The vault password string
+    Resolution:
+        1. `backend.read(location)` — keychain (macOS) or gpg file (Linux).
+        2. 1Password fallback if DOTFILES_VAULT_OP_ITEM is configured.
+        3. TTY prompt with best-effort backend persist.
+        4. Click exception with guidance if no TTY.
     """
-    global _vault_password_cache
+    backend = get_backend()
+    try:
+        password = backend.read(location)
+    except Exception:
+        # Backend surfaced a read error (gpg missing, wrong master password,
+        # keychain unreachable). Fall through to 1P / prompt; don't block.
+        password = None
 
-    password_file = get_vault_password_file(location)
-    # Use actual password file path as cache key (handles fallback to global)
-    cache_key = str(password_file)
+    if password is not None:
+        return password
 
-    if cache_key in _vault_password_cache:
-        return _vault_password_cache[cache_key]
+    # 1Password fallback — single-item, one field per profile.
+    fallback = onepassword.read_field(location)
+    if fallback is not None:
+        # Write-through so the next run is fast and offline-capable.
+        try:
+            backend.ensure_ready()
+            backend.write(location, fallback)
+        except Exception as exc:
+            click.echo(
+                f"Note: fetched vault password for {location!r} from 1Password "
+                f"but could not persist it locally ({exc}).",
+                err=True,
+            )
+        return fallback
 
-    if password_file.exists():
-        ensure_vault_password_permissions(password_file)
-        _vault_password_cache[cache_key] = password_file.read_text().strip()
-    else:
-        prompt = f"Vault password for {location}: "
-        _vault_password_cache[cache_key] = getpass.getpass(prompt)
+    if not sys.stdin.isatty() and not Path("/dev/tty").exists():
+        raise click.ClickException(
+            f"No vault password stored for {location!r} and no TTY to prompt.\n"
+            f"Run `dotfiles secret init` or "
+            f"`dotfiles secret keychain push {location}` to register one."
+        )
 
-    return _vault_password_cache[cache_key]
+    try:
+        password = getpass.getpass(f"Vault password for {location}: ")
+    except (KeyboardInterrupt, EOFError):
+        raise click.ClickException("Vault password prompt cancelled.")
+    if not password:
+        raise click.ClickException("Vault password cannot be empty.")
+
+    # Best-effort persist — if the backend refuses (gpg missing, permission),
+    # keep running with the in-memory password and advise the user.
+    try:
+        backend.ensure_ready()
+        backend.write(location, password)
+    except Exception as exc:
+        click.echo(
+            f"Note: could not save vault password for {location!r} to backend "
+            f"({exc}).\nRun `dotfiles secret init` when ready to persist it.",
+            err=True,
+        )
+
+    return password
 
 
 def validate_vault_password(password: str) -> bool:
-    """Validate vault password by attempting to decrypt a vault file.
+    """Try decrypting the first profile's secrets file with `password`.
 
-    Args:
-        password: Password to validate
-
-    Returns:
-        True if password is valid, False otherwise
+    Returns True if decryption succeeds, False otherwise.
     """
-    from .operations import run_ansible_vault, get_secrets_file
-    from ..profiles import get_profile_names
+    from .operations import (
+        run_ansible_vault,
+        get_profiles_with_secrets,
+        get_secrets_file,
+    )
 
-    # Try to find any vault file to validate against
-    for profile in get_profile_names():
+    for profile in get_profiles_with_secrets():
         profile_secrets = get_secrets_file(profile)
-        if profile_secrets.exists():
-            try:
-                # Try to decrypt the file (just view, don't modify)
-                rc, _, _ = run_ansible_vault(
-                    ["view", str(profile_secrets)], password=password
-                )
-                if rc == 0:
-                    return True
-                # If decryption failed, password is wrong
-                return False
-            except Exception:
-                # If we can't validate, assume it's invalid
-                return False
+        try:
+            rc, _, _ = run_ansible_vault(
+                ["view", str(profile_secrets)], password=password
+            )
+            return rc == 0
+        except Exception:
+            return False
 
-    # No vault files found - can't validate, but that's okay
-    # Return True to allow proceeding (maybe no secrets are needed)
     return True

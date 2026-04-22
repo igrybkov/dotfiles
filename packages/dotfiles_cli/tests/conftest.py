@@ -99,14 +99,15 @@ def mock_ansible_runner():
 
 @pytest.fixture
 def mock_getpass():
-    """Mock getpass.getpass and password validation for install command."""
+    """Mock getpass.getpass and sudo-password validation for install command.
+
+    Vault password validation moved into the client-script path (Phase 3);
+    install no longer validates locally.
+    """
     with (
         patch("getpass.getpass") as mock,
         patch(
             "dotfiles_cli.commands.install.validate_sudo_password", return_value=True
-        ),
-        patch(
-            "dotfiles_cli.commands.install.validate_vault_password", return_value=True
         ),
     ):
         mock.return_value = "test_password"

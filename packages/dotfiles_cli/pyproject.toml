@@ -21,6 +21,7 @@ dependencies = [
   "click~=8.3.1",
   "click-aliases~=1.0.1",
   "dotfiles-profile-discovery",
+  "keyring>=25; sys_platform=='darwin'",
   "prompt-toolkit>=3.0.52",
   "pydantic-settings~=2.14.0",
   "python-dotenv~=1.2.1",
@@ -28,14 +29,12 @@ dependencies = [
   "rich~=15.0.0",
   "ruamel-yaml>=0.18",
 ]
-
 scripts.dotfiles-cli = "dotfiles_cli:cli"
+scripts.dotfiles-vault-client = "dotfiles_cli.vault.vault_client:main"
 
-[tool.hatch.build.targets.wheel]
-packages = [ "src/dotfiles_cli" ]
+[tool.hatch]
+build.targets.sdist.include = [ "src/**/*.py" ]
+build.targets.wheel.packages = [ "src/dotfiles_cli" ]
 
-[tool.hatch.build.targets.sdist]
-include = [ "src/**/*.py" ]
-
-[tool.uv.sources]
-dotfiles-profile-discovery = { workspace = true }
+[tool.uv]
+sources.dotfiles-profile-discovery = { workspace = true }
