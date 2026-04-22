@@ -9,7 +9,31 @@ import click
 
 from ..constants import DOTFILES_DIR
 from ..profiles import get_all_repo_statuses
-from ..profiles.git import _run_git_command, _sync_single_repo, get_profile_repos
+from ..profiles.git import (
+    SyncResult,
+    _pull_with_summary,
+    _push_with_summary,
+    _sync_single_repo,
+    get_profile_repos,
+)
+
+
+def _print_sync_summaries(results: list[SyncResult]) -> None:
+    """Print the commits and file-change stats captured during a sync."""
+    printed_any = False
+    for result in results:
+        if not result.success or not result.commits:
+            continue
+        if printed_any:
+            click.echo("")
+        printed_any = True
+        click.echo(click.style(result.display_name, bold=True))
+        for line in result.commits.splitlines():
+            click.echo(f"  {line}")
+        if result.stat:
+            click.echo("")
+            for line in result.stat.splitlines():
+                click.echo(f"  {line}")
 
 
 def _sync_all_repos(action: str) -> bool:
@@ -25,40 +49,24 @@ def _sync_all_repos(action: str) -> bool:
     profiles_dir = Path(DOTFILES_DIR) / "profiles"
     main_repo = Path(DOTFILES_DIR)
 
-    async def run_all() -> bool:
-        # Build tasks for all repos (main + profiles)
-        tasks = []
-
-        # Main repo task
+    async def run_all() -> tuple[bool, list[SyncResult]]:
         if action == "pull":
-            click.echo("Pulling dotfiles...")
-            tasks.append(_run_git_command(["git", "pull"], main_repo))
+            main_task = _pull_with_summary(main_repo, "dotfiles")
         else:
-            click.echo("Pushing dotfiles...")
-            tasks.append(_run_git_command(["git", "push", "origin", "main"], main_repo))
+            main_task = _push_with_summary(main_repo, "dotfiles", "main")
 
-        # Profile repo tasks
         profile_tasks = [
             _sync_single_repo(action, repo, profiles_dir) for repo in repos
         ]
 
-        # Run main repo and all profile repos concurrently
-        main_result, *profile_results = await asyncio.gather(tasks[0], *profile_tasks)
+        results: list[SyncResult] = list(
+            await asyncio.gather(main_task, *profile_tasks)
+        )
+        return all(r.success for r in results), results
 
-        success = True
-        if main_result.returncode != 0:
-            click.echo(f"Error: git {action} failed for dotfiles", err=True)
-            if main_result.stderr.strip():
-                click.echo(f"  {main_result.stderr.strip()}", err=True)
-            success = False
-
-        for _, profile_ok in profile_results:
-            if not profile_ok:
-                success = False
-
-        return success
-
-    return asyncio.run(run_all())
+    success, results = asyncio.run(run_all())
+    _print_sync_summaries(results)
+    return success
 
 
 @click.command()

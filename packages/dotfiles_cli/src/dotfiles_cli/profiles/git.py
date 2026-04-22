@@ -248,37 +248,94 @@ async def _has_remote(repo: Path) -> bool:
     return False
 
 
-async def _sync_single_repo(
-    action: str, repo: Path, profiles_dir: Path
-) -> tuple[str, bool]:
-    """Sync a single profile repo. Returns (display_name, success)."""
+@dataclasses.dataclass
+class SyncResult:
+    """Result of syncing a single repo."""
+
+    display_name: str
+    success: bool
+    commits: str = ""
+    stat: str = ""
+
+
+async def _capture_range_summary(repo: Path, rev_range: str) -> tuple[str, str]:
+    """Return (oneline log, diff --stat) for rev_range in repo."""
+    log_task = _run_git_command(["git", "log", "--oneline", rev_range], repo)
+    stat_task = _run_git_command(["git", "diff", "--stat", rev_range], repo)
+    log_r, stat_r = await asyncio.gather(log_task, stat_task)
+    return (
+        log_r.stdout.strip() if log_r.returncode == 0 else "",
+        stat_r.stdout.strip() if stat_r.returncode == 0 else "",
+    )
+
+
+async def _pull_with_summary(repo: Path, display_name: str) -> SyncResult:
+    """Pull a repo and capture a summary of new commits and file changes."""
+    head_before = await _run_git_command(["git", "rev-parse", "HEAD"], repo)
+    old_sha = head_before.stdout.strip() if head_before.returncode == 0 else ""
+
+    click.echo(f"Pulling {display_name}...")
+    result = await _run_git_command(["git", "pull"], repo)
+
+    if result.returncode != 0:
+        click.echo(f"Warning: git pull failed for {display_name}", err=True)
+        if result.stderr.strip():
+            click.echo(f"  {result.stderr.strip()}", err=True)
+        return SyncResult(display_name, success=False)
+
+    if not old_sha:
+        return SyncResult(display_name, success=True)
+
+    head_after = await _run_git_command(["git", "rev-parse", "HEAD"], repo)
+    new_sha = head_after.stdout.strip() if head_after.returncode == 0 else ""
+    if not new_sha or new_sha == old_sha:
+        return SyncResult(display_name, success=True)
+
+    commits, stat = await _capture_range_summary(repo, f"{old_sha}..{new_sha}")
+    return SyncResult(display_name, success=True, commits=commits, stat=stat)
+
+
+async def _push_with_summary(repo: Path, display_name: str, branch: str) -> SyncResult:
+    """Push a repo and capture a summary of the commits and file changes sent."""
+    head_r = await _run_git_command(["git", "rev-parse", "HEAD"], repo)
+    head_sha = head_r.stdout.strip() if head_r.returncode == 0 else ""
+
+    remote_r = await _run_git_command(["git", "rev-parse", f"origin/{branch}"], repo)
+    old_sha = remote_r.stdout.strip() if remote_r.returncode == 0 else ""
+
+    click.echo(f"Pushing {display_name}...")
+    result = await _run_git_command(["git", "push", "origin", branch], repo)
+
+    if result.returncode != 0:
+        click.echo(f"Warning: git push failed for {display_name}", err=True)
+        if result.stderr.strip():
+            click.echo(f"  {result.stderr.strip()}", err=True)
+        return SyncResult(display_name, success=False)
+
+    if not old_sha or not head_sha or old_sha == head_sha:
+        return SyncResult(display_name, success=True)
+
+    commits, stat = await _capture_range_summary(repo, f"{old_sha}..{head_sha}")
+    return SyncResult(display_name, success=True, commits=commits, stat=stat)
+
+
+async def _sync_single_repo(action: str, repo: Path, profiles_dir: Path) -> SyncResult:
+    """Sync a single profile repo."""
     repo_rel_path = repo.relative_to(profiles_dir)
     display_name = f"profiles/{repo_rel_path}"
 
     if not await _has_remote(repo):
         click.echo(f"Skipping {display_name} (no remote configured)")
-        return display_name, True
+        return SyncResult(display_name, success=True)
 
     if action == "pull":
-        click.echo(f"Pulling {display_name}...")
-        result = await _run_git_command(["git", "pull"], repo)
-    else:  # push
-        branch_result = await _run_git_command(
-            ["git", "rev-parse", "--abbrev-ref", "HEAD"], repo
-        )
-        branch = (
-            branch_result.stdout.strip() if branch_result.returncode == 0 else "main"
-        )
-        click.echo(f"Pushing {display_name}...")
-        result = await _run_git_command(["git", "push", "origin", branch], repo)
+        return await _pull_with_summary(repo, display_name)
 
-    if result.returncode != 0:
-        click.echo(f"Warning: git {action} failed for {display_name}", err=True)
-        if result.stderr.strip():
-            click.echo(f"  {result.stderr.strip()}", err=True)
-        return display_name, False
-
-    return display_name, True
+    branch_result = await _run_git_command(
+        ["git", "rev-parse", "--abbrev-ref", "HEAD"], repo
+    )
+    branch = branch_result.stdout.strip() if branch_result.returncode == 0 else "main"
+    return await _push_with_summary(repo, display_name, branch)
 
 
 def sync_profile_repos(action: str) -> bool:
@@ -304,6 +361,6 @@ def sync_profile_repos(action: str) -> bool:
         results = await asyncio.gather(
             *[_sync_single_repo(action, repo, profiles_dir) for repo in repos]
         )
-        return all(success for _, success in results)
+        return all(r.success for r in results)
 
     return asyncio.run(sync_all())
