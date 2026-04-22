@@ -58,6 +58,18 @@ class RuntimeSettings(HiveBaseSettings):
         ),
     ]
 
+    # Session-scoped workdir override (set via Ctrl+W in the picker).
+    # Not persisted to env; cleared between restart-loop iterations.
+    # Aliased to a synthetic env name so BaseSettings doesn't read $WORKDIR.
+    workdir: Annotated[
+        Path | None,
+        Field(None, validation_alias="_HIVE_WORKDIR_SESSION", exclude=True),
+    ] = None
+    workdir_extras_override: Annotated[
+        list[str] | None,
+        Field(None, validation_alias="_HIVE_WORKDIR_EXTRAS_SESSION", exclude=True),
+    ] = None
+
     # --- Immutable context ---
     # Zellij sets ZELLIJ=0 when running inside a session.
     # Any non-empty string (including "0") means we're in Zellij.

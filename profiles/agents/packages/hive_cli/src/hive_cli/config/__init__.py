@@ -140,7 +140,10 @@ def get_extra_dirs_args(agent_name: str) -> list[str]:
     from ..git import expand_path, get_main_repo
 
     settings = get_settings()
-    dirs = settings.extra_dirs
+    # Session override (set by Ctrl+W in the picker) wins over configured dirs.
+    # It contains already-resolved absolute paths plus the displaced primary.
+    override = get_runtime_settings().workdir_extras_override
+    dirs = override if override is not None else settings.extra_dirs
     if not dirs:
         return []
 

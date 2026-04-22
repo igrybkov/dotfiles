@@ -43,6 +43,7 @@ from ..utils import (
     open_in_editor,
     select_agent,
     select_editor,
+    select_workdir,
     setup_worktree_files,
     success,
     warn,
@@ -57,6 +58,7 @@ ACTION_OPEN_IN_EDITOR_PREFIX = "__open_in_editor__:"
 ACTION_ISSUE_PREFIX = "__issue__:"
 ACTION_CHANGE_AGENT = "__change_agent__"
 ACTION_TOGGLE_SKIP_PERMISSIONS = "__toggle_skip_permissions__"
+ACTION_CHANGE_WORKDIR = "__change_workdir__"
 
 # Emoji prefix for GitHub issues to distinguish them from branches
 ISSUE_EMOJI = "🎫"
@@ -820,8 +822,9 @@ def _interactive_ensure(
 
         # Base header text
         skip_perms_tag = " [skip-perms]" if skip_permissions else ""
+        workdir_tag = f" [workdir: {rt.workdir}]" if rt.workdir else ""
         base_header = (
-            f"Agent {agent_num} [{selected_agent}]{skip_perms_tag}"
+            f"Agent {agent_num} [{selected_agent}]{skip_perms_tag}{workdir_tag}"
             f" - Select worktree or branch"
         )
         # Start with "Fetching..." indicator
@@ -846,6 +849,10 @@ def _interactive_ensure(
         # Define ctrl+s handler - returns sentinel to toggle skip-permissions
         def on_ctrl_s() -> str | None:
             return ACTION_TOGGLE_SKIP_PERMISSIONS
+
+        # Define ctrl+w handler - returns sentinel to trigger workdir override
+        def on_ctrl_w() -> str | None:
+            return ACTION_CHANGE_WORKDIR
 
         # List to receive update functions (populated before app.run())
         update_callbacks: list = []
@@ -999,6 +1006,7 @@ def _interactive_ensure(
                 "</dim><b>^O</b><dim> editor  </dim><b>^D</b><dim> del  "
                 "</dim><b>^A</b><dim> agent  "
                 f"</dim><b>^S</b><dim> skip-perms:{skip_perms_indicator}  "
+                "</dim><b>^W</b><dim> workdir  "
                 "</dim><b>Esc</b><dim> new  "
                 "</dim><b>^C</b><dim> quit"
             ),
@@ -1008,6 +1016,7 @@ def _interactive_ensure(
             on_shift_enter=on_shift_enter,
             on_ctrl_a=on_ctrl_a,
             on_ctrl_s=on_ctrl_s,
+            on_ctrl_w=on_ctrl_w,
             update_callbacks=update_callbacks,
             update_callbacks_ready=update_callbacks_ready,
             auto_select_value=resolved_auto_select,
@@ -1042,6 +1051,25 @@ def _interactive_ensure(
         if selected == ACTION_TOGGLE_SKIP_PERMISSIONS:
             skip_permissions = not skip_permissions
             rt.skip_permissions = skip_permissions
+            # Loop back to picker
+            continue
+
+        # Handle "change workdir" action (triggered by Ctrl+W)
+        if selected == ACTION_CHANGE_WORKDIR:
+            if not get_settings().extra_dirs:
+                warn(
+                    "No extra_dirs configured — add some to hive.yml or "
+                    ".hive.local.yml to enable workdir override."
+                )
+            else:
+                new_workdir = select_workdir(
+                    current_agent=selected_agent,
+                    current_override=rt.workdir,
+                )
+                if new_workdir is not None:
+                    rt.workdir = new_workdir
+                    # Clear any stale extras override; computed at launch time.
+                    rt.workdir_extras_override = None
             # Loop back to picker
             continue
 

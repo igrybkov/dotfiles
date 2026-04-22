@@ -11,8 +11,8 @@ from pathlib import Path
 
 from rich.console import Console
 
-from ..config import get_runtime_settings
-from ..git import get_git_root, get_main_repo, get_worktree_path
+from ..config import get_runtime_settings, get_settings
+from ..git import expand_path, get_git_root, get_main_repo, get_worktree_path
 from ..utils import error, format_yellow, is_interactive
 from ..utils.zellij import set_pane_branch
 from .wt import _interactive_ensure
@@ -21,6 +21,26 @@ console = Console()
 
 # Type alias for command runner function
 CommandRunner = Callable[[list[str]], int]
+
+
+def _apply_workdir_override(primary_path: Path) -> None:
+    """If a Ctrl+W workdir override is active, chdir to it and compute the extras list.
+
+    The override replaces the agent's cwd with one of the configured extra_dirs,
+    and prepends the displaced primary (worktree path) to the extras list so the
+    agent can still reach it. Absolute paths are stored; get_extra_dirs_args
+    consumes them verbatim.
+    """
+    rt = get_runtime_settings()
+    if rt.workdir is None:
+        return
+
+    main_repo = get_main_repo()
+    resolved = [expand_path(d, main_repo) for d in get_settings().extra_dirs]
+    # Drop the chosen workdir from the extras; prepend the displaced primary.
+    remaining = [str(p) for p in resolved if p != rt.workdir]
+    rt.workdir_extras_override = [str(primary_path), *remaining]
+    os.chdir(rt.workdir)
 
 
 def select_and_change_to_worktree(
@@ -58,7 +78,9 @@ def select_and_change_to_worktree(
             # User cancelled
             return False, None
         path, branch = result
-        os.chdir(Path(path))
+        primary = Path(path)
+        os.chdir(primary)
+        _apply_workdir_override(primary)
         return True, branch
     elif worktree is not None:
         # Specific branch provided
@@ -73,6 +95,7 @@ def select_and_change_to_worktree(
                 )
                 sys.exit(1)
         os.chdir(worktree_path)
+        _apply_workdir_override(worktree_path)
         return True, worktree
     else:
         # Change to git root if available (default behavior)
@@ -180,6 +203,12 @@ def run_in_worktree(
         # Auto-restart loop
         try:
             while True:
+                # Workdir override (Ctrl+W) is session-scoped — must be re-picked
+                # on each iteration so a previous run's choice doesn't leak.
+                rt = get_runtime_settings()
+                rt.workdir = None
+                rt.workdir_extras_override = None
+
                 if reselect_each_restart or last_selected_branch is None:
                     # Interactive selection or first run
                     # Only use auto-select on the first iteration

@@ -600,3 +600,169 @@ extra_dirs:
             result = get_extra_dirs_args("claude")
 
         assert result == ["--add-dir", str(tmp_path / "sibling")]
+
+    def test_runtime_override_replaces_configured_dirs(self, tmp_path, monkeypatch):
+        """When rt.workdir_extras_override is set, it replaces settings.extra_dirs."""
+        from hive_cli.config import get_runtime_settings
+
+        monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+
+        config_file = tmp_path / ".hive.yml"
+        config_file.write_text("""
+extra_dirs:
+  - /configured/dir
+""")
+
+        load_config.cache_clear()
+        rt = get_runtime_settings()
+        rt.workdir_extras_override = ["/runtime/one", "/runtime/two"]
+        try:
+            with (
+                patch(
+                    "hive_cli.config.loader.find_config_files",
+                    return_value=[config_file],
+                ),
+                patch("hive_cli.git.get_main_repo", return_value=tmp_path),
+            ):
+                result = get_extra_dirs_args("claude")
+        finally:
+            rt.workdir_extras_override = None
+
+        assert result == [
+            "--add-dir",
+            "/runtime/one",
+            "--add-dir",
+            "/runtime/two",
+        ]
+
+    def test_runtime_override_empty_list_produces_no_args(self, tmp_path, monkeypatch):
+        """Empty override list drops all extras even if config has dirs."""
+        from hive_cli.config import get_runtime_settings
+
+        monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+
+        config_file = tmp_path / ".hive.yml"
+        config_file.write_text("""
+extra_dirs:
+  - /configured/dir
+""")
+
+        load_config.cache_clear()
+        rt = get_runtime_settings()
+        rt.workdir_extras_override = []
+        try:
+            with (
+                patch(
+                    "hive_cli.config.loader.find_config_files",
+                    return_value=[config_file],
+                ),
+                patch("hive_cli.git.get_main_repo", return_value=tmp_path),
+            ):
+                result = get_extra_dirs_args("claude")
+        finally:
+            rt.workdir_extras_override = None
+
+        assert result == []
+
+
+class TestRuntimeWorkdirOverride:
+    """Tests for the session-scoped Ctrl+W workdir override."""
+
+    def test_workdir_fields_default_to_none(self):
+        """New RuntimeSettings has no workdir override set."""
+        from hive_cli.config.runtime import RuntimeSettings
+
+        rt = RuntimeSettings()
+        assert rt.workdir is None
+        assert rt.workdir_extras_override is None
+
+    def test_workdir_not_read_from_env(self, monkeypatch):
+        """$WORKDIR must not leak into the override (aliased to a synthetic name)."""
+        from hive_cli.config.runtime import RuntimeSettings
+
+        monkeypatch.setenv("WORKDIR", "/should/not/leak")
+        rt = RuntimeSettings()
+        assert rt.workdir is None
+
+    def test_workdir_not_exported_to_child_env(self):
+        """build_child_env must not expose the workdir override to subprocesses."""
+        from pathlib import Path
+
+        from hive_cli.config.runtime import RuntimeSettings
+
+        rt = RuntimeSettings()
+        rt.workdir = Path("/tmp/custom")
+        rt.workdir_extras_override = ["/tmp/other"]
+        env = rt.build_child_env()
+        assert "WORKDIR" not in env
+        assert "_HIVE_WORKDIR_SESSION" not in env
+        assert "_HIVE_WORKDIR_EXTRAS_SESSION" not in env
+
+
+class TestApplyWorkdirOverride:
+    """Tests for exec_runner._apply_workdir_override."""
+
+    def test_noop_when_no_override(self, tmp_path, monkeypatch):
+        """Without rt.workdir, cwd is not changed and override list stays None."""
+        import os
+
+        from hive_cli.commands.exec_runner import _apply_workdir_override
+        from hive_cli.config import get_runtime_settings
+
+        rt = get_runtime_settings()
+        rt.workdir = None
+        rt.workdir_extras_override = None
+
+        primary = tmp_path / "primary"
+        primary.mkdir()
+        monkeypatch.chdir(primary)
+
+        _apply_workdir_override(primary)
+
+        assert Path(os.getcwd()).resolve() == primary.resolve()
+        assert rt.workdir_extras_override is None
+
+    def test_swap_sets_cwd_and_extras(self, tmp_path, monkeypatch):
+        """Override: cwd→chosen, primary prepended to extras, chosen dropped."""
+        import os
+
+        from hive_cli.commands.exec_runner import _apply_workdir_override
+        from hive_cli.config import get_runtime_settings, load_config
+
+        primary = tmp_path / "primary"
+        primary.mkdir()
+        chosen = tmp_path / "chosen"
+        chosen.mkdir()
+        other = tmp_path / "other"
+        other.mkdir()
+
+        config_file = tmp_path / ".hive.yml"
+        config_file.write_text(
+            f"""
+extra_dirs:
+  - {chosen}
+  - {other}
+"""
+        )
+        load_config.cache_clear()
+
+        rt = get_runtime_settings()
+        rt.workdir = chosen
+        rt.workdir_extras_override = None
+
+        monkeypatch.chdir(primary)
+        try:
+            with (
+                patch(
+                    "hive_cli.config.loader.find_config_files",
+                    return_value=[config_file],
+                ),
+                patch("hive_cli.git.get_main_repo", return_value=tmp_path),
+            ):
+                _apply_workdir_override(primary)
+
+            assert Path(os.getcwd()).resolve() == chosen.resolve()
+            assert rt.workdir_extras_override == [str(primary), str(other)]
+        finally:
+            rt.workdir = None
+            rt.workdir_extras_override = None
