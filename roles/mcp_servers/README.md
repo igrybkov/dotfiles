@@ -240,7 +240,28 @@ mcp_servers:
     config_files:
       - path: "~/Library/Application Support/Claude/claude_desktop_config.json"
         state: present
+
+  # Server with optional deploy target (skipped when parent dir missing)
+  - name: cross-tool-server
+    command: some-command
+    config_files:
+      - path: ~/.config/mcp-hub/servers.json
+        state: present              # mandatory — dir created if missing
+      - path: "~/Library/Application Support/Claude/claude_desktop_config.json"
+        state: present
+        optional: true               # skipped when Claude Desktop not installed
+      - path: ~/Projects/productivity/.mcp.local.json
+        state: present
+        optional: true               # skipped when sibling repo not cloned
 ```
+
+### `config_files` options
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `path` | — | Target config file path (required). `~` is expanded. |
+| `state` | `present` | `present` adds the server entry, `absent` removes it. |
+| `optional` | `false` | When `true`, silently skip this path if its parent directory does not exist. Use for paths that depend on optional tools (Claude Desktop, sibling repos). When `false`, the role creates the parent directory if missing and writes the file. `state: absent` entries are always treated as optional — removing from a nonexistent path is a no-op. |
 
 ### URL-based Servers (HTTP/SSE transport)
 

@@ -132,6 +132,15 @@ argument_specs:
                   - present
                   - absent
                 default: present
+              optional:
+                description: >
+                  If true, silently skip this path when its parent directory
+                  does not exist (useful for paths that depend on other tools
+                  being installed — e.g. Claude Desktop, a cloned sibling repo).
+                  When false (the default), the role creates the parent
+                  directory if missing and writes the config file.
+                type: bool
+                default: false
 
       mcp_default_config_files:
         description: Default config files to update when config_files is not specified per server

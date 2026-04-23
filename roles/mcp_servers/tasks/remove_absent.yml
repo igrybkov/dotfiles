@@ -42,7 +42,8 @@
           item.1.path: ((mcp_absent_config_files_dict | default({})).get(item.1.path, []) + [{
             'name': item.0.name,
             'server': item.0,
-            'state': 'absent'
+            'state': 'absent',
+            'optional': true
           }])
         })
       }}

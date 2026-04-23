@@ -11,17 +11,39 @@
     path: "{{ _mcp_config_path | dirname }}"
   register: mcp_config_dir
 
-- name: "[🤖 MCP] Warn if config directory does not exist for {{ _mcp_config_path | basename }}"
+# A path is optional only if every entry targeting it declared `optional: true`.
+# Any non-optional entry forces us to create the parent directory.
+- name: "[🤖 MCP] Compute optional-ness for {{ _mcp_config_path | basename }}"
+  ansible.builtin.set_fact:
+    _mcp_path_optional: "{{ config_file.value | map(attribute='optional') | map('default', false) | list | min | default(false) }}"
+
+- name: "[🤖 MCP] Skip optional path with missing dir for {{ _mcp_config_path | basename }}"
   ansible.builtin.debug:
-    msg: "WARNING: Skipping {{ _mcp_config_path }} - directory {{ _mcp_config_path | dirname }} does not exist (application may not be installed)"
-  when: not mcp_config_dir.stat.exists
+    msg: "Skipping optional path {{ _mcp_config_path }} — parent directory {{ _mcp_config_path | dirname }} does not exist."
+  when:
+    - not mcp_config_dir.stat.exists
+    - _mcp_path_optional
+
+- name: "[🤖 MCP] Create missing parent directory for {{ _mcp_config_path | basename }}"
+  ansible.builtin.file:
+    path: "{{ _mcp_config_path | dirname }}"
+    state: directory
+    mode: "0755"
+  register: mcp_config_dir_created
+  when:
+    - not mcp_config_dir.stat.exists
+    - not _mcp_path_optional
+
+- name: "[🤖 MCP] Refresh dir existence after possible creation for {{ _mcp_config_path | basename }}"
+  ansible.builtin.set_fact:
+    _mcp_proceed: "{{ mcp_config_dir.stat.exists or (mcp_config_dir_created is defined and mcp_config_dir_created.changed | default(false)) }}"
 
 - name: "[🤖 MCP] Read existing config {{ _mcp_config_path | basename }}"
   ansible.builtin.slurp:
     src: "{{ _mcp_config_path }}"
   register: mcp_existing_config
   failed_when: false
-  when: mcp_config_dir.stat.exists
+  when: _mcp_proceed
 
 - name: "[🤖 MCP] Parse existing config {{ _mcp_config_path | basename }}"
   ansible.builtin.set_fact:
@@ -32,7 +54,7 @@
         else {}
       }}
   no_log: true  # existing config may hold resolved secrets from prior runs
-  when: mcp_config_dir.stat.exists
+  when: _mcp_proceed
 
 - name: "[🤖 MCP] Build updated mcpServers for {{ _mcp_config_path | basename }}"
   ansible.builtin.set_fact:
@@ -121,13 +143,13 @@
       {%- endfor -%}
       {{ result | to_json }}
   no_log: true  # resolves vault_secret lookups into plaintext env/headers
-  when: mcp_config_dir.stat.exists
+  when: _mcp_proceed
 
 - name: "[🤖 MCP] Coerce mcp_updated_servers to dict"
   ansible.builtin.set_fact:
     mcp_updated_servers: "{{ mcp_updated_servers | from_json }}"
   no_log: true  # mcp_updated_servers contains resolved secret values
-  when: mcp_config_dir.stat.exists and (mcp_updated_servers is string)
+  when: _mcp_proceed and (mcp_updated_servers is string)
 
 - name: "[🤖 MCP] Build final config for {{ _mcp_config_path | basename }}"
   ansible.builtin.set_fact:
@@ -136,7 +158,7 @@
         mcp_current_config | combine({'mcpServers': mcp_updated_servers})
       }}
   no_log: true  # merged config carries resolved secret values
-  when: mcp_config_dir.stat.exists
+  when: _mcp_proceed
 
 # Check if any server in the final result has env vars or headers (for file permissions)
 # Must check mcp_updated_servers (merged result) not config_file.value (current profile only)
@@ -149,7 +171,7 @@
         or
         (mcp_updated_servers.values() | selectattr('headers', 'defined') | list | length > 0)
       }}
-  when: mcp_config_dir.stat.exists
+  when: _mcp_proceed
 
 - name: "[🤖 MCP] Write updated config {{ _mcp_config_path | basename }}"
   ansible.builtin.copy:
@@ -157,4 +179,4 @@
     dest: "{{ _mcp_config_path }}"
     mode: "{{ '0600' if mcp_config_has_secrets else '0644' }}"
   no_log: "{{ mcp_config_has_secrets }}"
-  when: mcp_config_dir.stat.exists
+  when: _mcp_proceed

@@ -477,6 +477,11 @@
             "items": {
               "type": "object",
               "properties": {
+                "optional": {
+                  "description": "If true, silently skip this path when its parent directory does not exist (useful for paths that depend on other tools being installed \u2014 e.g. Claude Desktop, a cloned sibling repo). When false (the default), the role creates the parent directory if missing and writes the config file.",
+                  "type": "boolean",
+                  "default": false
+                },
                 "path": {
                   "description": "Path to the config file",
                   "type": "string"

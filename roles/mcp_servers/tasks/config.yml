@@ -11,19 +11,22 @@
           {%- for cf in server.config_files -%}
             {%- set path = cf.path | replace('~', lookup('env', 'HOME')) -%}
             {%- set state = cf.state | default('present') -%}
+            {# state: absent entries are always optional — removing from a nonexistent file is a no-op. #}
+            {%- set optional = cf.optional | default(false) or state == 'absent' -%}
             {%- if path not in files -%}
               {%- set _ = files.update({path: []}) -%}
             {%- endif -%}
-            {%- set _ = files[path].append({'name': name, 'server': server, 'state': state}) -%}
+            {%- set _ = files[path].append({'name': name, 'server': server, 'state': state, 'optional': optional}) -%}
           {%- endfor -%}
         {%- else -%}
           {%- for path in mcp_default_config_files -%}
             {%- set path = path | replace('~', lookup('env', 'HOME')) -%}
             {%- set state = server.state | default('present') -%}
+            {%- set optional = state == 'absent' -%}
             {%- if path not in files -%}
               {%- set _ = files.update({path: []}) -%}
             {%- endif -%}
-            {%- set _ = files[path].append({'name': name, 'server': server, 'state': state}) -%}
+            {%- set _ = files[path].append({'name': name, 'server': server, 'state': state, 'optional': optional}) -%}
           {%- endfor -%}
         {%- endif -%}
       {%- endfor -%}
