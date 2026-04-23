@@ -8,4 +8,5 @@
 
 # Claude Code
 .claude/plans/
+.claude/scheduled_tasks.lock
 .temp_wiki_content/
