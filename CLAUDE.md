@@ -237,7 +237,21 @@ color: green  # semantic color label
 ```
 Agents are symlinked to both `~/.claude/agents/` and `~/.cursor/agents/`.
 
-**Existing agents (3):** `staff-software-engineer` (Opus/green), `qa-automation-engineer` (Sonnet/pink), `productivity-coach` (Opus/cyan)
+**Existing agents (10):**
+- **Engineering team roster** (dual-use: directly invokable via `Agent`, and spawned as teammates by the `agent-team` skill):
+  - `product-manager` (Sonnet/yellow) — clarifies fuzzy requirements, drafts success criteria and scope
+  - `business-analyst` (Sonnet/blue) — domain modeling, business rules, acceptance criteria
+  - `ux-designer` (Sonnet/purple) — all user-facing surfaces (CLI, API, errors, docs, GUI flows)
+  - `ui-specialist` (Sonnet/pink) — GUI-only: components, layout, accessibility
+  - `tech-lead` (Opus/orange) — hands-on breadth: codebase archaeology, estimation, capacity planning
+  - `system-architect` (Opus/cyan) — design specialist: trade-off analysis, design docs; does not implement
+  - `software-engineer` (Opus default, override to Sonnet per task) — polyglot implementation
+  - `qa-automation-engineer` (Sonnet/pink) — test strategy, test writing, adversarial review
+  - `security-specialist` (Sonnet/red) — post-implementation audit: OWASP, findings report; does not fix
+  - `devops-engineer` (Opus/magenta) — cloud, k8s, networking, IaC-first
+- **Standalone helper:** `productivity-coach` (Opus/cyan)
+
+Engineering team agents are intentionally useful both as delegated subagents (via `Agent`) and as teammates in the `agent-team` skill — the subagent body is appended to the teammate's system prompt when spawned as a teammate.
 
 #### Global Agent Instructions
 The global `~/.claude/CLAUDE.md` is assembled from Markdown fragments in `profiles/agents/files/AGENT.md/` (and equivalent in other profiles). Fragments are named `{NN}-{section}.md` and concatenated in order.

@@ -53,7 +53,7 @@ These are legacy scripts. **Prefer using `hive` commands instead** - they provid
 
 ### Claude Code Configuration
 - Custom slash commands (`/pr`, `/changelog`, `/fixup`, `/explain`, `/review`, `/test`)
-- Sub-agents (productivity-coach, staff-software-engineer, qa-automation-engineer)
+- Sub-agents: engineering team roster (`product-manager`, `business-analyst`, `ux-designer`, `ui-specialist`, `tech-lead`, `system-architect`, `software-engineer`, `qa-automation-engineer`, `security-specialist`, `devops-engineer`) and standalone helpers (`productivity-coach`). Dual-use: invocable directly via the `Agent` tool or spawned as teammates by the `agent-team` skill.
 - Skills (git-commit, personal-docs, wiki, jira, github, omnifocus)
 
 **Skills and Agents**: Located in `files/skills/` and `files/agents/` (not under `dotfiles/claude/`) and symlinked to multiple agent destinations (Claude Code, Cursor) via `skill_folders` and `agent_folders` configuration in `config.yml`.
