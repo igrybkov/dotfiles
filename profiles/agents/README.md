@@ -59,7 +59,7 @@ These are legacy scripts. **Prefer using `hive` commands instead** - they provid
 **Skills and Agents**: Located in `files/skills/` and `files/agents/` (not under `dotfiles/claude/`) and symlinked to multiple agent destinations (Claude Code, Cursor) via `skill_folders` and `agent_folders` configuration in `config.yml`.
 
 ### MCP Servers
-- **mcp-hub** - Aggregator that lazy-loads child MCP servers and exposes them through `list_servers`, `get_server_tools`, `call_tool`, `search`. Ships with a `mcp-hub` CLI for shell scripting.
+- **mcp-hub** - Aggregator that lazy-loads child MCP servers and proxies their tools, prompts, and resources. Exposes `list_servers`, `get_server_tools`, `call_tool`, `search`, and `recommend_servers`. Ships with a `mcp-hub` CLI for shell scripting.
 - Reads configs from `CONFIG_FILE` (comma-separated), defaulting to `~/.config/mcp-hub/servers.json` and `~/.config/mcp-hub/servers.yml`. Both JSON and YAML are accepted; later files override earlier ones by server name.
 
 ## Requirements

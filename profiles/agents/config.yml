@@ -234,13 +234,13 @@ claude_plugins:
 mcp_servers:
   - name: mcp-hub
     description: >-
-      Aggregator that lazy-loads child MCP servers and proxies their tools.
-      Exposes list_servers, get_server_tools, call_tool, and search.
+      Aggregator that lazy-loads child MCP servers and proxies their tools,
+      prompts, and resources. Exposes list_servers, get_server_tools,
+      call_tool, search, and recommend_servers.
     tags: [mcp-hub, aggregator, meta]
     command: mcp-hub-server
     env:
-      CONFIG_FILE: "~/.config/mcp-hub/servers.json,~/.config/mcp-hub/servers.yml"
-
+      CONFIG_FILE: "~/.meta-mcp/servers.json,~/.config/mcp-hub/servers.json,~/.config/mcp-hub/servers.yml,.mcp.local.json,.mcp.local.yml"
   - name: meta-mcp
     state: absent
     config_files:
@@ -248,5 +248,6 @@ mcp_servers:
       - path: ~/Library/Application Support/Claude/claude_desktop_config.json
       - path: ~/.cursor/mcp.json
   - name: mcp-exec
+    state: absent
     command: npx
     args: ["-y", "@justanothermldude/mcp-exec@1.1.1"]

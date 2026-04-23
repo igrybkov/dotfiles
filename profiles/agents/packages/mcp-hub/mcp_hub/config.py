@@ -114,7 +114,7 @@ class ServerSpec:
 
 
 def _expand(path: str) -> Path:
-    return Path(os.path.expanduser(os.path.expandvars(path)))
+    return Path(os.path.expanduser(os.path.expandvars(path))).resolve()
 
 
 def _load_file(path: Path) -> dict[str, Any]:
