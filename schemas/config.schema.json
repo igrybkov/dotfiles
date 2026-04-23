@@ -446,6 +446,10 @@
       "type": "boolean",
       "default": false
     },
+    "mcp_run_with_secrets_bin": {
+      "description": "Absolute path to the `run-with-secrets.sh` wrapper used when a server specifies `secret_env`. The role writes this path into the rendered MCP config as the server's command, with VAR=key.path pairs and the real command placed after `--`.",
+      "type": "string"
+    },
     "mcp_servers": {
       "description": "List of MCP server configurations.\nEach server must have a name and either a command or url.",
       "type": "array",
@@ -493,6 +497,10 @@
               "additionalProperties": false
             }
           },
+          "description": {
+            "description": "Short human-readable description of what the server does. Surfaced by mcp-hub in list_servers/search for discovery.",
+            "type": "string"
+          },
           "env": {
             "description": "Environment variables (supports vault and 1Password secrets)",
             "type": "object"
@@ -533,6 +541,10 @@
             "description": "Shell command to run after cloning the repository",
             "type": "string"
           },
+          "secret_env": {
+            "description": "Environment variables whose values are resolved at server spawn time by the `run-with-secrets.sh` wrapper (via `dotfiles secret get`). Values in this dict are vault key paths (dot-notation), never the secrets themselves \u2014 so the rendered MCP config stays commit-safe. The role rewrites `command`/`args` to invoke the wrapper; plain `env` still ships as-is alongside. Stdio servers only.",
+            "type": "object"
+          },
           "state": {
             "description": "Whether the server should be present or absent",
             "type": "string",
@@ -541,6 +553,13 @@
               "absent"
             ],
             "default": "present"
+          },
+          "tags": {
+            "description": "Optional list of tags for grouping/filtering servers. Surfaced by mcp-hub in list_servers/search; useful for filtering by scope (adobe, personal), domain (docs, observability), or tool.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "transport": {
             "description": "Transport type for URL-based servers (e.g., sse, streamable-http)",

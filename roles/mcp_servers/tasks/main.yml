@@ -5,6 +5,8 @@
 # Supports two types of servers:
 #   - Command-based (stdio): uses 'command' field, requires command availability check
 #   - URL-based (http/sse): uses 'url' field, no command check needed
+# Absent servers (state: absent) are processed first and bypass all availability
+# checks — their only job is to be removed from the target config files.
 
 - name: "[🤖 MCP] Configure MCP servers"
   when: mcp_servers | default([]) | length > 0
@@ -12,11 +14,40 @@
     - name: "[🤖 MCP] Clone/update git repositories"
       ansible.builtin.include_tasks: git_repos.yml
 
+    # ────────────────────────────────────────────────────────────────
+    # Phase 1 — Remove absent servers FIRST, before any other step.
+    # This guarantees removal even if later checks (command availability,
+    # git clones, etc.) fail for unrelated present servers.
+    # ────────────────────────────────────────────────────────────────
+
+    - name: "[🤖 MCP] Split servers by state (absent vs. present)"
+      ansible.builtin.set_fact:
+        mcp_absent_servers: >-
+          {{ mcp_servers
+             | selectattr('state', 'defined')
+             | selectattr('state', 'equalto', 'absent')
+             | list }}
+        mcp_present_servers: >-
+          {{ (mcp_servers | rejectattr('state', 'defined') | list)
+             + (mcp_servers
+                | selectattr('state', 'defined')
+                | rejectattr('state', 'equalto', 'absent')
+                | list) }}
+
+    - name: "[🤖 MCP] Remove absent servers from their config files"
+      ansible.builtin.include_tasks: remove_absent.yml
+      when: mcp_absent_servers | length > 0
+
+    # ────────────────────────────────────────────────────────────────
+    # Phase 2 — Process present servers via command/url availability checks.
+    # From here on, operate only on mcp_present_servers.
+    # ────────────────────────────────────────────────────────────────
+
     # Separate servers into command-based and URL-based
     - name: "[🤖 MCP] Identify command-based servers"
       ansible.builtin.set_fact:
-        mcp_command_servers: "{{ mcp_servers | selectattr('command', 'defined') | list }}"
-        mcp_url_servers: "{{ mcp_servers | selectattr('url', 'defined') | list }}"
+        mcp_command_servers: "{{ mcp_present_servers | selectattr('command', 'defined') | list }}"
+        mcp_url_servers: "{{ mcp_present_servers | selectattr('url', 'defined') | list }}"
 
     - name: "[🤖 MCP] Check command availability for command-based servers"
       ansible.builtin.shell:

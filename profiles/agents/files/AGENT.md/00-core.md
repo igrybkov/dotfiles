@@ -65,14 +65,39 @@ Remove the lock entry when done.
 
 ## MCP Server Usage
 
-When working with MCP servers through `meta-mcp`, always verify tool schemas before making calls. Do not guess parameter names based on conventions.
+When working with MCP servers through `mcp-hub`, always verify tool schemas before making calls. Do not guess parameter names based on conventions.
 
 ### Required Workflow
 
-1. **Discover servers**: Use `list_servers` to find available MCP servers
-2. **Discover tools**: Use `get_server_tools` with `summary_only: true` for lightweight discovery
-3. **Get full schema**: Use `get_server_tools` with specific tool names to fetch full parameter schemas
-4. **Call the tool**: Use `call_tool` with the correct parameters from the schema
+1. **Discover servers**: Use `list_servers` to browse the catalog (or check the hub's startup `instructions` — it already lists configured servers)
+2. **Find capabilities**: Use `search` to match a task to tools/servers by keyword
+3. **Discover tools**: Use `get_server_tools` with `summary_only: true` for lightweight discovery
+4. **Get full schema**: Use `get_server_tools` with specific tool names to fetch full parameter schemas
+5. **Call the tool**: Use `call_tool` with the correct parameters from the schema
+
+For shell scripting (including calling MCP tools from Bash), use the `mcp-hub` CLI:
+
+```bash
+mcp-hub list --filter monitoring
+mcp-hub tools github --summary
+mcp-hub call github listIssues --args '{"repo": "my/repo"}'
+```
+
+## MCP Server Secrets
+
+When adding a new stdio MCP server that needs secrets (tokens, API keys), use `secret_env:` rather than `env:` with `vault_secret` lookups. The former resolves secrets at spawn time so the rendered config is commit-safe; the latter bakes plaintext secrets into `~/.config/mcp-hub/servers.json` and similar files.
+
+```yaml
+mcp_servers:
+  - name: my-server
+    command: my-server-bin
+    env:
+      LOG_LEVEL: info                                # non-secret, stays as-is
+    secret_env:
+      API_TOKEN: mcp_secrets.myservice.token       # vault key path, resolved at spawn
+```
+
+URL-based servers with secret headers still need install-time `vault_secret` lookups — that's the one exception.
 
 ### Example
 

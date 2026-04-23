@@ -59,8 +59,8 @@ These are legacy scripts. **Prefer using `hive` commands instead** - they provid
 **Skills and Agents**: Located in `files/skills/` and `files/agents/` (not under `dotfiles/claude/`) and symlinked to multiple agent destinations (Claude Code, Cursor) via `skill_folders` and `agent_folders` configuration in `config.yml`.
 
 ### MCP Servers
-- **meta-mcp** - Meta MCP server that loads other servers from config
-- User configures their own servers in `~/.meta-mcp/servers.json`
+- **mcp-hub** - Aggregator that lazy-loads child MCP servers and exposes them through `list_servers`, `get_server_tools`, `call_tool`, `search`. Ships with a `mcp-hub` CLI for shell scripting.
+- Reads configs from `CONFIG_FILE` (comma-separated), defaulting to `~/.config/mcp-hub/servers.json` and `~/.config/mcp-hub/servers.yml`. Both JSON and YAML are accepted; later files override earlier ones by server name.
 
 ## Requirements
 
@@ -121,7 +121,7 @@ This writes to `~/.config/hive/hive.yml` which the hive CLI reads directly.
 
 ### MCP Servers
 
-After installation, configure your MCP servers in `~/.meta-mcp/servers.json`:
+After installation, configure your MCP servers in `~/.config/mcp-hub/servers.json` (or `~/.config/mcp-hub/servers.yml` for YAML):
 
 ```json
 {
@@ -623,6 +623,6 @@ profiles/agents/
     ├── dotfiles/config/
     │   ├── fish/conf.d/agents.fish # Fish-specific functions & abbreviations
     │   └── zellij/layouts/agent.kdl
-    └── dotfiles-copy/.meta-mcp/
+    └── dotfiles-copy/.config/mcp-hub/
         └── servers.json            # MCP servers template
 ```

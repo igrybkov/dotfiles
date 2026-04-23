@@ -31,7 +31,10 @@ List of MCP servers to manage. Each server must have a `name` field and either `
 | `name` | Yes | Unique identifier for the server |
 | `command` | Yes | The command to run the server |
 | `args` | No | List of arguments to pass to the command |
-| `env` | No | Environment variables (supports vault and 1Password secrets) |
+| `env` | No | Environment variables resolved at install time (supports vault and 1Password secrets; values end up plaintext in the config file) |
+| `secret_env` | No | Environment variables resolved at **spawn time** by `bin/run-with-secrets.sh` — values are vault key paths, never the secrets themselves. See "Runtime-resolved secrets" below. |
+| `description` | No | Short human-readable description. Surfaced by mcp-hub in `list_servers`/`search`. |
+| `tags` | No | List of tags for grouping/filtering. Surfaced by mcp-hub in `list_servers`/`search`. |
 | `state` | No | `present` (default) or `absent` |
 | `config_files` | No | List of config files to update (overrides defaults) |
 | `git_repo` | No | Git repository URL to clone |
@@ -49,6 +52,8 @@ List of MCP servers to manage. Each server must have a `name` field and either `
 | `url` | Yes | The HTTP endpoint URL for the MCP server |
 | `transport` | No | Transport type (e.g., `sse`, `streamable-http`) |
 | `headers` | No | HTTP headers (supports vault and 1Password secrets) |
+| `description` | No | Short human-readable description. Surfaced by mcp-hub in `list_servers`/`search`. |
+| `tags` | No | List of tags for grouping/filtering. Surfaced by mcp-hub in `list_servers`/`search`. |
 | `state` | No | `present` (default) or `absent` |
 | `config_files` | No | List of config files to update (overrides defaults) |
 
@@ -73,20 +78,9 @@ Default: `~/.local/share/mcp-servers`
 
 ## Secret Management
 
-### Ansible Vault (Recommended)
+### Runtime-resolved secrets via `secret_env` (preferred for stdio servers)
 
-Store secrets in `secrets/common.yml` (or `secrets/<hostname>.yml`) encrypted with Ansible Vault:
-
-```yaml
-# secrets/common.yml (encrypted)
-mcp_secrets:
-  habitify:
-    api_key: "your-api-key-here"
-  readwise:
-    access_token: "your-token-here"
-```
-
-Reference secrets using the custom `vault_secret` lookup:
+Use `secret_env` to resolve secrets at **server spawn time** via `bin/run-with-secrets.sh`. The rendered MCP config contains only vault key paths — never the secret values themselves — so config files are safe to share, back up, or commit.
 
 ```yaml
 mcp_servers:
@@ -94,8 +88,61 @@ mcp_servers:
     command: npx
     args: ["-y", "@sargonpiraev/habitify-mcp-server"]
     env:
-      HABITIFY_API_KEY: "{{ lookup('vault_secret', 'mcp_secrets.habitify.api_key') }}"
+      LOG_LEVEL: debug            # plain env still works for non-secrets
+    secret_env:
+      HABITIFY_API_KEY: mcp_secrets.habitify.api_key
 ```
+
+The role rewrites this into:
+
+```json
+{
+  "habitify-mcp-server": {
+    "command": "<dotfiles>/bin/run-with-secrets.sh",
+    "args": [
+      "-p", "<profile>",
+      "HABITIFY_API_KEY=mcp_secrets.habitify.api_key",
+      "--",
+      "npx", "-y", "@sargonpiraev/habitify-mcp-server"
+    ],
+    "env": {"LOG_LEVEL": "debug"}
+  }
+}
+```
+
+The wrapper does a single batched `dotfiles secret get -p <profile> -0 <keys...>` call (one vault decrypt regardless of N secrets). It aborts with a loud error before `exec` if any key fails to resolve, so misconfigurations fail fast instead of silently running with empty env vars.
+
+Limitations:
+- stdio servers only (URL-based `headers:` still need install-time resolution — see below)
+- requires the repo's `.vault_password` to be readable when a server spawns (no interactive prompt during MCP-host launches)
+
+### Install-time secrets via `vault_secret` lookup
+
+Use the `vault_secret` Jinja lookup for fields that can't be rewritten at runtime (notably `headers:` on URL-based servers). These values are resolved at playbook time and written plaintext into the config file, which then gets `0600` mode.
+
+Store secrets in your profile's `secrets.yml` (encrypted with Ansible Vault):
+
+```yaml
+# profiles/<profile>/secrets.yml (encrypted)
+mcp_secrets:
+  habitify:
+    api_key: "your-api-key-here"
+  readwise:
+    access_token: "your-token-here"
+```
+
+Reference them via:
+
+```yaml
+mcp_servers:
+  - name: authenticated-api
+    url: "https://secure.example.com/mcp"
+    transport: streamable-http
+    headers:
+      x-api-key: "{{ lookup('vault_secret', 'mcp_secrets.secure.api_key') }}"
+```
+
+`vault_secret` still works on `env:` for backward compat, but prefer `secret_env:` for new stdio servers.
 
 ### CLI Commands
 
@@ -203,7 +250,7 @@ mcp_servers:
   - name: remote-api
     url: "https://api.example.com/mcp"
     config_files:
-      - path: ~/.meta-mcp/servers.json
+      - path: ~/.config/mcp-hub/servers.json
         state: present
 
   # URL-based server with streamable-http transport and authentication
@@ -214,7 +261,7 @@ mcp_servers:
       x-api-key: "{{ lookup('vault_secret', 'mcp_secrets.secure.api_key') }}"
       x-user-id: "user@example.com"
     config_files:
-      - path: ~/.meta-mcp/servers.json
+      - path: ~/.config/mcp-hub/servers.json
         state: present
 
   # URL-based server with 1Password secret in headers

@@ -1,0 +1,28 @@
+[build-system]
+build-backend = "hatchling.build"
+requires = [ "hatchling" ]
+
+[project]
+name = "mcp-hub"
+version = "0.1.0"
+description = "MCP aggregator hub — lazy proxy, discovery, and CLI for child MCP servers"
+requires-python = ">=3.11"
+classifiers = [
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+]
+dependencies = [
+  "click>=8.1",
+  "mcp>=1.2",
+  "python-dotenv>=1",
+  "pyyaml>=6",
+]
+
+scripts.mcp-hub = "mcp_hub.cli:main"
+scripts.mcp-hub-server = "mcp_hub.server:run"
+
+[tool.hatch.build.targets.wheel]
+packages = [ "mcp_hub" ]

@@ -65,18 +65,33 @@
             {%- endif -%}
           {%- else -%}
             {# Command-based server (stdio transport) #}
-            {%- set _ = server_config.update({'command': server.command | expanduser}) -%}
-            {%- if server.args is defined -%}
-              {# Expand paths in args (strings starting with ~) #}
-              {%- set expanded_args = [] -%}
-              {%- for arg in server.args -%}
-                {%- if arg is string and arg.startswith('~') -%}
-                  {%- set _ = expanded_args.append(arg | expanduser) -%}
-                {%- else -%}
-                  {%- set _ = expanded_args.append(arg) -%}
-                {%- endif -%}
+            {# Expand paths in args (strings starting with ~) — shared by both branches below #}
+            {%- set expanded_args = [] -%}
+            {%- for arg in server.args | default([]) -%}
+              {%- if arg is string and arg.startswith('~') -%}
+                {%- set _ = expanded_args.append(arg | expanduser) -%}
+              {%- else -%}
+                {%- set _ = expanded_args.append(arg) -%}
+              {%- endif -%}
+            {%- endfor -%}
+            {%- if server.secret_env is defined and server.secret_env -%}
+              {# Secrets resolved at spawn time by the wrapper — rewrite command/args #}
+              {%- set _ = server_config.update({'command': mcp_run_with_secrets_bin}) -%}
+              {%- set wrapped = ['-p', server._profile | default('')] -%}
+              {%- for var, path in server.secret_env.items() -%}
+                {%- set _ = wrapped.append(var ~ '=' ~ path) -%}
               {%- endfor -%}
-              {%- set _ = server_config.update({'args': expanded_args}) -%}
+              {%- set _ = wrapped.append('--') -%}
+              {%- set _ = wrapped.append(server.command | expanduser) -%}
+              {%- for arg in expanded_args -%}
+                {%- set _ = wrapped.append(arg) -%}
+              {%- endfor -%}
+              {%- set _ = server_config.update({'args': wrapped}) -%}
+            {%- else -%}
+              {%- set _ = server_config.update({'command': server.command | expanduser}) -%}
+              {%- if expanded_args -%}
+                {%- set _ = server_config.update({'args': expanded_args}) -%}
+              {%- endif -%}
             {%- endif -%}
             {# Process env vars: first resolve Jinja2 templates (vault_secret), then op:// references, then expand ~ #}
             {%- if server.env is defined -%}
@@ -93,11 +108,23 @@
               {%- set _ = server_config.update({'env': expanded_env}) -%}
             {%- endif -%}
           {%- endif -%}
+          {# Shared metadata: description and tags (surfaced by mcp-hub) #}
+          {%- if server.description is defined and server.description -%}
+            {%- set _ = server_config.update({'description': server.description}) -%}
+          {%- endif -%}
+          {%- if server.tags is defined and server.tags -%}
+            {%- set _ = server_config.update({'tags': server.tags | list}) -%}
+          {%- endif -%}
           {%- set _ = result.update({name: server_config}) -%}
         {%- endif -%}
       {%- endfor -%}
-      {{ result }}
+      {{ result | to_json }}
   when: mcp_config_dir.stat.exists
+
+- name: "[🤖 MCP] Coerce mcp_updated_servers to dict"
+  ansible.builtin.set_fact:
+    mcp_updated_servers: "{{ mcp_updated_servers | from_json }}"
+  when: mcp_config_dir.stat.exists and (mcp_updated_servers is string)
 
 - name: "[🤖 MCP] Build final config for {{ _mcp_config_path | basename }}"
   ansible.builtin.set_fact:

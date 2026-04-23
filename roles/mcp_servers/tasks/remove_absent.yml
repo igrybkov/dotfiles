@@ -1,0 +1,61 @@
+---
+# MCP Servers Role - Remove absent servers
+# Called from main.yml before any command/url availability checks.
+# For each server with state: absent, iterate its config_files (or the role
+# defaults) and remove the server entry from each target file. Absent servers
+# do NOT need command or url fields — the only thing they must provide is
+# name, and optionally config_files to override the default target list.
+
+- name: "[🤖 MCP] Normalize config_files for absent servers"
+  ansible.builtin.set_fact:
+    mcp_absent_servers_with_config_files: >-
+      {%- set result = mcp_absent_servers_with_config_files | default([]) -%}
+      {%- set config_files_normalized = [] -%}
+      {%- if item.config_files is defined -%}
+        {%- if item.config_files | first is mapping -%}
+          {# Already in {path: ..., state: ...} format — force state: absent #}
+          {%- for cf in item.config_files -%}
+            {%- set _ = config_files_normalized.append(cf | combine({'state': 'absent'})) -%}
+          {%- endfor -%}
+        {%- else -%}
+          {# List of strings — convert to mapping with state: absent #}
+          {%- for cf in item.config_files -%}
+            {%- set _ = config_files_normalized.append({'path': cf, 'state': 'absent'}) -%}
+          {%- endfor -%}
+        {%- endif -%}
+      {%- else -%}
+        {# No config_files specified — use role defaults, all as absent #}
+        {%- for cf in mcp_default_config_files -%}
+          {%- set _ = config_files_normalized.append({'path': cf, 'state': 'absent'}) -%}
+        {%- endfor -%}
+      {%- endif -%}
+      {{ result + [item | combine({'_config_files': config_files_normalized})] }}
+  loop: "{{ mcp_absent_servers }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: "[🤖 MCP] Build absent config files structure"
+  ansible.builtin.set_fact:
+    mcp_absent_config_files_dict: >-
+      {{
+        (mcp_absent_config_files_dict | default({})) | combine({
+          item.1.path: ((mcp_absent_config_files_dict | default({})).get(item.1.path, []) + [{
+            'name': item.0.name,
+            'server': item.0,
+            'state': 'absent'
+          }])
+        })
+      }}
+  loop: "{{ mcp_absent_servers_with_config_files | subelements('_config_files', skip_missing=True) }}"
+  loop_control:
+    label: "{{ item.0.name }} -> {{ item.1.path }}"
+
+- name: "[🤖 MCP] Remove absent servers from MCP configuration files"
+  ansible.builtin.include_tasks: config_file.yml
+  loop: "{{ (mcp_absent_config_files_dict | default({})) | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  vars:
+    config_file:
+      key: "{{ item.key }}"
+      value: "{{ item.value }}"

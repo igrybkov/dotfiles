@@ -32,7 +32,7 @@
 #     - name: remote-api
 #       url: "https://api.example.com/mcp"
 #       config_files:
-#         - path: ~/.meta-mcp/servers.json
+#         - path: ~/.config/mcp-hub/servers.json
 #           state: present
 #
 #     - name: authenticated-api
@@ -42,7 +42,7 @@
 #         x-api-key: "{{ lookup('vault_secret', 'mcp_secrets.secure.api_key') }}"
 #         x-user-id: "user@example.com"
 #       config_files:
-#         - path: ~/.meta-mcp/servers.json
+#         - path: ~/.config/mcp-hub/servers.json
 #           state: present
 mcp_servers: []
 
@@ -57,3 +57,10 @@ mcp_servers_git_base: ~/.local/share/mcp-servers
 # Force re-run of post_clone commands even if marker exists and repo unchanged
 # Useful for retrying failed builds: --extra-vars mcp_force_post_clone=true
 mcp_force_post_clone: false
+
+# Path to the runtime secret-resolving wrapper used when a server has secret_env.
+# Renders into the MCP config as the `command`, with VAR=key.path pairs and the
+# real command placed after `--`. Defaults to the repo-local bin/ script, which
+# makes configs durable against user-PATH differences (important for GUI-launched
+# MCP hosts that don't inherit the shell PATH).
+mcp_run_with_secrets_bin: "{{ playbook_dir }}/bin/run-with-secrets.sh"
