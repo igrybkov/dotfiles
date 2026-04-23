@@ -69,7 +69,7 @@ async def _recovery_daemon(
     delay = _INITIAL_BACKOFF
     while True:
         try:
-            await _enumerate_once(state, spec)
+            await enumerate_once(state, spec)
             delay = _INITIAL_BACKOFF  # reset on success
             first_attempt_done.set()
             # Success — keep the session alive (cached in ProxyClient) and
@@ -93,7 +93,7 @@ async def _recovery_daemon(
             delay = min(delay * 2.0, _MAX_BACKOFF)
 
 
-async def _enumerate_once(state: HubState, spec: ServerSpec) -> None:
+async def enumerate_once(state: HubState, spec: ServerSpec) -> None:
     """Connect + enumerate prompts/resources for a single server.
 
     Bounded by `spec.connect_timeout_seconds`. Raises on timeout or transport

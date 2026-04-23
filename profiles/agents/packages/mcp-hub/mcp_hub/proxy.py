@@ -188,6 +188,29 @@ class ProxyClient:
             self._locks[name] = lock
         return lock
 
+    async def invalidate_server(self, name: str) -> None:
+        """Tear down the live session for `name` and drop its tool cache. In-flight callers may see I/O errors as the transport closes."""
+        self._tool_cache.pop(name, None)
+        async with self._lock_for(name):
+            holder = self._holders.pop(name, None)
+        if holder is None:
+            return
+        holder.shutdown.set()
+        task = holder.task
+        if task is None or task.done():
+            return
+        try:
+            await asyncio.wait_for(task, timeout=5.0)
+        except asyncio.TimeoutError:
+            logger.warning("holder %r slow to invalidate, cancelling", name)
+            task.cancel()
+            try:
+                await task
+            except BaseException:
+                pass
+        except BaseException:
+            pass
+
     async def session(self, name: str) -> ClientSession:
         """Return a live session for `name`, spawning the holder task on first call."""
         if self._closed:

@@ -7,10 +7,12 @@ import logging
 from typing import Any
 
 from mcp import types
+from mcp.server.lowlevel.server import request_ctx
 
-from mcp_hub.config import ServerSpec
+from mcp_hub.config import ServerSpec, compute_config_hash, load_servers
 from mcp_hub.proxy import ProxyClient
 from mcp_hub.search import search as do_search
+from mcp_hub.startup import enumerate_once
 
 logger = logging.getLogger(__name__)
 
@@ -104,6 +106,35 @@ def get_hub_tools() -> list[types.Tool]:
             },
         ),
         types.Tool(
+            name="reload",
+            description=(
+                "Reload mcp-hub: re-reads config files and reconciles the "
+                "server set (added/removed/changed), tears down stale "
+                "child connections, and drops cached tool schemas. "
+                "Use after editing the hub's config, or after a child "
+                "server's tools have changed (code edits, new tool registered). "
+                "If `server` is given, only that server is reloaded (faster — "
+                "no config re-read). For exposed servers, the catalog is "
+                "re-enumerated and `prompts/list_changed` + "
+                "`resources/list_changed` notifications are emitted so the "
+                "host re-fetches. Tool schema changes on non-exposed servers "
+                "are picked up on the next `get_server_tools` call. Caveat: "
+                "if the hub started with no exposed servers, the prompts/"
+                "resources capabilities aren't registered for the session — "
+                "adding an exposed server via reload won't surface until "
+                "the host reconnects."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "server": {
+                        "type": "string",
+                        "description": "If set, only reload this server. Otherwise, reconcile all servers against config files.",
+                    },
+                },
+            },
+        ),
+        types.Tool(
             name="recommend_servers",
             description=(
                 "Given a natural-language task description, asks the host's LLM "
@@ -168,6 +199,103 @@ def _text(payload: Any) -> list[types.TextContent]:
     return [
         types.TextContent(type="text", text=json.dumps(payload, indent=2, default=str))
     ]
+
+
+async def _handle_reload(
+    arguments: dict[str, Any],
+    servers: dict[str, ServerSpec],
+    proxy: ProxyClient,
+    state,
+) -> list[types.TextContent]:
+    """Reconcile the live server set against config files and/or drop caches."""
+    # `servers` is shared by reference with ProxyClient — mutating in place
+    # is visible to subsequent tool calls.
+
+    # Capture host session up-front so notifications flush now instead of buffering.
+    if state is not None:
+        try:
+            ctx = request_ctx.get()
+            state.capture_host_session(ctx.session)
+        except LookupError:
+            pass
+
+    target = arguments.get("server")
+    if target is not None:
+        if target not in servers:
+            return _text({"error": f"unknown server: {target}"})
+        await proxy.invalidate_server(target)
+        result: dict[str, Any] = {"reloaded": target}
+        if state is not None and servers[target].is_exposed:
+            # Refresh catalog before notifying so the host's re-fetch sees the new state.
+            try:
+                await enumerate_once(state, servers[target])
+            except Exception as exc:
+                state.catalog.mark_degraded(target, str(exc))
+                result["enumerate_error"] = str(exc)
+            state.enqueue_or_send(lambda s: s.send_prompt_list_changed())
+            state.enqueue_or_send(lambda s: s.send_resource_list_changed())
+        return _text(result)
+
+    try:
+        new_servers = load_servers()
+    except Exception as exc:
+        logger.exception("reload: config reload failed")
+        return _text({"error": f"config reload failed: {exc}"})
+
+    old_names = set(servers.keys())
+    new_names = set(new_servers.keys())
+    added = sorted(new_names - old_names)
+    removed = sorted(old_names - new_names)
+    kept = old_names & new_names
+    changed = sorted(n for n in kept if servers[n] != new_servers[n])
+
+    for n in list(removed) + changed:
+        await proxy.invalidate_server(n)
+
+    # Mutate in place — ProxyClient holds the same dict reference.
+    for n in removed:
+        servers.pop(n, None)
+    for n in added + changed:
+        servers[n] = new_servers[n]
+
+    if state is not None:
+        state.catalog.set_config_hash(compute_config_hash())
+        for n in removed:
+            state.catalog.drop_server(n)
+
+        enumerate_errors: dict[str, str] = {}
+        for n in added + changed:
+            spec = servers[n]
+            if not spec.is_exposed:
+                continue
+            try:
+                await enumerate_once(state, spec)
+            except Exception as exc:
+                state.catalog.mark_degraded(n, str(exc))
+                enumerate_errors[n] = str(exc)
+
+        # Fire unconditionally — covers the "exposed server was removed" case too.
+        state.enqueue_or_send(lambda s: s.send_prompt_list_changed())
+        state.enqueue_or_send(lambda s: s.send_resource_list_changed())
+
+        payload: dict[str, Any] = {
+            "added": added,
+            "removed": removed,
+            "changed": changed,
+            "unchanged": sorted(kept - set(changed)),
+        }
+        if enumerate_errors:
+            payload["enumerate_errors"] = enumerate_errors
+        return _text(payload)
+
+    return _text(
+        {
+            "added": added,
+            "removed": removed,
+            "changed": changed,
+            "unchanged": sorted(kept - set(changed)),
+        }
+    )
 
 
 async def handle_tool(
@@ -242,6 +370,9 @@ async def handle_tool(
         # Use already-loaded tool cache — don't force eager connections
         hits = do_search(query, servers, proxy._tool_cache, limit=limit)
         return _text({"count": len(hits), "hits": [h.to_dict() for h in hits]})
+
+    if name == "reload":
+        return await _handle_reload(arguments or {}, servers, proxy, state)
 
     if name == "recommend_servers":
         if state is None:
