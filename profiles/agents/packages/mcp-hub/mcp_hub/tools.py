@@ -103,6 +103,32 @@ def get_hub_tools() -> list[types.Tool]:
                 "required": ["query"],
             },
         ),
+        types.Tool(
+            name="recommend_servers",
+            description=(
+                "Given a natural-language task description, asks the host's LLM "
+                "(via MCP sampling) to rank configured servers by relevance. "
+                "Returns up to max_results recommendations with scores and "
+                "rationale. Falls back to a raw catalog dump if the host "
+                "doesn't support sampling. Use this when the user's request "
+                "spans domains and you're not sure which server(s) to reach for."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "task_description": {
+                        "type": "string",
+                        "description": "Plain-English description of what the user wants to do.",
+                    },
+                    "max_results": {
+                        "type": "integer",
+                        "description": "Max recommendations to return (default 5).",
+                        "default": 5,
+                    },
+                },
+                "required": ["task_description"],
+            },
+        ),
     ]
 
 
@@ -149,7 +175,14 @@ async def handle_tool(
     arguments: dict[str, Any],
     servers: dict[str, ServerSpec],
     proxy: ProxyClient,
+    state=None,
 ) -> list[types.TextContent]:
+    """Dispatch a meta-tool call.
+
+    `state` is optional so the CLI (which has no hub state) can reuse this
+    function for the non-sampling tools. The `recommend_servers` tool needs
+    state to reach the host session and will error out if state is None.
+    """
     if name == "list_servers":
         needle = (arguments or {}).get("filter")
         matches = [
@@ -209,5 +242,16 @@ async def handle_tool(
         # Use already-loaded tool cache — don't force eager connections
         hits = do_search(query, servers, proxy._tool_cache, limit=limit)
         return _text({"count": len(hits), "hits": [h.to_dict() for h in hits]})
+
+    if name == "recommend_servers":
+        if state is None:
+            return _text(
+                {
+                    "error": "recommend_servers requires host state (not available in CLI mode)"
+                }
+            )
+        from mcp_hub.recommender import handle_recommend_servers
+
+        return await handle_recommend_servers(state, arguments)
 
     return _text({"error": f"unknown tool: {name}"})

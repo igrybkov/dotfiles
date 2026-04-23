@@ -37,6 +37,7 @@ top-level mapping is accepted either way.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -71,9 +72,28 @@ class ServerSpec:
     description: str | None = None
     tags: list[str] = field(default_factory=list)
     disabled: bool = False
+    # opt-in native enumeration (prompts/resources). When false (default), the
+    # server stays fully lazy and is only spawned on demand via the meta-tools.
+    expose_prompts: bool = False
+    expose_resources: bool = False
+    # Per-server connect + enumerate budget. Raise for Docker-backed or uvx
+    # cold-start servers. Applies to exposed servers only.
+    connect_timeout_seconds: float = 5.0
+
+    @property
+    def is_exposed(self) -> bool:
+        return self.expose_prompts or self.expose_resources
 
     @classmethod
     def from_dict(cls, name: str, data: dict[str, Any]) -> ServerSpec:
+        common_kwargs: dict[str, Any] = {
+            "description": data.get("description"),
+            "tags": list(data.get("tags", [])),
+            "disabled": bool(data.get("disabled", False)),
+            "expose_prompts": bool(data.get("expose_prompts", False)),
+            "expose_resources": bool(data.get("expose_resources", False)),
+            "connect_timeout_seconds": float(data.get("connect_timeout_seconds", 5.0)),
+        }
         if "url" in data:
             transport = data.get("transport", "streamable-http")
             return cls(
@@ -81,9 +101,7 @@ class ServerSpec:
                 transport=transport,
                 url=data["url"],
                 headers=dict(data.get("headers", {})),
-                description=data.get("description"),
-                tags=list(data.get("tags", [])),
-                disabled=bool(data.get("disabled", False)),
+                **common_kwargs,
             )
         return cls(
             name=name,
@@ -91,9 +109,7 @@ class ServerSpec:
             command=data.get("command"),
             args=list(data.get("args", [])),
             env=dict(data.get("env", {})),
-            description=data.get("description"),
-            tags=list(data.get("tags", [])),
-            disabled=bool(data.get("disabled", False)),
+            **common_kwargs,
         )
 
 
@@ -122,6 +138,26 @@ def config_paths() -> list[Path]:
     raw = os.environ.get("CONFIG_FILE")
     sources = raw.split(",") if raw else DEFAULT_CONFIG_FILES
     return [_expand(p.strip()) for p in sources if p.strip()]
+
+
+def compute_config_hash() -> str:
+    """SHA256 over the raw bytes of every existing config source.
+
+    Stable across runs when the files are unchanged; flips when any tracked
+    source is added, removed, or edited. Used by the catalog to decide whether
+    a stored enumeration is still valid.
+    """
+    h = hashlib.sha256()
+    for path in config_paths():
+        try:
+            data = path.read_bytes()
+        except FileNotFoundError:
+            data = b""
+        h.update(str(path).encode("utf-8"))
+        h.update(b"\0")
+        h.update(data)
+        h.update(b"\0\0")
+    return h.hexdigest()
 
 
 def load_servers() -> dict[str, ServerSpec]:

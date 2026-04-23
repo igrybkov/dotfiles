@@ -15,6 +15,7 @@ def build_instructions(servers: dict[str, ServerSpec]) -> str:
             "configured. Set CONFIG_FILE to point at a JSON or YAML config."
         )
 
+    exposed = [s for s in servers.values() if s.is_exposed]
     lines = [
         "MCP Hub — proxies lazy-loaded MCP servers. Child servers are spawned on "
         "first use, so calling a tool is the only way to trigger a connection.",
@@ -22,7 +23,24 @@ def build_instructions(servers: dict[str, ServerSpec]) -> str:
         f"Configured servers ({len(servers)}):",
     ]
     for name in sorted(servers):
-        lines.append(f"  • {name}")
+        suffix_parts = []
+        spec = servers[name]
+        if spec.expose_prompts:
+            suffix_parts.append("prompts")
+        if spec.expose_resources:
+            suffix_parts.append("resources")
+        suffix = f" — exposes {', '.join(suffix_parts)}" if suffix_parts else ""
+        lines.append(f"  • {name}{suffix}")
+
+    if exposed:
+        lines.extend(
+            [
+                "",
+                f"Prompts and resources from {len(exposed)} server(s) are enumerated "
+                "natively; use the host's prompt/resource pickers directly (names are "
+                "namespaced as `<server>__<prompt>` and `mcphub://<server>/<uri>`).",
+            ]
+        )
 
     lines.extend(
         [

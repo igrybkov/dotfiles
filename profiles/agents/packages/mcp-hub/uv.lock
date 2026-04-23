@@ -301,7 +301,7 @@ wheels = [
 
 [[package]]
 name = "mcp-hub"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
@@ -312,10 +312,10 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "click", specifier = ">=8.1.0" },
-    { name = "mcp", specifier = ">=1.2.0" },
-    { name = "python-dotenv", specifier = ">=1.0.0" },
-    { name = "pyyaml", specifier = ">=6.0" },
+    { name = "click", specifier = ">=8.1" },
+    { name = "mcp", specifier = ">=1.2" },
+    { name = "python-dotenv", specifier = ">=1" },
+    { name = "pyyaml", specifier = ">=6" },
 ]
 
 [[package]]
