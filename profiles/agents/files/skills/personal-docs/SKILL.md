@@ -1,27 +1,31 @@
 ---
 name: personal-docs
-description: Work with personal notes and documentation in Obsidian vault - drafts, personal notes, ideas not yet ready for team sharing. Use when user asks about personal notes, drafts, or private documentation. Requires Obsidian MCP server (obsidian-digital-garden or similar).
+description: Work with personal notes and documentation in the personal Obsidian vault — unstructured drafts, quick captures, inbox items, learning notes, meeting prep, idea sketches. Use when the user asks about personal notes, drafts, or private documentation. For structured capture of decisions, meeting outcomes, or commitments, prefer the `/capture` skill instead.
 ---
 
 # Personal Docs Skill
 
-Manage personal documentation and notes in Obsidian vault for private knowledge management.
+Manage personal documentation and unstructured notes in the Obsidian personal vault.
 
-## Prerequisites
+**Scope boundary:**
+- This skill: quick captures, daily notes, meeting prep, drafts, idea sketches, learning notes — unstructured content for personal use
+- Use `/capture` instead for: decisions (ADR-lite), meeting outcomes + transcripts, commitments
+- Use `/recall` instead for: finding existing notes, retrieving rationale, historical questions
 
-**Required**: Obsidian MCP server must be configured.
+## Available tools
 
-Available Obsidian MCP tools:
-- `mcp__obsidian-digital-garden__get_vault_file` - Read a file
-- `mcp__obsidian-digital-garden__create_vault_file` - Create/update a file
-- `mcp__obsidian-digital-garden__append_to_vault_file` - Append to a file
-- `mcp__obsidian-digital-garden__search_vault_simple` - Text search
-- `mcp__obsidian-digital-garden__search_vault_smart` - Semantic search
-- `mcp__obsidian-digital-garden__list_vault_files` - List files in directory
-- `mcp__obsidian-digital-garden__get_active_file` - Get currently open file
-- `mcp__obsidian-digital-garden__show_file_in_obsidian` - Open file in Obsidian
+The personal vault is served by the `obsidian-digital-garden` MCP server:
 
-If MCP is not available, inform user: "Obsidian MCP server required. Configure `obsidian-digital-garden` or similar MCP server."
+- `mcp__obsidian-digital-garden__get_vault_file` — Read a file
+- `mcp__obsidian-digital-garden__create_vault_file` — Create/update a file
+- `mcp__obsidian-digital-garden__append_to_vault_file` — Append to a file
+- `mcp__obsidian-digital-garden__search_vault_simple` — Text search
+- `mcp__obsidian-digital-garden__search_vault_smart` — Semantic search
+- `mcp__obsidian-digital-garden__list_vault_files` — List files in directory
+- `mcp__obsidian-digital-garden__get_active_file` — Get currently open file
+- `mcp__obsidian-digital-garden__show_file_in_obsidian` — Open file in Obsidian
+
+Direct `Read`/`Write`/`Edit` on `~/Obsidian/Digital Garden/` also works and is preferred for bulk or precise edits.
 
 ## Personal vs Team Documentation
 
