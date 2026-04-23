@@ -569,6 +569,103 @@ def keychain_push(label: str):
     click.echo(f"Stored password for {label!r}.")
 
 
+@secret_keychain.command("pull")
+@click.argument("label", required=False)
+@click.option(
+    "--all",
+    "-a",
+    "pull_all",
+    is_flag=True,
+    help="Pull every profile with an encrypted secrets.yml.",
+)
+def keychain_pull(label: str | None, pull_all: bool):
+    """Refresh vault password(s) from 1Password into the local backend.
+
+    Use after a rekey on another machine left the local keychain stale.
+    Requires DOTFILES_VAULT_OP_ITEM to be set and `op` signed in.
+
+    For each label, the 1Password value is validated by decrypting the
+    profile's secrets.yml before being written — a bad field value never
+    overwrites a good stored password.
+    """
+    if not label and not pull_all:
+        click.echo("Error: provide LABEL or use --all.", err=True)
+        sys.exit(1)
+    if label and pull_all:
+        click.echo("Error: LABEL and --all are mutually exclusive.", err=True)
+        sys.exit(1)
+    if not onepassword.is_configured():
+        click.echo(
+            "1Password fallback is not configured. Set DOTFILES_VAULT_OP_ITEM "
+            "(e.g. op://Private/dotfiles-vault-passwords) and ensure `op` is "
+            "on PATH and signed in.",
+            err=True,
+        )
+        sys.exit(1)
+
+    backend = get_backend()
+    try:
+        backend.ensure_ready()
+    except Exception as exc:
+        click.echo(f"Backend not ready: {exc}", err=True)
+        sys.exit(1)
+
+    labels = [label] if label else get_profiles_with_secrets()
+    if not labels:
+        click.echo("No profiles with encrypted secrets found.")
+        return 0
+
+    pulled: list[str] = []
+    failed: list[str] = []
+
+    for lbl in labels:
+        fresh = onepassword.read_field(lbl)
+        if not fresh:
+            click.echo(f"Skipping {lbl!r}: no value in 1Password.", err=True)
+            failed.append(lbl)
+            continue
+
+        try:
+            secrets_file = get_secrets_file(lbl)
+        except ValueError:
+            secrets_file = None
+
+        if (
+            secrets_file is not None
+            and secrets_file.exists()
+            and secrets_file.read_text().startswith("$ANSIBLE_VAULT")
+        ):
+            rc, _, _ = run_ansible_vault(
+                ["view", str(secrets_file)], password=fresh, location=lbl
+            )
+            if rc != 0:
+                click.echo(
+                    f"Skipping {lbl!r}: 1Password value does not decrypt "
+                    f"{secrets_file.name}.",
+                    err=True,
+                )
+                failed.append(lbl)
+                continue
+
+        try:
+            backend.write(lbl, fresh)
+        except Exception as exc:
+            click.echo(f"Failed to store {lbl!r}: {exc}", err=True)
+            failed.append(lbl)
+            continue
+
+        click.echo(f"Pulled password for {lbl!r} from 1Password.")
+        pulled.append(lbl)
+
+    click.echo()
+    if pulled:
+        click.echo(f"Pulled: {', '.join(pulled)}")
+    if failed:
+        click.echo(f"Failed: {', '.join(failed)}", err=True)
+        sys.exit(1)
+    return 0
+
+
 @secret_keychain.command("rm")
 @click.argument("label")
 @click.option(

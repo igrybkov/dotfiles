@@ -38,6 +38,10 @@ To provision one label without going through the full list:
 # View backend state + list of stored labels (no values)
 ./dotfiles secret keychain status
 
+# Refresh stored passwords from 1Password (recovers from stale keychain)
+./dotfiles secret keychain pull <profile>
+./dotfiles secret keychain pull --all
+
 # Read one secret (defaults to clipboard on TTY, auto-clears after 30s)
 ./dotfiles secret get -p <profile> mcp_secrets.myservice.api_key
 
@@ -92,8 +96,9 @@ If you have multiple 1Password accounts signed in, also set `OP_ACCOUNT`.
 ### When 1Password is consulted
 
 1. **Local miss.** If `keychain read <profile>` returns nothing, the CLI reads `op://<item>/<profile>` and writes the value back to the local backend — so the next run is fast and offline.
-2. **Decryption failure.** If `ansible-vault` fails (i.e. the locally-cached password has gone stale, typically after a rekey on another machine), the CLI refreshes from 1Password, writes back, and retries the operation once.
-3. **Manual push.** After `secret rekey`, the new password is saved locally. If you want to mirror it up to 1Password, do so yourself via `op item edit`.
+2. **Decryption failure.** If decryption fails (i.e. the locally-cached password has gone stale, typically after a rekey on another machine), the tool refreshes from 1Password, writes back, and retries once. This covers both the CLI path (`secret list`/`get`/`edit`) and the `vault_secret` Ansible lookup plugin used at playbook time.
+3. **Manual pull.** Run `./dotfiles secret keychain pull <label>` (or `--all`) to explicitly refresh stored passwords from 1Password. The fetched value is validated by decrypting the profile's `secrets.yml` before it overwrites the local backend — a bad field value never replaces a good stored password.
+4. **Manual push.** After `secret rekey`, the new password is saved locally. Pushed to 1Password automatically when `DOTFILES_VAULT_OP_ITEM` is set (pass `--no-sync` to skip).
 
 ### What 1Password is not
 

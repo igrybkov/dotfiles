@@ -40,9 +40,19 @@ if str(_discovery_pkg) not in sys.path:
 
 import yaml  # noqa: E402
 from ansible.errors import AnsibleError  # noqa: E402
-from ansible.parsing.vault import VaultLib, VaultSecret  # noqa: E402
+from ansible.parsing.vault import AnsibleVaultError, VaultLib, VaultSecret  # noqa: E402
 from ansible.plugins.lookup import LookupBase  # noqa: E402
 from dotfiles_profile_discovery import get_profile_by_name  # noqa: E402
+
+# Best-effort import of the 1Password fallback + backend writer. These live
+# in the installed dotfiles_cli package (the venv Ansible runs under) and
+# are only consulted when primary decryption fails.
+try:
+    from dotfiles_cli.vault.backend import get_backend as _get_backend  # noqa: E402
+    from dotfiles_cli.vault.backends import onepassword as _onepassword  # noqa: E402
+except Exception:  # pragma: no cover — env without dotfiles_cli on path
+    _get_backend = None
+    _onepassword = None
 
 VAULT_HEADER_PREFIX = b"$ANSIBLE_VAULT"
 
@@ -154,21 +164,57 @@ def _locate_client_script(playbook_dir: str | os.PathLike) -> Path:
 
 
 def _decrypt_file(vault_file: Path, client_script: Path) -> dict:
-    """Decrypt `vault_file` by reading its vault-id and invoking the client script."""
+    """Decrypt `vault_file` by reading its vault-id and invoking the client script.
+
+    On an `AnsibleVaultError` (typically: locally-cached password is stale
+    because the vault was rekeyed on another machine), consult 1Password
+    if configured, write the fresh value back to the local backend, and
+    retry once. Matches the retry semantics `run_ansible_vault` already
+    implements for the CLI path.
+    """
     raw = vault_file.read_bytes()
     if not raw.startswith(VAULT_HEADER_PREFIX):
-        # Not encrypted — load as plain YAML.
         return yaml.safe_load(raw) or {}
 
     header, _, body = raw.partition(b"\n")
-    # Header format: $ANSIBLE_VAULT;VERSION;CIPHER[;VAULT_ID]
     parts = header.decode("utf-8", errors="replace").split(";")
     vault_id = parts[3].strip() if len(parts) >= 4 else "default"
 
     password = _fetch_password(client_script, vault_id)
-    vault = VaultLib(secrets=[(vault_id, VaultSecret(password.encode()))])
-    decrypted = vault.decrypt(raw)
+    try:
+        decrypted = _try_decrypt(raw, vault_id, password)
+    except AnsibleVaultError:
+        fresh = _refresh_from_onepassword(vault_id)
+        if fresh is None or fresh == password:
+            raise
+        decrypted = _try_decrypt(raw, vault_id, fresh)
+        # Clear cached wrong password so concurrent callers in this process
+        # pick up the refreshed value too.
+        _fetch_password.cache_clear()
     return yaml.safe_load(decrypted) or {}
+
+
+def _try_decrypt(raw: bytes, vault_id: str, password: str) -> bytes:
+    vault = VaultLib(secrets=[(vault_id, VaultSecret(password.encode()))])
+    return vault.decrypt(raw)
+
+
+def _refresh_from_onepassword(vault_id: str) -> str | None:
+    """Fetch a fresh password from 1P and persist it. Returns None if unavailable."""
+    if _onepassword is None or not _onepassword.is_configured():
+        return None
+    fresh = _onepassword.read_field(vault_id)
+    if not fresh:
+        return None
+    if _get_backend is not None:
+        try:
+            backend = _get_backend()
+            backend.ensure_ready()
+            backend.write(vault_id, fresh)
+        except Exception:
+            # Write-through best-effort; decrypt-retry proceeds regardless.
+            pass
+    return fresh
 
 
 @lru_cache(maxsize=32)

@@ -302,6 +302,150 @@ class TestKeychainPush:
         fake_backend.write.assert_not_called()
 
 
+class TestKeychainPull:
+    """`keychain pull` refreshes stored passwords from 1Password."""
+
+    def test_requires_label_or_all(self, fake_backend: MagicMock):
+        runner = CliRunner()
+        result = runner.invoke(secret, ["keychain", "pull"])
+        assert result.exit_code == 1
+        assert "LABEL" in result.output or "--all" in result.output
+        fake_backend.write.assert_not_called()
+
+    def test_rejects_label_with_all(self, fake_backend: MagicMock):
+        runner = CliRunner()
+        result = runner.invoke(secret, ["keychain", "pull", "-a", "common"])
+        assert result.exit_code == 1
+        fake_backend.write.assert_not_called()
+
+    def test_aborts_when_1p_not_configured(self, fake_backend: MagicMock):
+        runner = CliRunner()
+        with patch.object(onepassword, "is_configured", return_value=False):
+            result = runner.invoke(secret, ["keychain", "pull", "common"])
+        assert result.exit_code == 1
+        assert "DOTFILES_VAULT_OP_ITEM" in result.output
+        fake_backend.write.assert_not_called()
+
+    def test_pull_single_label_writes_backend(self, fake_backend: MagicMock, tmp_path):
+        encrypted = tmp_path / "secrets.yml"
+        encrypted.write_text("$ANSIBLE_VAULT;1.1;AES256\nstub")
+        runner = CliRunner()
+        with (
+            patch.object(onepassword, "is_configured", return_value=True),
+            patch.object(onepassword, "read_field", return_value="fresh-pw"),
+            patch(
+                "dotfiles_cli.commands.secrets.get_secrets_file",
+                return_value=encrypted,
+            ),
+            patch(
+                "dotfiles_cli.commands.secrets.run_ansible_vault",
+                return_value=(0, "ok", ""),
+            ) as mock_vault,
+            patch(
+                "dotfiles_cli.commands.secrets.SecretLocationChoice.choices",
+                new=property(lambda self: ["common"]),
+            ),
+        ):
+            result = runner.invoke(secret, ["keychain", "pull", "common"])
+        assert result.exit_code == 0, result.output
+        # Validation uses the fetched password as an explicit one.
+        assert mock_vault.call_args.kwargs.get("password") == "fresh-pw"
+        fake_backend.write.assert_called_once_with("common", "fresh-pw")
+
+    def test_pull_skips_when_1p_has_no_value(self, fake_backend: MagicMock, tmp_path):
+        runner = CliRunner()
+        with (
+            patch.object(onepassword, "is_configured", return_value=True),
+            patch.object(onepassword, "read_field", return_value=None),
+            patch(
+                "dotfiles_cli.commands.secrets.SecretLocationChoice.choices",
+                new=property(lambda self: ["common"]),
+            ),
+        ):
+            result = runner.invoke(secret, ["keychain", "pull", "common"])
+        assert result.exit_code == 1
+        fake_backend.write.assert_not_called()
+
+    def test_pull_skips_when_validation_fails(self, fake_backend: MagicMock, tmp_path):
+        """Bad 1P value must not overwrite a (possibly good) stored password."""
+        encrypted = tmp_path / "secrets.yml"
+        encrypted.write_text("$ANSIBLE_VAULT;1.1;AES256\nstub")
+        runner = CliRunner()
+        with (
+            patch.object(onepassword, "is_configured", return_value=True),
+            patch.object(onepassword, "read_field", return_value="stale"),
+            patch(
+                "dotfiles_cli.commands.secrets.get_secrets_file",
+                return_value=encrypted,
+            ),
+            patch(
+                "dotfiles_cli.commands.secrets.run_ansible_vault",
+                return_value=(1, "", "decryption failed"),
+            ),
+            patch(
+                "dotfiles_cli.commands.secrets.SecretLocationChoice.choices",
+                new=property(lambda self: ["common"]),
+            ),
+        ):
+            result = runner.invoke(secret, ["keychain", "pull", "common"])
+        assert result.exit_code == 1
+        fake_backend.write.assert_not_called()
+
+    def test_pull_all_iterates_profiles_with_secrets(
+        self, fake_backend: MagicMock, tmp_path
+    ):
+        encrypted = tmp_path / "secrets.yml"
+        encrypted.write_text("$ANSIBLE_VAULT;1.1;AES256\nstub")
+        runner = CliRunner()
+        with (
+            patch.object(onepassword, "is_configured", return_value=True),
+            patch.object(onepassword, "read_field", side_effect=["pw-a", "pw-b"]),
+            patch(
+                "dotfiles_cli.commands.secrets.get_profiles_with_secrets",
+                return_value=["alpha", "beta"],
+            ),
+            patch(
+                "dotfiles_cli.commands.secrets.get_secrets_file",
+                return_value=encrypted,
+            ),
+            patch(
+                "dotfiles_cli.commands.secrets.run_ansible_vault",
+                return_value=(0, "ok", ""),
+            ),
+        ):
+            result = runner.invoke(secret, ["keychain", "pull", "-a"])
+        assert result.exit_code == 0, result.output
+        assert fake_backend.write.call_count == 2
+        fake_backend.write.assert_any_call("alpha", "pw-a")
+        fake_backend.write.assert_any_call("beta", "pw-b")
+
+    def test_pull_skips_validation_when_no_encrypted_file(
+        self, fake_backend: MagicMock, tmp_path
+    ):
+        """A label without an encrypted secrets.yml is trusted as-fetched."""
+        missing = tmp_path / "nope.yml"
+        runner = CliRunner()
+        with (
+            patch.object(onepassword, "is_configured", return_value=True),
+            patch.object(onepassword, "read_field", return_value="pw"),
+            patch(
+                "dotfiles_cli.commands.secrets.get_secrets_file",
+                return_value=missing,
+            ),
+            patch(
+                "dotfiles_cli.commands.secrets.run_ansible_vault",
+            ) as mock_vault,
+            patch(
+                "dotfiles_cli.commands.secrets.SecretLocationChoice.choices",
+                new=property(lambda self: ["common"]),
+            ),
+        ):
+            result = runner.invoke(secret, ["keychain", "pull", "common"])
+        assert result.exit_code == 0, result.output
+        mock_vault.assert_not_called()
+        fake_backend.write.assert_called_once_with("common", "pw")
+
+
 class TestKeychainRm:
     def test_absent_label_is_noop(self, fake_backend: MagicMock):
         fake_backend.list_labels.return_value = []
