@@ -86,6 +86,12 @@ repos:
         language: system
         pass_filenames: false
         files: (roles/.*/meta/argument_specs\.yml|scripts/generate_config_schema\.py)
+      - id: no-vault-password-file
+        name: forbid .vault_password files
+        description: Vault passwords belong in the OS keychain / GPG file, never on disk.
+        entry: bash -c 'echo "Refusing to commit disk vault-password files. Store secrets via \`dotfiles secret init\`." >&2; exit 1'
+        language: system
+        files: '(^|/)\.vault_password$'
       - id: trufflehog
         name: TruffleHog
         description: Detect secrets in your data.

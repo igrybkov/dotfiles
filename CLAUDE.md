@@ -30,8 +30,13 @@ See [docs/architecture.md](docs/architecture.md) for the full architecture docum
 ./dotfiles profile list                     # List all profiles
 ./dotfiles profile bootstrap myco           # Create a new profile
 ./dotfiles config                           # Interactive profile/settings configuration
-./dotfiles secret init                      # Initialize vault password
+./dotfiles secret init                      # Provision OS-backed vault passwords
 ./dotfiles secret set -p shell key.path     # Set a secret (prompts for value)
+./dotfiles secret get -p shell key.path     # Read one secret (clipboard on TTY)
+./dotfiles secret keychain status           # Inspect backend + stored labels
+./dotfiles secret keychain push <profile>   # Manually register a vault password
+./dotfiles secret keychain rm <profile>     # Remove a stored vault password
+./dotfiles secret rekey -p <profile>        # Change vault password for a profile
 ```
 
 ### Working with Ansible directly
@@ -293,12 +298,17 @@ This lets multiple profiles contribute to the same config file without overwriti
 
 ### Secret Management (Vault)
 
-Private profile secrets are encrypted with Ansible Vault in `profiles/private/{profile}/secrets.yml`. Reference them in config:
+Per-profile secrets are encrypted with Ansible Vault in `profiles/{profile}/secrets.yml`. The unlock password lives in the OS credential store — macOS login keychain (via `keyring`) or a GPG-symmetric-encrypted file on Linux — **never** on disk.
+
+Reference a secret value in profile config:
 ```yaml
 env:
   MY_TOKEN: "{{ lookup('vault_secret', 'mcp_secrets.service.token') }}"
 ```
-See [docs/secrets.md](docs/secrets.md) for vault setup and usage.
+
+For MCP server env vars, prefer `secret_env:` over `env:` with a lookup — values are resolved at spawn time (via `bin/run-with-secrets.sh`) instead of being rendered into config files. See [docs/secrets.md](docs/secrets.md) for the full flow including optional 1Password fallback.
+
+Provision on a new machine with `./dotfiles secret init` (walks every profile with an encrypted `secrets.yml`, validates each password by decrypting the real file).
 
 ## Detailed Documentation
 

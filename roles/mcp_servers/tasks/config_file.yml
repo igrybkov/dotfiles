@@ -31,6 +31,7 @@
         if mcp_existing_config.content is defined
         else {}
       }}
+  no_log: true  # existing config may hold resolved secrets from prior runs
   when: mcp_config_dir.stat.exists
 
 - name: "[🤖 MCP] Build updated mcpServers for {{ _mcp_config_path | basename }}"
@@ -119,11 +120,13 @@
         {%- endif -%}
       {%- endfor -%}
       {{ result | to_json }}
+  no_log: true  # resolves vault_secret lookups into plaintext env/headers
   when: mcp_config_dir.stat.exists
 
 - name: "[🤖 MCP] Coerce mcp_updated_servers to dict"
   ansible.builtin.set_fact:
     mcp_updated_servers: "{{ mcp_updated_servers | from_json }}"
+  no_log: true  # mcp_updated_servers contains resolved secret values
   when: mcp_config_dir.stat.exists and (mcp_updated_servers is string)
 
 - name: "[🤖 MCP] Build final config for {{ _mcp_config_path | basename }}"
@@ -132,6 +135,7 @@
       {{
         mcp_current_config | combine({'mcpServers': mcp_updated_servers})
       }}
+  no_log: true  # merged config carries resolved secret values
   when: mcp_config_dir.stat.exists
 
 # Check if any server in the final result has env vars or headers (for file permissions)
