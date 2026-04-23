@@ -76,9 +76,9 @@ class TestZellijCommand:
             assert "--layout" not in cmd_list
             assert "attach" in cmd_list
             assert "--create" in cmd_list
-            # Session name should include agent name
+            # Default session name is the repo name (no agent suffix)
             session_name = cmd_list[-1]
-            assert "claude" in session_name
+            assert session_name == "test-repo"
 
     def test_zellij_uses_configured_layout(
         self, cli_runner: CycloptsTestRunner, temp_git_repo, monkeypatch

@@ -85,7 +85,7 @@ worktrees:
 
 zellij:
   # layout: "agent"  # Optional: set to use a custom layout, omit for default
-  session_name: "{repo}-{agent}"
+  session_name: "{repo}"
 
 github:
   fetch_issues: true

@@ -142,7 +142,7 @@ class ZellijConfig(HiveBaseSettings):
     model_config = SettingsConfigDict(env_prefix="HIVE_ZELLIJ_")
 
     layout: str | None = None
-    session_name: str = "{repo}-{agent}"
+    session_name: str = "{repo}"
 
 
 class GitHubConfig(HiveBaseSettings):

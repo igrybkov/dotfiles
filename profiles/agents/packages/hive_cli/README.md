@@ -255,7 +255,7 @@ zellij:
 
   # Session name template
   # Supports placeholders: {repo} = repository name, {agent} = agent name
-  session_name: "{repo}-{agent}"
+  session_name: "{repo}"
 
 # GitHub integration
 github:
@@ -380,7 +380,7 @@ Each item can be:
 #### `zellij.session_name`
 
 - **Type:** `string`
-- **Default:** `"{repo}-{agent}"`
+- **Default:** `"{repo}"`
 - **Description:** Session name template. Supports `{repo}` (repository name) and `{agent}` (agent name) placeholders.
 
 #### `github.fetch_issues`
