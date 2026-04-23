@@ -99,7 +99,6 @@
     cmd: >-
       {{ uv_check.stdout }} tool install
       --editable "{{ _full_path }}"
-      --force
   environment: "{{ _pkg_env if (_pkg_env | length > 0) else omit }}"
   vars:
     _full_path: "{{ item.path }}"
@@ -119,8 +118,11 @@
   when:
     - pipx_packages is defined and pipx_packages | length > 0
     - uv_check.rc == 0
-  # Only report changed on first install; --force ensures deps are updated silently
-  changed_when: "'Uninstalled' not in _uv_install_result.stderr"
+  # uv re-resolves deps every run; report changed only when packages were actually
+  # installed or removed (stderr shows "Installed N packages" / "Uninstalled N packages").
+  # A steady-state run prints "Checked N packages" and no package markers.
+  changed_when: >-
+    _uv_install_result.stderr is search('(Installed|Uninstalled) \d+ package')
   register: _uv_install_result
 
 # --- pipx fallback (when uv not available) ---
