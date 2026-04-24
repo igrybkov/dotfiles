@@ -59,6 +59,45 @@ def get_git_branch(cwd: str) -> str:
     return ""
 
 
+def get_context_tokens(transcript_path: str):
+    """Read last assistant usage from transcript to compute current context size."""
+    if not transcript_path or not os.path.exists(transcript_path):
+        return None
+    try:
+        with open(transcript_path, "rb") as f:
+            f.seek(0, 2)
+            size = f.tell()
+            chunk = 65536
+            f.seek(max(0, size - chunk))
+            lines = f.read().decode("utf-8", errors="replace").splitlines()
+        for line in reversed(lines):
+            if not line.strip():
+                continue
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            usage = (entry.get("message") or {}).get("usage")
+            if not usage:
+                continue
+            return (
+                usage.get("input_tokens", 0)
+                + usage.get("cache_creation_input_tokens", 0)
+                + usage.get("cache_read_input_tokens", 0)
+            )
+    except OSError:
+        return None
+    return None
+
+
+def format_tokens(n: int) -> str:
+    if n >= 1_000_000:
+        return f"{n / 1_000_000:.1f}M"
+    if n >= 1_000:
+        return f"{n / 1_000:.1f}k"
+    return str(n)
+
+
 def main() -> None:
     data = json.load(sys.stdin)
 
@@ -66,6 +105,7 @@ def main() -> None:
     cwd = data.get("workspace", {}).get("current_dir") or data.get("cwd", "")
     model = data.get("model", {}).get("display_name", "Claude")
     remaining = data.get("context_window", {}).get("remaining_percentage")
+    transcript_path = data.get("transcript_path", "")
     vim_mode = data.get("vim", {}).get("mode")
     output_style = data.get("output_style", {}).get("name")
 
@@ -90,13 +130,22 @@ def main() -> None:
     if output_style and output_style != "default":
         components.append(f"{YELLOW}{output_style}{RESET}")
 
-    # Context remaining (only when low)
-    if remaining is not None:
-        remaining_int = int(remaining)
-        if remaining_int < 30:
-            components.append(f"{RED}ctx:{remaining_int}%{RESET}")
-        elif remaining_int < 50:
-            components.append(f"{YELLOW}ctx:{remaining_int}%{RESET}")
+    # Context usage — tokens used, plus remaining % when low
+    tokens_used = get_context_tokens(transcript_path)
+    remaining_int = int(remaining) if remaining is not None else None
+    if remaining_int is not None and remaining_int < 30:
+        ctx_color = RED
+    elif remaining_int is not None and remaining_int < 50:
+        ctx_color = YELLOW
+    else:
+        ctx_color = DIM
+    if tokens_used is not None:
+        label = f"ctx:{format_tokens(tokens_used)}"
+        if remaining_int is not None and remaining_int < 50:
+            label += f" ({remaining_int}%)"
+        components.append(f"{ctx_color}{label}{RESET}")
+    elif remaining_int is not None and remaining_int < 50:
+        components.append(f"{ctx_color}ctx:{remaining_int}%{RESET}")
 
     # Vim mode
     if vim_mode:
