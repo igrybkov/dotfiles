@@ -6,7 +6,7 @@
 # - Claude Code, Cursor, Copilot CLI, Codex, Gemini
 # - Custom helper scripts for agent workflows
 # - Zellij layouts for multi-agent sessions
-# - MCP servers via meta-mcp pattern
+# - MCP servers via the mcp-hub aggregator
 #
 # Usage:
 #   ./dotfiles install -p agents         # Agents only
@@ -229,8 +229,6 @@ claude_plugins:
 # MCP servers
 # mcp-hub is the aggregator: it lazy-loads child servers defined by other
 # profiles (e.g. adobe) and writes them into ~/.config/mcp-hub/servers.json.
-# meta-mcp was the previous aggregator — now kept as state: absent so the
-# role removes stale entries from client configs.
 mcp_servers:
   - name: mcp-hub
     description: >-
@@ -240,14 +238,4 @@ mcp_servers:
     tags: [mcp-hub, aggregator, meta]
     command: mcp-hub-server
     env:
-      CONFIG_FILE: "~/.meta-mcp/servers.json,~/.config/mcp-hub/servers.json,~/.config/mcp-hub/servers.yml,.mcp.local.json,.mcp.local.yml"
-  - name: meta-mcp
-    state: absent
-    config_files:
-      - path: ~/.mcp.json
-      - path: ~/Library/Application Support/Claude/claude_desktop_config.json
-      - path: ~/.cursor/mcp.json
-  - name: mcp-exec
-    state: absent
-    command: npx
-    args: ["-y", "@justanothermldude/mcp-exec@1.1.1"]
+      CONFIG_FILE: "~/.config/mcp-hub/servers.json,~/.config/mcp-hub/servers.yml,.mcp.local.json,.mcp.local.yml"
