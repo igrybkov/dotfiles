@@ -112,6 +112,27 @@ The role rewrites this into:
 
 The wrapper does a single batched `dotfiles secret get -p <profile> -0 <keys...>` call (one vault decrypt regardless of N secrets). It aborts with a loud error before `exec` if any key fails to resolve, so misconfigurations fail fast instead of silently running with empty env vars.
 
+**Cross-profile secrets:** suffix a path with `@profile-name` to resolve it from a different profile's vault (e.g. `mcp_secrets.obsidian_adobe.api_key@private-adobe`). The wrapper groups keys by profile and does one decrypt per referenced profile. Full syntax + examples in [`docs/secrets.md`](../../docs/secrets.md#cross-profile-secrets-profile-suffix).
+
+**Cross-profile contributions (preferred over hand-written `@profile`):** multiple profiles may declare `mcp_servers:` entries with the same `name:`. Exactly one profile is the *owner* (it sets `command:` or `url:`); others are *contributors* whose entries carry only extra `secret_env:` / `env:` pairs. At aggregation time the playbook's `merge_mcp_servers` filter collapses them into a single record and auto-appends `@<contributor-profile>` to every contributed `secret_env` value, so profile authors write bare key paths and the suffix only appears in the rendered `~/.config/mcp-hub/servers.json`.
+
+```yaml
+# profiles/private/personal/productivity/config.yml (owner)
+mcp_servers:
+  - name: obsidian
+    command: obsidian-mcp-server
+    secret_env:
+      OBSIDIAN_API_KEY_GARDEN: mcp_secrets.obsidian.digital_garden.api_key
+
+# profiles/private/adobe/config.yml (contributor — no command/url)
+mcp_servers:
+  - name: obsidian
+    secret_env:
+      OBSIDIAN_API_KEY_ADOBE: mcp_secrets.obsidian_adobe.api_key
+```
+
+Renders as a single `obsidian` server whose `secret_env` contains both keys, with the Adobe value rewritten to `mcp_secrets.obsidian_adobe.api_key@private-adobe`. A contribution is recognised by shape — fields ⊆ `{name, secret_env, env}` with at least one `secret_env:`/`env:` pair. Anything else (owners, pruning entries like `name + config_files`, top-level `state: absent`) passes through unchanged. Duplicate owners, env-var collisions, and contributions whose `name:` no profile owns fail the playbook at aggregation time with both source profiles named. Same-profile contributions (contributor == owner) stay bare.
+
 Limitations:
 - stdio servers only (URL-based `headers:` still need install-time resolution — see below)
 - requires the repo's `.vault_password` to be readable when a server spawns (no interactive prompt during MCP-host launches)

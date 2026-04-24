@@ -139,6 +139,11 @@
       loop_control:
         label: "{{ item }}"
       tags: [mcp-servers]
+
+    - name: "[🤖 MCP] Merge same-name entries across profiles (auto-@profile suffix on contributed secret_env)"
+      ansible.builtin.set_fact:
+        _all_mcp_servers: "{{ _all_mcp_servers | default([]) | merge_mcp_servers }}"
+      tags: [mcp-servers]
   roles:
     - name: Symlink and copy dotfiles (aggregated from all profiles)
       role: dotfiles

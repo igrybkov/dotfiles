@@ -3,6 +3,9 @@
 Usage in templates:
     {{ lookup('vault_secret', 'mcp_secrets.habitify.api_key') }}
 
+Cross-profile (per-term override):
+    {{ lookup('vault_secret', 'mcp_secrets.other.key@other-profile') }}
+
 Usage in variables:
     env:
       API_KEY: "{{ lookup('vault_secret', 'mcp_secrets.habitify.api_key') }}"
@@ -20,6 +23,15 @@ invoking `bin/dotfiles-vault-client --vault-id <label>` to fetch the
 password. The client script reads from the OS backend (login keychain on
 macOS, GPG file on Linux). This makes the lookup self-sufficient and
 independent of Ansible's loader-level vault-secrets wiring.
+
+Per-term `@profile` suffix
+--------------------------
+A term of the form ``key.path@profile-name`` resolves against
+``profile-name``'s vault file set instead of the current profile. The suffix
+is split at the LAST ``@``, so profile names may contain ``/`` (e.g.
+``@personal/productivity``). Files in ``secrets/`` (host-level + common) are
+still consulted alongside the override profile — only the
+``profiles/<name>/`` portion of the search path changes.
 """
 
 from __future__ import annotations
@@ -61,75 +73,47 @@ class LookupModule(LookupBase):
     def run(
         self, terms: list[str], variables: dict | None = None, **kwargs
     ) -> list[Any]:
-        playbook_dir = (
+        playbook_dir = Path(
             variables.get("playbook_dir", os.getcwd()) if variables else os.getcwd()
         )
         inventory_hostname = (
             variables.get("inventory_hostname", "common") if variables else "common"
         )
         vault_profile = variables.get("_vault_profile") if variables else None
-        current_profile = (
+        default_profile = (
             vault_profile
             if vault_profile
             else inventory_hostname.replace("-profile", "")
         )
 
-        secrets_dir = Path(playbook_dir) / "secrets"
-        vault_files = [
-            secrets_dir / f"{inventory_hostname}.yml",
-            secrets_dir / "common.yml",
-        ]
+        client_script = _locate_client_script(str(playbook_dir))
 
-        profiles_dir = Path(playbook_dir) / "profiles"
-        if profiles_dir.exists():
-            for profile_name in [current_profile, "common"]:
-                profile_info = get_profile_by_name(profiles_dir, profile_name)
-                if profile_info is None:
-                    continue
-                profile_dir = profile_info.path
+        # Cache decrypted secrets per effective profile to amortize across
+        # terms that hit the same profile.
+        secrets_cache: dict[str, list[dict]] = {}
 
-                profile_secrets_file = profile_dir / "secrets.yml"
-                if (
-                    profile_secrets_file.exists()
-                    and profile_secrets_file not in vault_files
-                ):
-                    vault_files.append(profile_secrets_file)
-
-                profile_secrets_dir = profile_dir / "secrets"
-                if profile_secrets_dir.exists():
-                    for secret_file in sorted(profile_secrets_dir.glob("*.yml")):
-                        if secret_file not in vault_files:
-                            vault_files.append(secret_file)
-
-        client_script = _locate_client_script(playbook_dir)
-
-        all_secrets = []
-        for vault_file in vault_files:
-            if not vault_file.exists():
-                continue
-            try:
-                data = _decrypt_file(vault_file, client_script)
-            except Exception as exc:
-                raise AnsibleError(f"Failed to decrypt {vault_file}: {exc}")
-            if data:
-                all_secrets.append(data)
-
-        if not all_secrets:
-            checked_locations = [str(f) for f in vault_files if f.parent.exists()]
-            raise AnsibleError(
-                "No vault secrets file found. Checked locations:\n"
-                + "\n".join(f"  - {loc}" for loc in checked_locations)
-            )
-
-        results = []
+        results: list[Any] = []
         for term in terms:
+            key_path, profile_override = _parse_term(term)
+            effective_profile = profile_override or default_profile
+
+            if effective_profile not in secrets_cache:
+                secrets_cache[effective_profile] = _load_profile_secrets(
+                    playbook_dir,
+                    inventory_hostname,
+                    effective_profile,
+                    client_script,
+                )
+
+            all_secrets = secrets_cache[effective_profile]
             value = None
             for secrets in all_secrets:
-                value = self._resolve_path(secrets, term)
+                value = self._resolve_path(secrets, key_path)
                 if value is not None:
                     break
             if value is None:
-                raise AnsibleError(f"Secret not found: {term}")
+                scope = f" in profile {effective_profile!r}" if profile_override else ""
+                raise AnsibleError(f"Secret not found: {key_path}{scope}")
             results.append(value)
 
         return results
@@ -144,6 +128,84 @@ class LookupModule(LookupBase):
             if current is None:
                 return None
         return current
+
+
+def _parse_term(term: str) -> tuple[str, str | None]:
+    """Split ``key.path@profile`` into ``(key_path, profile)``.
+
+    Returns ``(term, None)`` when no ``@`` is present. Splits on the last
+    ``@`` so profile names containing ``/`` work naturally. Empty key or
+    empty profile after the split is an error.
+    """
+    if "@" not in term:
+        return term, None
+    key_path, _, profile = term.rpartition("@")
+    if not profile:
+        raise AnsibleError(f"Empty profile suffix in vault_secret term: {term!r}")
+    if not key_path:
+        raise AnsibleError(f"Empty key path in vault_secret term: {term!r}")
+    return key_path, profile
+
+
+def _build_vault_files(
+    playbook_dir: Path, inventory_hostname: str, profile: str
+) -> list[Path]:
+    """Return the ordered list of potential vault files for a given profile."""
+    secrets_dir = playbook_dir / "secrets"
+    vault_files: list[Path] = [
+        secrets_dir / f"{inventory_hostname}.yml",
+        secrets_dir / "common.yml",
+    ]
+    profiles_dir = playbook_dir / "profiles"
+    if profiles_dir.exists():
+        for profile_name in [profile, "common"]:
+            profile_info = get_profile_by_name(profiles_dir, profile_name)
+            if profile_info is None:
+                continue
+            profile_dir = profile_info.path
+
+            profile_secrets_file = profile_dir / "secrets.yml"
+            if (
+                profile_secrets_file.exists()
+                and profile_secrets_file not in vault_files
+            ):
+                vault_files.append(profile_secrets_file)
+
+            profile_secrets_subdir = profile_dir / "secrets"
+            if profile_secrets_subdir.exists():
+                for secret_file in sorted(profile_secrets_subdir.glob("*.yml")):
+                    if secret_file not in vault_files:
+                        vault_files.append(secret_file)
+    return vault_files
+
+
+def _load_profile_secrets(
+    playbook_dir: Path,
+    inventory_hostname: str,
+    profile: str,
+    client_script: Path,
+) -> list[dict]:
+    """Decrypt every vault file in scope for ``profile`` and return the parsed dicts."""
+    vault_files = _build_vault_files(playbook_dir, inventory_hostname, profile)
+    all_secrets: list[dict] = []
+    for vault_file in vault_files:
+        if not vault_file.exists():
+            continue
+        try:
+            data = _decrypt_file(vault_file, client_script)
+        except Exception as exc:
+            raise AnsibleError(f"Failed to decrypt {vault_file}: {exc}")
+        if data:
+            all_secrets.append(data)
+
+    if not all_secrets:
+        checked_locations = [str(f) for f in vault_files if f.parent.exists()]
+        raise AnsibleError(
+            f"No vault secrets file found for profile {profile!r}. "
+            "Checked locations:\n"
+            + "\n".join(f"  - {loc}" for loc in checked_locations)
+        )
+    return all_secrets
 
 
 def _locate_client_script(playbook_dir: str | os.PathLike) -> Path:

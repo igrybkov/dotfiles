@@ -2,22 +2,33 @@
 # run-with-secrets.sh — resolve Ansible Vault secrets into env vars, then exec.
 #
 # Intended for wrapping MCP servers (and similar) so their configs never
-# contain plaintext tokens. Secrets are fetched at spawn time via a single
-# `dotfiles secret get -p <profile> -0 ...` call (one vault decrypt,
-# null-separated output, byte-safe).
+# contain plaintext tokens. Secrets are fetched at spawn time via one
+# `dotfiles secret get -p <profile> -0 ...` call per referenced profile
+# (one vault decrypt per profile, null-separated output, byte-safe).
+#
+# Syntax for each pair:
+#   VAR=key.path              — resolve from --profile's vault (default).
+#   VAR=key.path@profile-name — resolve from `profile-name`'s vault instead.
+#
+# The `@profile-name` suffix routes that specific pair to a different profile's
+# encrypted `secrets.yml`. Profile names may contain `/` (e.g. `@personal/productivity`).
+# Splitting is on the LAST `@` so keys like `alpha.two@personal/adobe` parse
+# deterministically. Callers that legitimately need `@` inside a key path and
+# aren't using the override are out of scope — this syntax is reserved.
 #
 # Usage:
-#   run-with-secrets.sh -p <profile> VAR=key.path [VAR=key.path ...] -- command [args...]
+#   run-with-secrets.sh -p <profile> VAR=key.path[@profile] [VAR=...] -- command [args...]
 #
-# Example:
-#   run-with-secrets.sh -p private-adobe \
-#     OUTLOOK_TENANT_ID=mcp_secrets.outlook.tenant_id \
-#     OUTLOOK_CLIENT_ID=mcp_secrets.outlook.client_id \
-#     -- outlook-mcp-auth --port 8080
+# Examples:
+#   run-with-secrets.sh -p private-personal-productivity \
+#     OBSIDIAN_API_KEY_GARDEN=mcp_secrets.obsidian.digital_garden.api_key \
+#     OBSIDIAN_API_KEY_ADOBE=mcp_secrets.obsidian_adobe.api_key@private-adobe \
+#     -- obsidian-mcp-server
 #
 # Exit codes:
 #   0  — command executed (via exec; this script does not return)
-#   2  — usage/parse error (missing --profile, missing --, malformed pair, unknown arg)
+#   2  — usage/parse error (missing --profile, missing --, malformed pair,
+#        empty @profile suffix, unknown arg)
 #   3  — secret resolution failed (CLI returned non-zero, or value count mismatch)
 #   *  — any non-zero from the CLI is propagated
 
@@ -31,18 +42,20 @@ usage() {
 run-with-secrets.sh: resolve vault secrets into env, then exec a command.
 
 Usage:
-  run-with-secrets.sh -p <profile> VAR=key.path [VAR=key.path ...] -- command [args...]
+  run-with-secrets.sh -p <profile> VAR=key.path[@profile] [VAR=...] -- command [args...]
 
-  -p, --profile NAME   Vault profile to resolve from (required)
-  VAR=key.path         Zero or more env-var / secret-path pairs
-  --                   Separator between pairs and the real command
-  command [args...]    The program to exec after secrets resolve
+  -p, --profile NAME       Default vault profile for pairs without @ suffix (required)
+  VAR=key.path             Resolve from --profile's vault
+  VAR=key.path@profile     Resolve from that profile's vault instead
+  --                       Separator between pairs and the real command
+  command [args...]        The program to exec after secrets resolve
 EOF
 }
 
 profile=""
 vars=()
 keys=()
+profiles_for_pair=()  # per-pair effective profile (filled after parse)
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -60,8 +73,28 @@ while [[ $# -gt 0 ]]; do
             break
             ;;
         *=*)
-            vars+=("${1%%=*}")
-            keys+=("${1#*=}")
+            var_name="${1%%=*}"
+            raw="${1#*=}"
+            # Split on LAST '@' for the optional profile override.
+            if [[ "$raw" == *@* ]]; then
+                keypart="${raw%@*}"
+                profpart="${raw##*@}"
+                if [[ -z "$profpart" ]]; then
+                    echo "run-with-secrets: empty profile suffix in ${var_name}=${raw}" >&2
+                    exit 2
+                fi
+                if [[ -z "$keypart" ]]; then
+                    echo "run-with-secrets: empty key path in ${var_name}=${raw}" >&2
+                    exit 2
+                fi
+                vars+=("$var_name")
+                keys+=("$keypart")
+                profiles_for_pair+=("$profpart")
+            else
+                vars+=("$var_name")
+                keys+=("$raw")
+                profiles_for_pair+=("")  # filled with $profile after parse
+            fi
             shift
             ;;
         *)
@@ -84,24 +117,64 @@ if [[ $# -eq 0 ]]; then
     exit 2
 fi
 
+# Fill in default profile for pairs without explicit @override.
+for i in "${!profiles_for_pair[@]}"; do
+    if [[ -z "${profiles_for_pair[i]}" ]]; then
+        profiles_for_pair[i]="$profile"
+    fi
+done
+
 if [[ ${#keys[@]} -gt 0 ]]; then
-    # One decrypt, N values, null-separated so any byte is safe.
-    # `set -euo pipefail` + the explicit count check below guarantee we never
-    # exec with a partially-populated env.
-    i=0
-    while IFS= read -r -d '' value; do
-        if [[ $i -ge ${#vars[@]} ]]; then
-            echo "run-with-secrets: CLI returned more values than requested" >&2
+    # Build the unique set of referenced profiles, preserving first-seen order.
+    unique_profiles=()
+    for p in "${profiles_for_pair[@]}"; do
+        seen=0
+        # bash 3.2: empty-array expansion is unsafe under `set -u`; ${arr[@]:-}
+        # would inject an empty element, so guard the iteration explicitly.
+        if [[ ${#unique_profiles[@]} -gt 0 ]]; then
+            for u in "${unique_profiles[@]}"; do
+                if [[ "$u" == "$p" ]]; then seen=1; break; fi
+            done
+        fi
+        [[ $seen -eq 0 ]] && unique_profiles+=("$p")
+    done
+
+    # Resolve secrets one profile at a time, scattering values back by index.
+    # Using an indexed array with explicit assignment so each pair's value
+    # lands at its original index regardless of which profile-group resolves it.
+    resolved=()
+    for i in "${!vars[@]}"; do resolved[i]=""; done
+
+    for up in "${unique_profiles[@]}"; do
+        subkeys=()
+        subidx=()
+        for i in "${!profiles_for_pair[@]}"; do
+            if [[ "${profiles_for_pair[i]}" == "$up" ]]; then
+                subkeys+=("${keys[i]}")
+                subidx+=("$i")
+            fi
+        done
+
+        j=0
+        while IFS= read -r -d '' value; do
+            if [[ $j -ge ${#subidx[@]} ]]; then
+                echo "run-with-secrets: CLI returned more values than requested for profile ${up}" >&2
+                exit 3
+            fi
+            orig="${subidx[j]}"
+            resolved[orig]="$value"
+            j=$((j + 1))
+        done < <("$DOTFILES" secret get -p "$up" -0 "${subkeys[@]}")
+
+        if [[ $j -ne ${#subkeys[@]} ]]; then
+            echo "run-with-secrets: expected ${#subkeys[@]} values for profile ${up}, got $j" >&2
             exit 3
         fi
-        export "${vars[i]}=$value"
-        i=$((i + 1))
-    done < <("$DOTFILES" secret get -p "$profile" -0 "${keys[@]}")
+    done
 
-    if [[ $i -ne ${#keys[@]} ]]; then
-        echo "run-with-secrets: expected ${#keys[@]} values, got $i" >&2
-        exit 3
-    fi
+    for i in "${!vars[@]}"; do
+        export "${vars[i]}=${resolved[$i]}"
+    done
 fi
 
 exec "$@"

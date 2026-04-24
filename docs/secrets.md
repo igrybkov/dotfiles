@@ -124,6 +124,46 @@ mcp_servers:
 
 The wrapper does one batched `dotfiles secret get -p <profile> -0 <keys...>` call (one vault decrypt regardless of N secrets). `set -e` in the wrapper aborts before `exec` if any key fails to resolve, so a misconfigured server fails loudly rather than starting with an empty env var.
 
+#### Cross-profile contributions (preferred)
+
+When one MCP server needs secrets that live across multiple profiles (e.g. one server talking to two vaults), multiple profiles declare `mcp_servers:` entries with the same `name:`. Exactly one profile is the **owner** — it sets `command:` or `url:` and carries the rest of the shape. Other profiles are **contributors**: partial entries that add extra `secret_env:` / `env:` pairs. The playbook's `merge_mcp_servers` filter collapses them into a single record and auto-applies the cross-profile `@<contributor>` suffix to every contributed `secret_env` value, so profile authors always write bare key paths.
+
+```yaml
+# profiles/private/personal/productivity/config.yml — owns `obsidian`
+mcp_servers:
+  - name: obsidian
+    command: obsidian-mcp-server
+    secret_env:
+      OBSIDIAN_API_KEY_GARDEN: mcp_secrets.obsidian.digital_garden.api_key
+
+# profiles/private/adobe/config.yml — contributes, does NOT own
+mcp_servers:
+  - name: obsidian
+    secret_env:
+      OBSIDIAN_API_KEY_ADOBE: mcp_secrets.obsidian_adobe.api_key
+```
+
+At install time this renders as one `obsidian` entry with both keys; the rendered `~/.config/mcp-hub/servers.json` carries `OBSIDIAN_API_KEY_ADOBE=mcp_secrets.obsidian_adobe.api_key@private-adobe` on the wrapper command line. Contribution rules:
+
+- **What counts as a contribution.** An entry whose fields are a subset of `{name, secret_env, env}` and that declares at least one `secret_env:`/`env:` pair. Anything else — owners, pruning entries like `name + config_files`, top-level `state: absent`, …  — passes through verbatim and never merges with anything.
+- **Home-profile contributions stay bare.** A contribution from the same profile that owns the server gets no suffix (treated identically to adding the entry directly under the owner's `secret_env:`).
+- **Conflicts fail fast.** Two contributors declaring the same env-var name on the same server, or a contributor clashing with the owner's own `secret_env:`, aborts the playbook at aggregation time with both profile names in the error.
+- **Orphan contributions fail fast.** A contribution whose `name:` no profile owns (nobody sets `command`/`url`) aborts with the contributor's profile name.
+
+#### Hand-written `@profile` suffix (lower-level)
+
+For ad-hoc cases that don't warrant splitting across profiles — or for the `vault_secret` Jinja lookup (install-time URL-server headers) — the resolver also accepts an explicit `@profile-name` suffix on any path:
+
+```yaml
+# Jinja lookup — install-time header resolution
+env:
+  ADOBE_KEY: "{{ lookup('vault_secret', 'mcp_secrets.obsidian_adobe.api_key@private-adobe') }}"
+```
+
+The wrapper groups requested keys by profile and does one decrypt per referenced profile (so N secrets across M profiles = M decrypts, not M×N). Each referenced profile must have its vault password available via `dotfiles secret keychain` — missing entries produce a clear error naming the profile that needs `./dotfiles secret keychain push <profile>`.
+
+Paths are split at the **last** `@`, so profile names containing `/` work naturally (`key@personal/productivity`). Leave the suffix off to use the server's home profile — backward compatible.
+
 Limitations:
 - Stdio servers only. URL-based servers (`url:` + `headers:`) use install-time `vault_secret` lookups (see below).
 - Requires the vault backend to be populated — run `secret init` once per machine.
