@@ -41,6 +41,9 @@ pipx_packages:
   - name: hive-cli
     path: packages/hive_cli
     editable: true
+  - name: apple-mail-mcp
+    path: packages/apple-mail
+    editable: true
 
 # Enable Cursor CLI installation (via cursor_cli role)
 install_cursor_cli: true
@@ -239,3 +242,15 @@ mcp_servers:
     command: mcp-hub-server
     env:
       CONFIG_FILE: "~/.config/mcp-hub/servers.json,~/.config/mcp-hub/servers.yml,.mcp.local.json,.mcp.local.yml"
+
+  # Apple Mail bridge — drives Mail.app via JXA (osascript). No auth/tokens needed;
+  # uses the existing Mail.app session. Set APPLE_MAIL_ACCOUNT to scope to a specific
+  # account name; omit to operate across all accounts in parallel.
+  # First run will prompt for Automation access (System Settings > Privacy & Security > Automation).
+  - name: apple-mail
+    description: Apple Mail — list mailboxes, read/search messages, create drafts. No send.
+    tags: [mail, apple-mail]
+    command: apple-mail-mcp
+    config_files:
+      - path: ~/.config/mcp-hub/servers.json
+        state: present
