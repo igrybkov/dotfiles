@@ -18,23 +18,15 @@ def rename_pane(name: str) -> None:
     """Rename the current Zellij pane.
 
     Args:
-        name: New name for the pane.
+        name: New name for the pane (always the full desired title).
 
     Note:
         This is a no-op if not running inside Zellij.
-        Calls undo-rename-pane first to clear any previous rename.
-        Note: undo-rename-pane only clears user renames, NOT layout-defined names.
-        Layout names remain as the base, and rename-pane appends to them.
+        Since Zellij 0.44.1, rename-pane replaces the entire pane title
+        (including layout-defined names), so callers must pass the full name.
     """
     if not is_running_in_zellij():
         return
-
-    # Clear any previous user rename (not layout-defined names)
-    subprocess.run(
-        ["zellij", "action", "undo-rename-pane"],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
 
     subprocess.run(
         ["zellij", "action", "rename-pane", name],
@@ -107,8 +99,10 @@ def rebuild_pane_title() -> bool:
     """Rebuild and set pane title from stored state.
 
     Title format depends on context:
-    - With HIVE_PANE_ID (in layout): [{agent}] {status} [{branch}] {custom_title}
-      (Layout provides "c{id}: Name" as base name, we append agent and branch info)
+    - With HIVE_PANE_ID (in layout): c{id}: {label} [{agent}] {status} [{branch}]
+      Base reconstructed from HIVE_PANE_ID + HIVE_PANE_LABEL (Zellij 0.44.1
+      changed rename-pane to full-replace instead of append-to-layout).
+
     - Without HIVE_PANE_ID: {agent}-{pane_id} {status} [{branch}] {custom_title}
       or falls back to cwd relative to home
 
@@ -123,13 +117,19 @@ def rebuild_pane_title() -> bool:
     pane_id = rt.pane_id
     agent = rt.agent
 
-    # Build title parts
-    # When HIVE_PANE_ID is set, we're in a layout that already defines
-    # the base pane name (e.g., "c2: Bohdan"). Since rename-pane appends
-    # to the layout name, we should NOT include the base name prefix.
     parts: list[str] = []
 
-    if not pane_id:
+    if pane_id:
+        # Reconstruct the layout base name since rename-pane now replaces entirely.
+        label = rt.pane_label
+        if label:
+            parts.append(f"c{pane_id}: {label}")
+        else:
+            parts.append(f"c{pane_id}")
+
+        if agent:
+            parts.append(f"[{agent}]")
+    else:
         # Not in layout - need to set the full name including prefix
         if agent:
             # Use ZELLIJ_PANE_ID as fallback for pane numbering
@@ -145,10 +145,6 @@ def rebuild_pane_title() -> bool:
                 # cwd is not under home, use absolute path
                 parts.append(str(cwd))
 
-    # When in layout, add agent name in brackets
-    if pane_id and agent:
-        parts.append(f"[{agent}]")
-
     if state.get("status"):
         parts.append(state["status"])
 
@@ -158,13 +154,7 @@ def rebuild_pane_title() -> bool:
     if state.get("custom_title"):
         parts.append(state["custom_title"])
 
-    title = " ".join(parts)
-
-    # When appending to layout name, add leading space
-    if pane_id and title:
-        title = f" {title}"
-
-    rename_pane(title)
+    rename_pane(" ".join(parts))
     return True
 
 

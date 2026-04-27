@@ -87,6 +87,7 @@ class RuntimeSettings(HiveBaseSettings):
         str, Field("default", validation_alias="ZELLIJ_SESSION_NAME")
     ]
     zellij_pane_id: Annotated[str, Field("0", validation_alias="ZELLIJ_PANE_ID")]
+    pane_label: Annotated[str | None, Field(None, validation_alias="HIVE_PANE_LABEL")]
     editor: Annotated[str, Field("vim", validation_alias="EDITOR")]
     xdg_cache_home: Annotated[
         Path,

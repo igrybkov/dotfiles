@@ -28,6 +28,7 @@ This repo ships with an opinionated set of packages and tools across four topica
 - **18 modular Ansible roles** — use what you need, ignore the rest
 - **macOS system settings** automation
 - **Auto-bootstrapping** — installs Homebrew, mise, uv, and Ansible on first run
+- **AI coding agent environment** — mcp-hub aggregator, Hive CLI, and Zellij layouts for multi-agent parallel development
 
 ## Table of Contents
 
@@ -299,6 +300,52 @@ Key design choices:
 - **Mitogen** — used as the connection strategy for faster execution
 
 See [docs/architecture.md](docs/architecture.md) for detailed architecture documentation.
+
+## AI Coding Agent Environment
+
+The `agents` profile provides a complete AI coding workspace built around Claude Code and Cursor. It bundles a custom MCP aggregator, a CLI for managing parallel agent sessions, and a Zellij layout that turns one terminal into a 16-slot agent control room.
+
+### mcp-hub
+
+A lazy-loading MCP aggregator that proxies any number of child MCP servers behind a single connection. Child processes are spawned only when their tools are actually called.
+
+The key insight: instead of bloating every individual tool schema with cross-server context, mcp-hub assembles a dynamic `instructions` string that lists every configured server by name and capability. The model always knows what tools exist (and which server to ask) without paying schema-size tax on every call. Discovery flows through `list_servers`, `search`, and `get_server_tools`.
+
+Full MCP protocol support: tools, prompts, resources, sampling, elicitation, logging, and roots. Configs are merged from `~/.config/mcp-hub/servers.{json,yml}` and a `mcp-hub` shell CLI is shipped for scripting.
+
+### Hive CLI
+
+Python CLI (`profiles/agents/packages/hive_cli/`) for multi-agent and worktree workflows.
+
+| Command | Description |
+|---------|-------------|
+| `hive run` | Launch agent with optional worktree selection |
+| `hive run --restart` | Auto-restart agent on exit (used in Zellij panes) |
+| `hive zellij` | Open Zellij with the 16-slot agent layout |
+| `hive wt` | Git worktree management (create, navigate, execute) |
+| `hive status --watch` | Live multi-agent status dashboard |
+
+### Zellij layout
+
+`profiles/agents/files/dotfiles/config/zellij/layouts/agent.kdl` defines a layout with up to 16 named agent panes (Anton, Bohdan, Chris, …) each running `hive run --restart`, plus a `hive status --watch --compact` board. It is purpose-built for parallelizing work across multiple independent branches — kick off agents on separate worktrees and watch them progress side by side.
+
+### MCP Secrets
+
+MCP server credentials are encrypted with Ansible Vault per profile. The vault password lives in the macOS login keychain (or a GPG-encrypted file on Linux), populated from 1Password during `./dotfiles secret init`. At spawn time, `bin/run-with-secrets.sh` resolves each `secret_env:` entry via `dotfiles secret get` — rendered configs in `~/.config/mcp-hub/` contain only vault key paths, never plaintext tokens. Cross-profile references use a `@profile-name` suffix (e.g. `mcp_secrets.foo.token@adobe`).
+
+### Picking what to adopt
+
+The components are independently usable. You don't need the full stack to get value:
+
+| If you want… | Minimum to adopt |
+|---|---|
+| Just the MCP tool integrations | Install the `agents` profile for mcp-hub, then configure `~/.config/mcp-hub/servers.json` |
+| Just multi-agent worktree management | `pipx install -e profiles/agents/packages/hive_cli` standalone |
+| Just the Zellij layout | Copy `profiles/agents/files/dotfiles/config/zellij/layouts/agent.kdl` to `~/.config/zellij/layouts/` |
+| Just Claude skills or sub-agents | Copy `profiles/agents/files/skills/` and `profiles/agents/files/agents/` to `~/.claude/` |
+| Everything wired together | `./dotfiles install -p agents --all` |
+
+See [profiles/agents/README.md](profiles/agents/README.md) for the full agents profile reference (skills, sub-agents, global instructions, gitignore aggregation).
 
 ## Project Structure
 

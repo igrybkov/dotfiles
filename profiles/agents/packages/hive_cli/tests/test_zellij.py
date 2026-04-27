@@ -158,6 +158,7 @@ class TestPaneStateManagement:
         monkeypatch.setenv("ZELLIJ_PANE_ID", "42")
         monkeypatch.setenv("HIVE_AGENT", "claude")
         monkeypatch.setenv("HIVE_PANE_ID", "1")
+        monkeypatch.setenv("HIVE_PANE_LABEL", "Anton")
 
         # Use tmp_path for state files instead of /tmp
         state_dir = tmp_path / "hive-zellij" / "test-session"
@@ -225,16 +226,15 @@ class TestPaneStateManagement:
     def test_rebuild_pane_title_minimal(self, zellij_env):
         """Test rebuild_pane_title with no state components.
 
-        When HIVE_PANE_ID is set (in layout), we're appending to a layout-defined
-        base name (e.g., "c1: Anton"), so we append [agent-name] with leading space.
+        When HIVE_PANE_ID and HIVE_PANE_LABEL are set, the full base name is
+        reconstructed and passed to rename-pane (Zellij 0.44.1+ replaces entirely).
         """
         from hive_cli.utils.zellij import rebuild_pane_title
 
         with patch("hive_cli.utils.zellij.rename_pane") as mock_rename:
             result = rebuild_pane_title()
             assert result is True
-            # When HIVE_PANE_ID is set, append with leading space
-            mock_rename.assert_called_once_with(" [claude]")
+            mock_rename.assert_called_once_with("c1: Anton [claude]")
 
     def test_rebuild_pane_title_fallback_to_cwd(self, monkeypatch, tmp_path):
         """Test rebuild_pane_title uses cwd path relative to home when not set."""
@@ -260,41 +260,27 @@ class TestPaneStateManagement:
             mock_rename.assert_called_once_with(str(test_dir))
 
     def test_rebuild_pane_title_with_status(self, zellij_env):
-        """Test rebuild_pane_title with status set.
-
-        When HIVE_PANE_ID is set (in layout), we append [agent] and status
-        with leading space.
-        """
+        """Test rebuild_pane_title with status set."""
         from hive_cli.utils.zellij import _write_state, rebuild_pane_title
 
         _write_state({"status": "[working]", "branch": None, "custom_title": None})
 
         with patch("hive_cli.utils.zellij.rename_pane") as mock_rename:
             rebuild_pane_title()
-            # Format: [agent] [status] with leading space
-            mock_rename.assert_called_once_with(" [claude] [working]")
+            mock_rename.assert_called_once_with("c1: Anton [claude] [working]")
 
     def test_rebuild_pane_title_with_branch(self, zellij_env):
-        """Test rebuild_pane_title with branch set.
-
-        When HIVE_PANE_ID is set (in layout), we append [agent] and [branch]
-        with leading space.
-        """
+        """Test rebuild_pane_title with branch set."""
         from hive_cli.utils.zellij import _write_state, rebuild_pane_title
 
         _write_state({"status": None, "branch": "feature-branch", "custom_title": None})
 
         with patch("hive_cli.utils.zellij.rename_pane") as mock_rename:
             rebuild_pane_title()
-            # Format: [agent] [branch] with leading space
-            mock_rename.assert_called_once_with(" [claude] [feature-branch]")
+            mock_rename.assert_called_once_with("c1: Anton [claude] [feature-branch]")
 
     def test_rebuild_pane_title_full(self, zellij_env):
-        """Test rebuild_pane_title with all components set.
-
-        When HIVE_PANE_ID is set (in layout), we append [agent] and all
-        other info with leading space.
-        """
+        """Test rebuild_pane_title with all components set."""
         from hive_cli.utils.zellij import _write_state, rebuild_pane_title
 
         _write_state(
@@ -307,9 +293,8 @@ class TestPaneStateManagement:
 
         with patch("hive_cli.utils.zellij.rename_pane") as mock_rename:
             rebuild_pane_title()
-            # Format: [agent] [status] [branch] custom_title with leading space
             mock_rename.assert_called_once_with(
-                " [claude] [working] [feature-branch] Fixing bug"
+                "c1: Anton [claude] [working] [feature-branch] Fixing bug"
             )
 
     def test_set_pane_status(self, zellij_env):

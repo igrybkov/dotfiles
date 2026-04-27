@@ -20,19 +20,19 @@ layout {
             pane stacked=true {
                 pane name="c1: Anton" expanded=true {
                     command "fish"
-                    args "-c" "env HIVE_PANE_ID=1 hive run --restart"
+                    args "-c" "env HIVE_PANE_ID=1 HIVE_PANE_LABEL=Anton hive run --restart"
                 }
                 pane name="c2: Bohdan" start_suspended=true {
                     command "fish"
-                    args "-c" "env HIVE_PANE_ID=2 hive run --restart"
+                    args "-c" "env HIVE_PANE_ID=2 HIVE_PANE_LABEL=Bohdan hive run --restart"
                 }
                 pane name="c3: Chris" start_suspended=true {
                     command "fish"
-                    args "-c" "env HIVE_PANE_ID=3 hive run --restart"
+                    args "-c" "env HIVE_PANE_ID=3 HIVE_PANE_LABEL=Chris hive run --restart"
                 }
                 pane name="c4: Dmytro" start_suspended=true {
                     command "fish"
-                    args "-c" "env HIVE_PANE_ID=4 hive run --restart"
+                    args "-c" "env HIVE_PANE_ID=4 HIVE_PANE_LABEL=Dmytro hive run --restart"
                 }
             }
             // Right: Agents 5-8 stacked + status board
@@ -40,19 +40,19 @@ layout {
                 pane size="75%" stacked=true {
                     pane name="c5: Emily" expanded=true start_suspended=true {
                         command "fish"
-                        args "-c" "env HIVE_PANE_ID=5 hive run --restart"
+                        args "-c" "env HIVE_PANE_ID=5 HIVE_PANE_LABEL=Emily hive run --restart"
                     }
                     pane name="c6: Frank" start_suspended=true {
                         command "fish"
-                        args "-c" "env HIVE_PANE_ID=6 hive run --restart"
+                        args "-c" "env HIVE_PANE_ID=6 HIVE_PANE_LABEL=Frank hive run --restart"
                     }
                     pane name="c7: Grygoriy" start_suspended=true {
                         command "fish"
-                        args "-c" "env HIVE_PANE_ID=7 hive run --restart"
+                        args "-c" "env HIVE_PANE_ID=7 HIVE_PANE_LABEL=Grygoriy hive run --restart"
                     }
                     pane name="c8: Henry" start_suspended=true {
                         command "fish"
-                        args "-c" "env HIVE_PANE_ID=8 hive run --restart"
+                        args "-c" "env HIVE_PANE_ID=8 HIVE_PANE_LABEL=Henry hive run --restart"
                     }
                 }
                 pane name="status" {
@@ -70,38 +70,38 @@ layout {
             pane stacked=true {
                 pane name="c9: Ihor" expanded=true start_suspended=true {
                     command "fish"
-                    args "-c" "env HIVE_PANE_ID=9 hive run --restart"
+                    args "-c" "env HIVE_PANE_ID=9 HIVE_PANE_LABEL=Ihor hive run --restart"
                 }
                 pane name="c10: Jake" start_suspended=true {
                     command "fish"
-                    args "-c" "env HIVE_PANE_ID=10 hive run --restart"
+                    args "-c" "env HIVE_PANE_ID=10 HIVE_PANE_LABEL=Jake hive run --restart"
                 }
                 pane name="c11: Kateryna" start_suspended=true {
                     command "fish"
-                    args "-c" "env HIVE_PANE_ID=11 hive run --restart"
+                    args "-c" "env HIVE_PANE_ID=11 HIVE_PANE_LABEL=Kateryna hive run --restart"
                 }
                 pane name="c12: Liam" start_suspended=true {
                     command "fish"
-                    args "-c" "env HIVE_PANE_ID=12 hive run --restart"
+                    args "-c" "env HIVE_PANE_ID=12 HIVE_PANE_LABEL=Liam hive run --restart"
                 }
             }
             // Right: Agents 13-16 stacked
             pane stacked=true {
                 pane name="c13: Mykola" expanded=true start_suspended=true {
                     command "fish"
-                    args "-c" "env HIVE_PANE_ID=13 hive run --restart"
+                    args "-c" "env HIVE_PANE_ID=13 HIVE_PANE_LABEL=Mykola hive run --restart"
                 }
                 pane name="c14: Noah" start_suspended=true {
                     command "fish"
-                    args "-c" "env HIVE_PANE_ID=14 hive run --restart"
+                    args "-c" "env HIVE_PANE_ID=14 HIVE_PANE_LABEL=Noah hive run --restart"
                 }
                 pane name="c15: Orest" start_suspended=true {
                     command "fish"
-                    args "-c" "env HIVE_PANE_ID=15 hive run --restart"
+                    args "-c" "env HIVE_PANE_ID=15 HIVE_PANE_LABEL=Orest hive run --restart"
                 }
                 pane name="c16: Petro" start_suspended=true {
                     command "fish"
-                    args "-c" "env HIVE_PANE_ID=16 hive run --restart"
+                    args "-c" "env HIVE_PANE_ID=16 HIVE_PANE_LABEL=Petro hive run --restart"
                 }
             }
         }
