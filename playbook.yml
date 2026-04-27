@@ -135,7 +135,7 @@
              (hostvars[item]['mcp_servers'] | default([])
               | map('combine', {'_profile': item | replace('-profile', '')})
               | list) }}
-      loop: "{{ lookup('aggregated_profile_var', '_hosts') }}"
+      loop: "{{ lookup('aggregated_profile_var', '_hosts', all_profiles=True) }}"
       loop_control:
         label: "{{ item }}"
       tags: [mcp-servers]
@@ -204,8 +204,8 @@
       role: ssh_config
       tags: [ssh]
       vars:
-        ssh_client_config: "{{ lookup('aggregated_profile_var', 'ssh_client_config') | community.general.lists_mergeby('host') }}"
-        ssh_client_config_block: "{{ lookup('aggregated_profile_var', 'ssh_client_config_block') | flatten }}"
+        ssh_client_config: "{{ lookup('aggregated_profile_var', 'ssh_client_config', all_profiles=True) | community.general.lists_mergeby('host') }}"
+        ssh_client_config_block: "{{ lookup('aggregated_profile_var', 'ssh_client_config_block', all_profiles=True) | flatten }}"
 
     - name: Set up gitconfig (aggregated from all profiles)
       role: gitconfig
@@ -260,13 +260,13 @@
       role: json_config
       tags: [json-config, coding-agents]
       vars:
-        json_configs: "{{ lookup('aggregated_profile_var', 'json_configs') | flatten }}"
+        json_configs: "{{ lookup('aggregated_profile_var', 'json_configs', all_profiles=True) | flatten }}"
 
     - name: Apply YAML config settings (aggregated from all profiles)
       role: yaml_config
       tags: [yaml-config]
       vars:
-        yaml_configs: "{{ lookup('aggregated_profile_var', 'yaml_configs') | flatten }}"
+        yaml_configs: "{{ lookup('aggregated_profile_var', 'yaml_configs', all_profiles=True) | flatten }}"
 
   tasks:
     - name: Install mise tools if mise cli is installed
@@ -300,7 +300,7 @@
         apply:
           tags: [agent-instructions, coding-agents]
       vars:
-        agent_instructions_destinations: "{{ lookup('aggregated_profile_var', 'agent_instructions_destinations') | flatten }}"
+        agent_instructions_destinations: "{{ lookup('aggregated_profile_var', 'agent_instructions_destinations', all_profiles=True) | flatten }}"
 
     - name: Install Claude Code plugins (aggregated from all profiles)
       tags: [claude-plugins, coding-agents]
@@ -309,8 +309,8 @@
         apply:
           tags: [claude-plugins, coding-agents]
       vars:
-        claude_plugin_marketplaces: "{{ lookup('aggregated_profile_var', 'claude_plugin_marketplaces') | community.general.lists_mergeby('name') }}"
-        claude_plugins: "{{ lookup('aggregated_profile_var', 'claude_plugins') | community.general.lists_mergeby('name') }}"
+        claude_plugin_marketplaces: "{{ lookup('aggregated_profile_var', 'claude_plugin_marketplaces', all_profiles=True) | community.general.lists_mergeby('name') }}"
+        claude_plugins: "{{ lookup('aggregated_profile_var', 'claude_plugins', all_profiles=True) | community.general.lists_mergeby('name') }}"
 
     - name: "[ Summary] Check for Mac App Store errors file"
       tags: [always]

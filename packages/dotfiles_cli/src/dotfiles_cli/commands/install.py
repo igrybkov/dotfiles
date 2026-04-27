@@ -187,14 +187,21 @@ def install(
 
     available_profiles = get_all_profile_names()
 
+    # Always resolve the full enabled set (used by all_profiles=True lookups in Ansible)
+    all_enabled_selection = get_active_profiles()
+    all_enabled_profiles = all_enabled_selection.resolve(available_profiles)
+
     if profile:
         # Join multiple -p flags with commas (e.g., -p common -p work -> "common,work")
         profiles_str = ",".join(profile)
         selection = parse_profile_selection(profiles_str)
     else:
-        selection = get_active_profiles()
+        selection = all_enabled_selection
 
     active_profiles = selection.resolve(available_profiles)
+
+    if not all_enabled_profiles:
+        all_enabled_profiles = active_profiles
 
     if not active_profiles:
         click.echo(
@@ -345,11 +352,18 @@ def install(
             limit_str = ",".join(limit_profiles + ["localhost"])
             click.echo(f"Running with profiles: {', '.join(active_profiles)}")
 
+            # Always pass the full enabled profile set so all_profiles=True lookups
+            # in Ansible can aggregate from all enabled profiles (not just the -p subset).
+            all_enabled_str = ",".join(
+                p.replace("-", "_") for p in all_enabled_profiles
+            )
+            become_extravars["dotfiles_enabled_profiles"] = all_enabled_str
+
             r = ansible_runner.run(
                 private_data_dir=tmpdir,
                 project_dir=DOTFILES_DIR,
                 envvars=envvars,
-                extravars=become_extravars if become_extravars else None,
+                extravars=become_extravars,
                 playbook="playbook.yml",
                 limit=limit_str,
                 tags=",".join(tags) if tags else None,

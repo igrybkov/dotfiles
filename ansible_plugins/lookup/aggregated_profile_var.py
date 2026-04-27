@@ -41,10 +41,25 @@ options:
     description: Default value if variable not found in any profile. Used with first, last, and boolean strategies.
     type: raw
     default: null
+  all_profiles:
+    description: >
+      When true, ignore ansible_limit and aggregate from all *enabled* profile hosts
+      (read from the dotfiles_enabled_profiles extra var set by the CLI).
+      Use this for config-file aggregations (gitignore, SSH config, MCP servers, etc.)
+      where a partial result from only the -p selected profiles would overwrite a complete
+      file with incomplete content. Leave false (the default) for package-install
+      aggregations where installing a subset is safe.
+      Only profiles the user has enabled are included; disabled profiles on disk are not.
+    type: bool
+    default: false
 notes:
   - Parses ansible_limit to get active profiles (e.g., --limit common,work,localhost).
   - Falls back to all hosts in all group if no limit is set.
   - Profiles are sorted by profile_priority variable (ascending).
+  - all_profiles=true reads dotfiles_enabled_profiles extra var (set by CLI); falls back
+    to ansible_limit if that var is absent (e.g. direct ansible invocation).
+  - Use all_profiles=true for destructive aggregations (config file writes) to avoid
+    partial overwrite when running with -p to limit profiles.
 """
 
 EXAMPLES = """
@@ -98,6 +113,11 @@ EXAMPLES = """
 - name: Check if no profiles want verbose output
   set_fact:
     quiet_mode: "{{ lookup('aggregated_profile_var', 'verbose_output', merge='none', default=true) }}"
+
+# Aggregate from ALL profiles regardless of --limit (use for config file writes)
+- name: Get gitignore entries from every profile (not just selected ones)
+  set_fact:
+    all_hosts: "{{ lookup('aggregated_profile_var', '_hosts', all_profiles=True) }}"
 """
 
 RETURN = """
@@ -136,6 +156,7 @@ class LookupModule(LookupBase):
         # Get options
         merge_strategy = kwargs.get("merge", "list")
         default_value = kwargs.get("default")
+        use_all_profiles = kwargs.get("all_profiles", False)
 
         # Validate merge strategy
         valid_strategies = (
@@ -154,8 +175,26 @@ class LookupModule(LookupBase):
                 f"Valid options: {', '.join(valid_strategies)}"
             )
 
-        # Build sorted host list from active profiles
-        hosts = self._get_profile_hosts(active_profiles, groups, hostvars)
+        if use_all_profiles:
+            # Use dotfiles_enabled_profiles (passed by CLI as extra var) so we get
+            # all enabled profiles on this machine, not all discovered profiles on disk.
+            # This prevents disabled profiles (e.g. home-network on a work machine) from
+            # being included, while still ignoring the -p narrowing from ansible_limit.
+            enabled_var = variables.get("dotfiles_enabled_profiles")
+            if enabled_var:
+                profiles_for_lookup = [
+                    p.strip()
+                    for p in enabled_var.split(",")
+                    if p.strip() and p.strip() != "localhost"
+                ]
+            else:
+                # Fallback: no extra var means running outside the CLI (e.g. direct ansible call)
+                # — use the limit as-is, same as all_profiles=False.
+                profiles_for_lookup = active_profiles
+        else:
+            profiles_for_lookup = active_profiles
+
+        hosts = self._get_profile_hosts(profiles_for_lookup, groups, hostvars)
 
         results = []
         for term in terms:

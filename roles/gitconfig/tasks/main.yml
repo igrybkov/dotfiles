@@ -6,7 +6,7 @@
 
 - name: "[🔧 gitconfig] Get sorted profile hosts"
   ansible.builtin.set_fact:
-    _sorted_hosts: "{{ lookup('aggregated_profile_var', '_hosts') }}"
+    _sorted_hosts: "{{ lookup('aggregated_profile_var', '_hosts', all_profiles=True) }}"
 
 # ==============================================================================
 # Collect gitconfig fragments from all profiles
