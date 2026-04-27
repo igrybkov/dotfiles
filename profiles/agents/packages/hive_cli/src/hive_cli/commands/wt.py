@@ -32,6 +32,7 @@ from ..git import (
     worktree_exists,
 )
 from ..utils import (
+    WORKDIR_CLEAR,
     FuzzyItem,
     confirm,
     error,
@@ -1066,7 +1067,10 @@ def _interactive_ensure(
                     current_agent=selected_agent,
                     current_override=rt.workdir,
                 )
-                if new_workdir is not None:
+                if new_workdir is WORKDIR_CLEAR:
+                    rt.workdir = None
+                    rt.workdir_extras_override = None
+                elif new_workdir is not None:
                     rt.workdir = new_workdir
                     # Clear any stale extras override; computed at launch time.
                     rt.workdir_extras_override = None

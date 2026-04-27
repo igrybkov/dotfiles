@@ -29,7 +29,7 @@ from .terminal import (
     warn,
 )
 from .tty import confirm, read_line_from_tty, read_single_key
-from .workdir import select_workdir
+from .workdir import WORKDIR_CLEAR, select_workdir
 from .zellij import (
     is_running_in_zellij,
     rebuild_pane_title,
@@ -74,6 +74,7 @@ __all__ = [
     "select_agent",
     "select_editor",
     "select_workdir",
+    "WORKDIR_CLEAR",
     "success",
     "warn",
 ]
