@@ -13,11 +13,10 @@ from unittest.mock import patch
 
 import pytest
 
-pytestmark = pytest.mark.skipif(
-    sys.platform != "darwin", reason="macOS login-keychain backend is macOS-only"
-)
+if sys.platform != "darwin":
+    pytest.skip("macOS login-keychain backend is macOS-only", allow_module_level=True)
 
-from dotfiles_cli.vault.backends.macos import MacOSKeyringBackend  # noqa: E402
+from dotfiles_cli.vault.backends.macos import MacOSKeyringBackend
 
 
 @pytest.fixture
