@@ -82,7 +82,9 @@
     path: "{{ item.path }}"
   loop: "{{ pipx_packages | selectattr('path', 'defined') | list }}"
   register: _pipx_local_paths
-  when: pipx_packages is defined and pipx_packages | length > 0
+  when:
+    - pipx_packages is defined and pipx_packages | length > 0
+    - item.state | default('present') != 'absent'
 
 - name: "[🐍] Fail if local package directory does not exist"
   ansible.builtin.fail:
@@ -118,12 +120,25 @@
   when:
     - pipx_packages is defined and pipx_packages | length > 0
     - uv_check.rc == 0
+    - item.state | default('present') != 'absent'
   # uv re-resolves deps every run; report changed only when packages were actually
   # installed or removed (stderr shows "Installed N packages" / "Uninstalled N packages").
   # A steady-state run prints "Checked N packages" and no package markers.
   changed_when: >-
     _uv_install_result.stderr is search('(Installed|Uninstalled) \d+ package')
   register: _uv_install_result
+
+- name: "[⚡ uv] Uninstall absent local packages"
+  ansible.builtin.command:
+    cmd: "{{ uv_check.stdout }} tool uninstall {{ item.name }}"
+  loop: "{{ pipx_packages | selectattr('path', 'defined') | list }}"
+  when:
+    - pipx_packages is defined and pipx_packages | length > 0
+    - uv_check.rc == 0
+    - item.state | default('present') == 'absent'
+  register: _uv_uninstall_result
+  failed_when: _uv_uninstall_result.rc != 0 and 'is not installed' not in (_uv_uninstall_result.stderr | default(''))
+  changed_when: _uv_uninstall_result.rc == 0
 
 # --- pipx fallback (when uv not available) ---
 - name: "[🐍 pipx] Install local packages (editable) - fallback"
