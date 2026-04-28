@@ -154,7 +154,8 @@ json_configs:
           - "Bash(basename *)"
           - "Bash(dirname *)"
       enabledPlugins:
-        pyright-lsp@claude-plugins-official: true
+        pyright-lsp@claude-plugins-official: false
+        basedpyright-lsp@custom-lsp: true
         typescript-lsp@claude-plugins-official: true
         ralph-wiggum@claude-plugins-official: true
         ansible-lsp@custom-lsp: true
@@ -206,7 +207,9 @@ yaml_configs:
 # npm packages for LSP language servers (used by Claude Code LSP plugins)
 npm_packages:
   - name: "@ansible/ansible-language-server"
+  - name: basedpyright
   - name: pyright
+    state: absent
   - name: typescript-language-server
   - name: typescript
 
@@ -220,6 +223,9 @@ claude_plugin_marketplaces:
 # Claude Code plugins (via claude_plugins role)
 claude_plugins:
   - name: pyright-lsp
+    state: absent
+  - name: basedpyright-lsp
+    marketplace: custom-lsp
   - name: typescript-lsp
   - name: ralph-wiggum
   - name: ansible-lsp

@@ -49,6 +49,28 @@
           }
         }
       }
+    },
+    {
+      "name": "basedpyright-lsp",
+      "description": "Python language server (basedpyright) with auto .venv detection",
+      "version": "1.0.0",
+      "author": {
+        "name": "dotfiles"
+      },
+      "source": "./plugins/basedpyright-lsp",
+      "category": "development",
+      "lspServers": {
+        "basedpyright": {
+          "command": "basedpyright-langserver",
+          "args": [
+            "--stdio"
+          ],
+          "extensionToLanguage": {
+            ".py": "python",
+            ".pyi": "python"
+          }
+        }
+      }
     }
   ]
 }
