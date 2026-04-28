@@ -1,0 +1,8 @@
+---
+- name: "[⬇ github_binary] Install/update {{ _gh_bin.name }}"
+  ansible.builtin.include_tasks:
+    file: install_one.yml
+  loop: "{{ github_binaries }}"
+  loop_control:
+    loop_var: _gh_bin
+    label: "{{ _gh_bin.name }}"

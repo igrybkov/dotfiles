@@ -1,0 +1,92 @@
+---
+# Install or update a single binary from a GitHub release.
+# Called in a loop from main.yml with loop_var: _gh_bin
+#
+# Required fields on _gh_bin:
+#   name: binary filename
+#   repo: GitHub repo (owner/repo)
+#
+# Optional fields:
+#   type: binary (default) | tarball
+#   asset: single asset name for all platforms
+#   asset_darwin: macOS asset (any arch)
+#   asset_darwin_arm64: macOS ARM64 asset (takes precedence over asset_darwin)
+#   asset_darwin_x86_64: macOS x86_64 asset (takes precedence over asset_darwin)
+#   asset_linux: Linux asset
+
+- name: "[⬇ github_binary] Get latest release tag for {{ _gh_bin.name }}"
+  ansible.builtin.command: >
+    gh release view --repo {{ _gh_bin.repo }} --json tagName -q .tagName
+  register: _gh_latest_tag
+  changed_when: false
+
+- name: "[⬇ github_binary] Read installed version file for {{ _gh_bin.name }}"
+  ansible.builtin.slurp:
+    src: "{{ github_binary_install_dir }}/.{{ _gh_bin.name }}.version"
+  register: _gh_version_file
+  failed_when: false
+
+- name: "[⬇ github_binary] Set version facts for {{ _gh_bin.name }}"
+  ansible.builtin.set_fact:
+    _gh_latest: "{{ _gh_latest_tag.stdout | trim }}"
+    _gh_installed: "{{ (_gh_version_file.content | b64decode | trim) if _gh_version_file.content is defined else '' }}"
+    _gh_is_darwin: "{{ hostvars['localhost']['ansible_facts']['system'] == 'Darwin' }}"
+    _gh_is_arm64: "{{ hostvars['localhost']['ansible_facts']['architecture'] == 'arm64' }}"
+
+- name: "[⬇ github_binary] Resolve asset name for {{ _gh_bin.name }}"
+  ansible.builtin.set_fact:
+    _gh_asset: >-
+      {%- if _gh_bin.asset is defined -%}
+        {{ _gh_bin.asset }}
+      {%- elif _gh_is_darwin and _gh_bin.asset_darwin_arm64 is defined and _gh_is_arm64 -%}
+        {{ _gh_bin.asset_darwin_arm64 }}
+      {%- elif _gh_is_darwin and _gh_bin.asset_darwin_x86_64 is defined and not _gh_is_arm64 -%}
+        {{ _gh_bin.asset_darwin_x86_64 }}
+      {%- elif _gh_is_darwin and _gh_bin.asset_darwin is defined -%}
+        {{ _gh_bin.asset_darwin }}
+      {%- else -%}
+        {{ _gh_bin.asset_linux }}
+      {%- endif -%}
+
+- name: "[⬇ github_binary] Already up to date: {{ _gh_bin.name }}"
+  ansible.builtin.debug:
+    msg: "{{ _gh_bin.name }} {{ _gh_latest }} is already installed — skipping."
+  when: _gh_latest == _gh_installed
+
+- name: "[⬇ github_binary] Ensure install dir exists for {{ _gh_bin.name }}"
+  ansible.builtin.file:
+    path: "{{ github_binary_install_dir }}"
+    state: directory
+    mode: "0755"
+  when: _gh_latest != _gh_installed
+
+- name: "[⬇ github_binary] Download binary: {{ _gh_bin.name }}"
+  ansible.builtin.get_url:
+    url: "https://github.com/{{ _gh_bin.repo }}/releases/download/{{ _gh_latest }}/{{ _gh_asset }}"
+    dest: "{{ github_binary_install_dir }}/{{ _gh_bin.name }}"
+    mode: "0755"
+    force: true
+  when: _gh_latest != _gh_installed and (_gh_bin.type | default('binary')) == 'binary'
+
+- name: "[⬇ github_binary] Download and extract tarball: {{ _gh_bin.name }}"
+  ansible.builtin.shell: |
+    set -e
+    TMPDIR=$(mktemp -d)
+    trap "rm -rf $TMPDIR" EXIT
+    gh release download "{{ _gh_latest }}" \
+      --repo {{ _gh_bin.repo }} \
+      --pattern "{{ _gh_asset }}" \
+      --dir "$TMPDIR" \
+      --clobber
+    tar xzf "$TMPDIR/{{ _gh_asset }}" -C "$TMPDIR"
+    mv "$TMPDIR/{{ _gh_bin.name }}" {{ github_binary_install_dir }}/{{ _gh_bin.name }}
+    chmod 755 {{ github_binary_install_dir }}/{{ _gh_bin.name }}
+  when: _gh_latest != _gh_installed and (_gh_bin.type | default('binary')) == 'tarball'
+  changed_when: true
+
+- name: "[⬇ github_binary] Write version file: {{ _gh_bin.name }}"
+  ansible.builtin.copy:
+    content: "{{ _gh_latest }}\n"
+    dest: "{{ github_binary_install_dir }}/.{{ _gh_bin.name }}.version"
+    mode: "0644"
+  when: _gh_latest != _gh_installed
