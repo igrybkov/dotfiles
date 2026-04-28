@@ -9,7 +9,7 @@ from typing import Any
 
 from mcp.types import TextContent, Tool
 
-from outlook_mcp.client import MailClient
+from apple_mail_mcp.client import MailClient
 
 logger = logging.getLogger(__name__)
 

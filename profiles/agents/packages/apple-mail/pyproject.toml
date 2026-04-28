@@ -18,7 +18,7 @@ dependencies = [
   "mcp>=1",
 ]
 
-scripts.apple-mail-mcp = "outlook_mcp.server:run"
+scripts.apple-mail-mcp = "apple_mail_mcp.server:run"
 
 [tool.hatch.build.targets.wheel]
-packages = [ "outlook_mcp" ]
+packages = [ "apple_mail_mcp" ]

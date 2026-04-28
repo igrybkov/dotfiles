@@ -14,8 +14,8 @@ from mcp.server.stdio import stdio_server
 from mcp.types import ClientCapabilities, ElicitationCapability, TextContent
 from pydantic import BaseModel
 
-from outlook_mcp.client import MailClient
-from outlook_mcp.tools import get_outlook_tools, handle_outlook_tool
+from apple_mail_mcp.client import MailClient
+from apple_mail_mcp.tools import get_outlook_tools, handle_outlook_tool
 
 log_file = os.getenv(
     "APPLE_MAIL_LOG_FILE", os.path.expanduser("~/Library/Logs/apple-mail-mcp.log")
