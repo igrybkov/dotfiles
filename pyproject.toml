@@ -21,7 +21,7 @@ dependencies = [
   # Cloud providers
   "boto3~=1.42.21",
   # Security
-  "certifi~=2026.2.25",
+  "certifi~=2026.4.22",
   # Workspace packages
   "dotfiles-cli",
   "dotfiles-profile-discovery",
