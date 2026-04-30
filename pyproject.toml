@@ -19,7 +19,7 @@ dependencies = [
   "ansible~=13.6.0",
   "ansible-runner~=2.4.2",
   # Cloud providers
-  "boto3~=1.42.21",
+  "boto3~=1.43.0",
   # Security
   "certifi~=2026.4.22",
   # Workspace packages
