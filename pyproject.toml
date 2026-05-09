@@ -26,7 +26,7 @@ dependencies = [
   "dotfiles-cli",
   "dotfiles-profile-discovery",
   "mitogen~=0.3.36",
-  "paramiko~=4.0.0",
+  "paramiko~=5.0.0",
   "symlink-dotfiles",
 ]
 
