@@ -222,17 +222,52 @@ layout {
         }
     }
 
-    // Narrow-window variant: chat panes collapse into one stack.
-    // Toggle with Alt+] / Alt+[. min_panes=7 only matches the two chat
-    // tabs (11 and 10 panes including plugins); other tabs cap at 6.
+    // Narrow-window variant: chats collapse into a single stack ordered
+    // c1..c8 (or c9..c16) and, for Tab 1, status pinned to the bottom.
+    //
+    // Each slot declares the matching pane's exact command + args (and
+    // start_suspended where applicable) so zellij's first-pass run
+    // matcher pins each existing pane to the slot of the same identity.
+    // Without this, panes would slot in by breadth-first enumeration of
+    // the wide layout's tree, producing the interleaved odd/even order
+    // (c1, c3, c5, c7, c2, c4, c6, c8).
     swap_tiled_layout name="narrow" {
-        // Tab 1: chats stacked at top, status pinned to bottom.
-        // Status is matched by its exact command (zellij's first-pass
-        // matcher) so the slot survives even with the `children` stack.
+        // Tab 1 "Chats 1-8": c1..c8 stacked sequentially, status pinned.
         tab exact_panes=11 {
             pane split_direction="horizontal" {
                 pane stacked=true {
-                    children
+                    pane name="c1: Anton" {
+                        command "fish"
+                        args "-c" "env HIVE_PANE_ID=1 HIVE_PANE_LABEL=Anton hive run --restart"
+                    }
+                    pane name="c2: Bohdan" start_suspended=true {
+                        command "fish"
+                        args "-c" "env HIVE_PANE_ID=2 HIVE_PANE_LABEL=Bohdan hive run --restart"
+                    }
+                    pane name="c3: Chris" start_suspended=true {
+                        command "fish"
+                        args "-c" "env HIVE_PANE_ID=3 HIVE_PANE_LABEL=Chris hive run --restart"
+                    }
+                    pane name="c4: Dmytro" start_suspended=true {
+                        command "fish"
+                        args "-c" "env HIVE_PANE_ID=4 HIVE_PANE_LABEL=Dmytro hive run --restart"
+                    }
+                    pane name="c5: Emily" start_suspended=true {
+                        command "fish"
+                        args "-c" "env HIVE_PANE_ID=5 HIVE_PANE_LABEL=Emily hive run --restart"
+                    }
+                    pane name="c6: Frank" start_suspended=true {
+                        command "fish"
+                        args "-c" "env HIVE_PANE_ID=6 HIVE_PANE_LABEL=Frank hive run --restart"
+                    }
+                    pane name="c7: Grygoriy" start_suspended=true {
+                        command "fish"
+                        args "-c" "env HIVE_PANE_ID=7 HIVE_PANE_LABEL=Grygoriy hive run --restart"
+                    }
+                    pane name="c8: Henry" start_suspended=true {
+                        command "fish"
+                        args "-c" "env HIVE_PANE_ID=8 HIVE_PANE_LABEL=Henry hive run --restart"
+                    }
                 }
                 pane name="status" size="20%" {
                     command "fish"
@@ -240,10 +275,41 @@ layout {
                 }
             }
         }
-        // Fallback (Tab 2, or Tab 1 with closed panes): single stack.
-        tab min_panes=7 {
+        // Tab 2 "Chats 9-16": c9..c16 stacked sequentially.
+        tab exact_panes=10 {
             pane stacked=true {
-                children
+                pane name="c9: Ihor" start_suspended=true {
+                    command "fish"
+                    args "-c" "env HIVE_PANE_ID=9 HIVE_PANE_LABEL=Ihor hive run --restart"
+                }
+                pane name="c10: Jake" start_suspended=true {
+                    command "fish"
+                    args "-c" "env HIVE_PANE_ID=10 HIVE_PANE_LABEL=Jake hive run --restart"
+                }
+                pane name="c11: Kateryna" start_suspended=true {
+                    command "fish"
+                    args "-c" "env HIVE_PANE_ID=11 HIVE_PANE_LABEL=Kateryna hive run --restart"
+                }
+                pane name="c12: Liam" start_suspended=true {
+                    command "fish"
+                    args "-c" "env HIVE_PANE_ID=12 HIVE_PANE_LABEL=Liam hive run --restart"
+                }
+                pane name="c13: Mykola" start_suspended=true {
+                    command "fish"
+                    args "-c" "env HIVE_PANE_ID=13 HIVE_PANE_LABEL=Mykola hive run --restart"
+                }
+                pane name="c14: Noah" start_suspended=true {
+                    command "fish"
+                    args "-c" "env HIVE_PANE_ID=14 HIVE_PANE_LABEL=Noah hive run --restart"
+                }
+                pane name="c15: Orest" start_suspended=true {
+                    command "fish"
+                    args "-c" "env HIVE_PANE_ID=15 HIVE_PANE_LABEL=Orest hive run --restart"
+                }
+                pane name="c16: Petro" start_suspended=true {
+                    command "fish"
+                    args "-c" "env HIVE_PANE_ID=16 HIVE_PANE_LABEL=Petro hive run --restart"
+                }
             }
         }
     }
