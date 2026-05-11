@@ -162,6 +162,7 @@ json_configs:
         marksman-lsp@custom-lsp: true
         plannotator@plannotator: true
       defaultMode: "auto"
+      advisorModel: opus
       env:
         CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: "1"
       statusLine:
