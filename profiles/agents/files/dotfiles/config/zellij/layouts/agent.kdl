@@ -220,6 +220,40 @@ layout {
         }
     }
 
+    // Narrow-window variant for the two chat tabs: collapse the
+    // two-column layout into a single stack. Toggle with Alt+] / Alt+[.
+    swap_tiled_layout name="narrow" {
+        // Tab 1 "Chats 1-8": c1–c8 stacked, status pinned to bottom.
+        tab exact_panes=9 {
+            pane split_direction="horizontal" {
+                pane stacked=true {
+                    pane
+                    pane
+                    pane
+                    pane
+                    pane
+                    pane
+                    pane
+                    pane
+                }
+                pane size="20%"
+            }
+        }
+        // Tab 2 "Chats 9-16": all 8 chats in a single stack.
+        tab exact_panes=8 {
+            pane stacked=true {
+                pane
+                pane
+                pane
+                pane
+                pane
+                pane
+                pane
+                pane
+            }
+        }
+    }
+
     swap_floating_layout {
         floating_panes {
             pane x="17%" y="17%" width="65%" height="65%"
