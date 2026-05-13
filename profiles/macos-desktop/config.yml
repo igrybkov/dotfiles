@@ -32,6 +32,7 @@ cask_packages:
   - name: google-chrome
   - name: handy
   - name: hazel
+  - name: rectangle-pro
   - name: obsidian
   - name: telegram
   - name: vlc
@@ -47,6 +48,7 @@ mas_packages:
     id: 1033342465
   - name: Magnet
     id: 441258766
+    state: absent
   - name: Numbers
     id: 409203825
   - name: MindNode
