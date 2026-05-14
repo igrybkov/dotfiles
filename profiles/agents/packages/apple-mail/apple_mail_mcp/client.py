@@ -227,6 +227,60 @@ function main(args) {
 }
 """
 
+JXA_EDIT_DRAFT = r"""
+function main(args) {
+  const Mail = Application("Mail");
+  const acct = Mail.accounts.byName(args.account);
+  const drafts = acct.mailboxes.byName("Drafts");
+
+  // Find the existing draft
+  const hits = drafts.messages.whose({ messageId: args.message_id })();
+  if (!hits || hits.length === 0) return { error: "draft not found" };
+  const old = hits[0];
+
+  // Read current values (before deleting)
+  const curSubject = old.subject();
+  let curBody = "";
+  try { curBody = old.content(); } catch(e) {}
+  const curTo = [];
+  try { for (const r of old.toRecipients()) curTo.push(r.address()); } catch(e) {}
+  const curCc = [];
+  try { for (const r of old.ccRecipients()) curCc.push(r.address()); } catch(e) {}
+
+  // Merge: use provided values where given, keep current where not
+  const newSubject = args.subject !== undefined ? args.subject : curSubject;
+  const newBody    = args.body    !== undefined ? args.body    : curBody;
+  const newTo      = args.to      !== undefined ? args.to      : curTo;
+  const newCc      = args.cc      !== undefined ? args.cc      : curCc;
+
+  // Delete old draft (moves to Trash)
+  try { Mail.delete(old); } catch(e) {}
+
+  // Create replacement draft
+  const d = Mail.OutgoingMessage({ subject: newSubject, content: newBody, visible: false });
+  Mail.outgoingMessages.push(d);
+  for (const addr of newTo) {
+    d.toRecipients.push(Mail.Recipient({ address: addr }));
+  }
+  for (const addr of newCc) {
+    d.ccRecipients.push(Mail.Recipient({ address: addr }));
+  }
+  d.save();
+  delay(1);
+
+  // Find the newly saved draft (re-query mailbox after save)
+  try {
+    const drafts2 = acct.mailboxes.byName("Drafts");
+    const cands = drafts2.messages.whose({ subject: newSubject })();
+    if (cands && cands.length > 0) {
+      const m = cands[cands.length - 1];
+      return { message_id: m.messageId(), subject: m.subject(), mailbox: "Drafts" };
+    }
+  } catch(e) {}
+  return { message_id: "", warning: "updated but not found in Drafts yet" };
+}
+"""
+
 
 class MailClient:
     def __init__(self, account: str | None = None) -> None:
@@ -357,3 +411,40 @@ class MailClient:
             JXA_DELETE_DRAFT, {"account": resolved_account, "message_id": message_id}
         )
         return result or {"deleted": 0}
+
+    async def edit_draft(
+        self,
+        message_id: str,
+        to: str | list[str] | None = None,
+        subject: str | None = None,
+        body: str | None = None,
+        cc: str | list[str] | None = None,
+        account: str | None = None,
+    ) -> dict:
+        def _split(v):
+            if v is None:
+                return None
+            if isinstance(v, list):
+                return [a.strip() for a in v if a and a.strip()]
+            return [a.strip() for a in str(v).split(",") if a.strip()]
+
+        resolved_account = account or self.account
+        if not resolved_account:
+            raise ValueError(
+                "account is required for edit_draft when multiple Mail accounts exist"
+            )
+        args: dict = {"account": resolved_account, "message_id": message_id}
+        if subject is not None:
+            args["subject"] = subject
+        if body is not None:
+            args["body"] = body
+        split_to = _split(to)
+        if split_to is not None:
+            args["to"] = split_to
+        split_cc = _split(cc)
+        if split_cc is not None:
+            args["cc"] = split_cc
+        return await self._run(JXA_EDIT_DRAFT, args) or {
+            "message_id": "",
+            "warning": "updated but not found in Drafts yet",
+        }

@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 app = Server("apple-mail-mcp")
 _client: MailClient | None = None
 
-_DRAFT_TOOLS = {"mail_create_draft", "mail_delete_draft"}
+_DRAFT_TOOLS = {"mail_create_draft", "mail_delete_draft", "mail_edit_draft"}
 
 
 class _AccountChoice(BaseModel):

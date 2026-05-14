@@ -182,6 +182,44 @@ def get_outlook_tools() -> list[Tool]:
                 "required": ["message_id"],
             },
         ),
+        Tool(
+            name="mail_edit_draft",
+            description=(
+                "Edit an existing draft in the Drafts folder by its RFC Message-ID. "
+                "Only the fields you supply are changed; omitted fields keep their current values. "
+                "Returns the new message_id (the old one is invalidated). "
+                "When multiple Mail accounts exist, `account` is required unless the "
+                "client supports elicitation. "
+                "Use mail_get_accounts to discover available account names."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "message_id": {
+                        "type": "string",
+                        "description": "Message-ID of the draft to edit (from mail_create_draft).",
+                    },
+                    "to": {
+                        "type": "string",
+                        "description": "New recipient addresses, comma-separated (optional).",
+                    },
+                    "subject": {
+                        "type": "string",
+                        "description": "New subject line (optional).",
+                    },
+                    "body": {
+                        "type": "string",
+                        "description": "New plain-text body (optional).",
+                    },
+                    "cc": {
+                        "type": "string",
+                        "description": "New CC addresses, comma-separated (optional).",
+                    },
+                    **_ACCOUNT_PROP,
+                },
+                "required": ["message_id"],
+            },
+        ),
     ]
 
 
@@ -226,6 +264,15 @@ async def handle_outlook_tool(
         elif name == "mail_delete_draft":
             result = await client.delete_draft(
                 message_id=arguments["message_id"],
+                account=account,
+            )
+        elif name == "mail_edit_draft":
+            result = await client.edit_draft(
+                message_id=arguments["message_id"],
+                to=arguments.get("to"),
+                subject=arguments.get("subject"),
+                body=arguments.get("body"),
+                cc=arguments.get("cc"),
                 account=account,
             )
         else:
