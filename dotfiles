@@ -94,7 +94,7 @@ if needs_preparation; then
     # shellcheck disable=SC2317
     if [ -n "$DELAYED_OUTPUT" ]; then
       # shellcheck disable=SC2317
-      echo "$DELAYED_OUTPUT"
+      echo "$DELAYED_OUTPUT" >&2
     fi
   }
   # shellcheck disable=SC2329
@@ -134,7 +134,7 @@ if needs_preparation; then
     DELAYED_OUTPUT=""
   # Otherwise, print the captured output
   else
-    echo "$DELAYED_OUTPUT"
+    echo "$DELAYED_OUTPUT" >&2
     log
     DELAYED_OUTPUT=""
   fi
