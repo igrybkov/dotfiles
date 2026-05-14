@@ -237,7 +237,7 @@ color: green  # semantic color label
 ```
 Agents are symlinked to both `~/.claude/agents/` and `~/.cursor/agents/`.
 
-**Existing agents (10):**
+**Existing agents (11):**
 - **Engineering team roster** (dual-use: directly invokable via `Agent`, and spawned as teammates by the `agent-team` skill):
   - `product-manager` (Sonnet/yellow) — clarifies fuzzy requirements, drafts success criteria and scope
   - `business-analyst` (Sonnet/blue) — domain modeling, business rules, acceptance criteria
@@ -249,6 +249,7 @@ Agents are symlinked to both `~/.claude/agents/` and `~/.cursor/agents/`.
   - `qa-automation-engineer` (Sonnet/pink) — test strategy, test writing, adversarial review
   - `security-specialist` (Sonnet/red) — post-implementation audit: OWASP, findings report; does not fix
   - `devops-engineer` (Opus/magenta) — cloud, k8s, networking, IaC-first
+  - `tech-writer` (Sonnet/green) — documentation audit and authoring; uses MCP (Confluence, Obsidian, GitHub, Jira, Slack) to find docs wherever they live; spawned in discovery (audit) and post-implementation (update)
 - **Standalone helper:** `productivity-coach` (Opus/cyan)
 
 Engineering team agents are intentionally useful both as delegated subagents (via `Agent`) and as teammates in the `agent-team` skill — the subagent body is appended to the teammate's system prompt when spawned as a teammate.

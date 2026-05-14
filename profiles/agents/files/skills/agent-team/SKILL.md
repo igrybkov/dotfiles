@@ -48,8 +48,9 @@ Each role is backed by a subagent definition in `profiles/agents/files/agents/` 
 | **QA Engineer** | `qa-automation-engineer` | sonnet | Anything with meaningful test surface |
 | **Security Specialist** | `security-specialist` | sonnet | **After** implementation, for any code that handles user input, authn/authz, data storage/egress, external integrations, or secrets. Skip for pure internal refactors. |
 | **DevOps Engineer** | `devops-engineer` | opus | **Mandatory** for any task involving deployment topology, CI/CD, k8s/Helm, cloud infra, networking, autoscaling, secrets/IAM, multi-tenancy, IaC, container builds, observability. Bring them in during discovery, not post-hoc. |
+| **Tech Writer** | `tech-writer` | sonnet | Any task that changes a public-facing API, CLI interface, configuration schema, or user-visible behavior. Also for tasks where documentation is a primary deliverable. Audits what docs exist, identifies what is stale, and writes or updates the minimum necessary. Has access to all MCP tools (Confluence, Obsidian, GitHub, Jira, Slack) to discover documentation that lives outside the repo. |
 
-When spawning, **name teammates by role** (e.g. `pm`, `ba`, `ux`, `ui`, `tech-lead`, `architect`, `engineer`, `qa`, `security`, `devops`) so you can message them by name later. Clone engineers with suffixes when parallel tracks warrant it (`engineer-1`, `engineer-2`).
+When spawning, **name teammates by role** (e.g. `pm`, `ba`, `ux`, `ui`, `tech-lead`, `architect`, `engineer`, `qa`, `security`, `devops`, `writer`) so you can message them by name later. Clone engineers with suffixes when parallel tracks warrant it (`engineer-1`, `engineer-2`).
 
 **Tech Lead vs System Architect — don't conflate them:**
 - **Tech Lead** is hands-on and broad: codebase archaeology, estimates, pairing with BA, breaking down work, unblocking implementers. Present on almost every task.
@@ -59,6 +60,10 @@ When spawning, **name teammates by role** (e.g. `pm`, `ba`, `ux`, `ui`, `tech-le
 **UX vs UI — don't conflate them:**
 - **UX** is about the whole interaction: flag names, command order, error copy, confirmation prompts, output legibility, flow, defaults. Applies even if there's zero GUI.
 - **UI** is about the visual layer when there *is* a GUI. If the task is CLI-only, spawn UX, skip UI.
+
+**UX Designer vs Tech Writer — don't conflate them:**
+- **UX Designer** shapes the interaction surface: what the interface says and how it works. Produces UX decisions.
+- **Tech Writer** captures and maintains what the system *does* — in READMEs, docs, wikis, guides, and API references. Applies when there's a documentation audience (developers, operators, users) who needs to understand or act on the change. Skip for pure internal refactors with no user-facing or operator-visible behavior change.
 
 **Picking engineer model per task:** Match model to difficulty. Tricky algorithms, perf-critical paths, correctness-critical code, subtle debugging → `opus`. Well-scoped implementation of clear specs → `sonnet`. Straightforward parallelizable work like scaffolding or mechanical changes → `sonnet`. Don't spin up opus engineers for easy tasks, and don't starve hard tasks on sonnet.
 
@@ -73,6 +78,8 @@ Default discovery team:
 - **PM** (`product-manager`) — drafts requirements, open questions, success criteria, priorities
 - **UX Designer** (`ux-designer`) — maps out the user-facing surface (CLI flags, error states, output formats, GUI flows, docs) and names friction points. Spawn whenever the task touches any user interaction, which is most of the time.
 - **Tech Lead** (`tech-lead`) — investigates the existing codebase/system relevant to the task, estimates feasibility and effort, pairs with BA to ground domain analysis in what the code actually does, identifies risks and unknowns. Always present in discovery.
+
+**Add the Tech Writer** (`tech-writer`) **to discovery only when** the task is likely to produce a documentation change — meaning a developer using or operating the system would need to know something different after the change than before. Most changes don't clear this bar. When it does apply, the Tech Writer audits the existing documentation landscape (including external sources via MCP: Confluence, Obsidian, GitHub, Jira) and produces a map of what exists, what is stale, and what is missing — before any code is written.
 
 **Add the System Architect** (`system-architect`) **to discovery when:**
 - The task spans multiple components or services
@@ -141,6 +148,7 @@ Conservative default heuristics (use when Tech Lead hasn't recommended otherwise
 - **CLI or API ergonomics work**: no UI Specialist needed — UX Designer stays on through implementation to review flag names, error copy, output formats.
 - **Security-sensitive work** (auth, input handling, data storage, external integrations, secrets): Security Specialist is **mandatory** in the post-implementation phase. For especially sensitive work, also bring the Architect in upfront to cover security architecture before code is written.
 - **DevOps / infra work**: DevOps Engineer is **mandatory** — bring them in during discovery. For production-grade changes, also pair with Security Specialist and Architect.
+- **User-visible or operator-visible changes** (new CLI flags, API surface, config schema, behavior changes): consider spawning a Tech Writer. Most changes do not need documentation — a bug fix, a refactor, an internal restructuring rarely does. The bar is: would a developer using or operating the system need to know something different than before? If yes, spawn a writer. If no, skip. When in doubt, have the Tech Lead make the call after discovery.
 
 Explain the team shape to the user and get confirmation before spawning.
 
@@ -159,7 +167,15 @@ Tell teammates to:
 - If a teammate stalls, redirect or respawn.
 - Synthesize findings across teammates for the user.
 
-### 6. Post-implementation security review
+### 6. Post-implementation documentation update
+
+If a Tech Writer was part of the team, spawn them post-implementation to update docs against the finished code:
+
+> Spawn `writer` — use the `tech-writer` subagent type. Review the changes produced by this team (diff, new files, updated config). First determine whether a documentation change is actually warranted — most changes don't require one. If it is, audit existing documentation (local and external via MCP: Confluence, Obsidian, GitHub, Jira, Slack), then update or create the minimum necessary. Report: your warrant assessment, what you changed, and what you flagged for later.
+
+If no Tech Writer was involved in discovery, don't spawn one now just for completeness — only if the Tech Lead believes the change warrants it.
+
+### 7. Post-implementation security review
 
 Once implementation is done (or a significant reviewable slice is), spawn the Security Specialist to audit the new code **before** declaring the work complete:
 
@@ -169,9 +185,9 @@ After the Security Specialist reports, feed findings back to the implementation 
 
 Skip this phase only for pure internal refactors with no change in attack surface.
 
-### 7. Cleanup
+### 8. Cleanup
 
-When all tasks are done (including security remediation), run cleanup: `Clean up the team`.
+When all tasks are done (including security remediation and documentation updates), run cleanup: `Clean up the team`.
 
 ## Spawn command for the lead (you)
 
@@ -189,7 +205,7 @@ Start with discovery only. Spawn:
 Each teammate reports back to me when done. Do not start implementation. I will decide the rest of the team shape (including whether to bring in a System Architect and how many engineers at what model) after reviewing their reports and clarifying with the user.
 ```
 
-Add `architect` (use the `system-architect` subagent) to the initial spawn when the task is obviously design-heavy, cross-component, or security/reliability-critical. Add `devops` (use the `devops-engineer` subagent) when the task has any infra touchpoint. Drop `ux` only for pure internal refactors.
+Add `architect` (use the `system-architect` subagent) to the initial spawn when the task is obviously design-heavy, cross-component, or security/reliability-critical. Add `devops` (use the `devops-engineer` subagent) when the task has any infra touchpoint. Add `writer` (use the `tech-writer` subagent) only when a developer or operator would need to know something different after the change than before — most changes don't clear this bar. Drop `ux` only for pure internal refactors.
 
 ## Important notes
 
