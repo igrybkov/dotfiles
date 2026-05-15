@@ -211,7 +211,7 @@ jobs:
   # macOS integration tests (manual trigger only - expensive)
   molecule-macos:
     name: Molecule macOS Integration
-    runs-on: macos-15 # Apple Silicon runner
+    runs-on: macos-26 # Apple Silicon runner
     if: github.event_name == 'workflow_dispatch'
     steps:
       - name: Check out the codebase
