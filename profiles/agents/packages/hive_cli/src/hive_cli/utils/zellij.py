@@ -24,12 +24,23 @@ def rename_pane(name: str) -> None:
         This is a no-op if not running inside Zellij.
         Since Zellij 0.44.1, rename-pane replaces the entire pane title
         (including layout-defined names), so callers must pass the full name.
+
+        `zellij action rename-pane` defaults to the *focused* pane, which may
+        not be the pane this process runs in. We pass `--pane-id` explicitly
+        from $ZELLIJ_PANE_ID so the rename always targets our own pane.
     """
     if not is_running_in_zellij():
         return
 
     subprocess.run(
-        ["zellij", "action", "rename-pane", name],
+        [
+            "zellij",
+            "action",
+            "rename-pane",
+            "--pane-id",
+            get_runtime_settings().zellij_pane_id,
+            name,
+        ],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
@@ -54,7 +65,14 @@ def append_to_pane_title(value: str) -> bool:
         return False
 
     subprocess.run(
-        ["zellij", "action", "rename-pane", f" {value}"],
+        [
+            "zellij",
+            "action",
+            "rename-pane",
+            "--pane-id",
+            get_runtime_settings().zellij_pane_id,
+            f" {value}",
+        ],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )

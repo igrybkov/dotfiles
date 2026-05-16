@@ -359,6 +359,54 @@ class TestPaneStateManagement:
         assert state["custom_title"] == "New title"
 
 
+class TestRenamePane:
+    """Tests for the low-level rename_pane / append_to_pane_title wrappers.
+
+    Regression: rename-pane defaults to the focused pane, so we must pass
+    --pane-id explicitly with $ZELLIJ_PANE_ID to target our own pane.
+    """
+
+    def test_rename_pane_targets_current_pane(self, monkeypatch):
+        monkeypatch.setenv("ZELLIJ", "0")
+        monkeypatch.setenv("ZELLIJ_PANE_ID", "7")
+
+        from hive_cli.utils.zellij import rename_pane
+
+        with patch("hive_cli.utils.zellij.subprocess.run") as mock_run:
+            rename_pane("new title")
+
+        mock_run.assert_called_once()
+        cmd = mock_run.call_args[0][0]
+        assert cmd[:3] == ["zellij", "action", "rename-pane"]
+        assert "--pane-id" in cmd
+        assert cmd[cmd.index("--pane-id") + 1] == "7"
+        assert cmd[-1] == "new title"
+
+    def test_rename_pane_noop_outside_zellij(self, monkeypatch):
+        monkeypatch.delenv("ZELLIJ", raising=False)
+
+        from hive_cli.utils.zellij import rename_pane
+
+        with patch("hive_cli.utils.zellij.subprocess.run") as mock_run:
+            rename_pane("ignored")
+
+        mock_run.assert_not_called()
+
+    def test_append_to_pane_title_targets_current_pane(self, monkeypatch):
+        monkeypatch.setenv("ZELLIJ", "0")
+        monkeypatch.setenv("ZELLIJ_PANE_ID", "12")
+
+        from hive_cli.utils.zellij import append_to_pane_title
+
+        with patch("hive_cli.utils.zellij.subprocess.run") as mock_run:
+            assert append_to_pane_title("suffix") is True
+
+        cmd = mock_run.call_args[0][0]
+        assert "--pane-id" in cmd
+        assert cmd[cmd.index("--pane-id") + 1] == "12"
+        assert cmd[-1] == " suffix"
+
+
 class TestSetStatusCommand:
     """Tests for hive zellij set-status command."""
 
