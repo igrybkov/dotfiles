@@ -92,7 +92,7 @@ worktrees:
   #     if_exists: "pyproject.toml"
 
 # zellij:
-#   layout: "agent"              # Layout name, or omit for Zellij's default
+#   layout: "agent"              # Default. Set to null for Zellij's built-in default.
 #   session_name: "{repo}-{agent}"
 
 # github:

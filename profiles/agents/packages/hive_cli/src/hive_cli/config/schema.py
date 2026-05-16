@@ -135,13 +135,15 @@ class ZellijConfig(HiveBaseSettings):
     """Configuration for Zellij terminal multiplexer.
 
     Attributes:
-        layout: Layout name to use. If None, uses Zellij's default layout.
+        layout: Layout name to use. Defaults to "agent" (the multi-agent layout
+            shipped by the dotfiles agents profile). Set to None to use
+            Zellij's built-in default layout.
         session_name: Session name template.
     """
 
     model_config = SettingsConfigDict(env_prefix="HIVE_ZELLIJ_")
 
-    layout: str | None = None
+    layout: str | None = "agent"
     session_name: str = "{repo}"
 
 

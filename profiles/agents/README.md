@@ -28,7 +28,7 @@ The **`hive`** command is a Python CLI that provides a unified interface for age
 The hive CLI is the recommended way to interact with agents and worktrees. It provides better error handling, shell completion, and a consistent interface.
 
 ### Zellij Integration
-- Generic `agent.kdl` layout for multi-agent sessions
+- Generic `agent.kdl` layout for multi-agent sessions (default for `hive zellij`)
 - `zc` - Auto-detect and open agent in Zellij (shell script, works in any shell)
 - `zcc`, `zcu`, `zcp`, `zco`, `zcg` - Open specific agent in Zellij (fish functions)
 - `ai-code` - Run agent directly without Zellij (shell script, works in any shell)

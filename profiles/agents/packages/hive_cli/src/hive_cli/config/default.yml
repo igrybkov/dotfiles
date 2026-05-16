@@ -84,7 +84,7 @@ worktrees:
       if_exists: "pyproject.toml"
 
 zellij:
-  # layout: "agent"  # Optional: set to use a custom layout, omit for default
+  layout: "agent"  # Multi-agent layout shipped by the agents profile. Set to null for Zellij's built-in default.
   session_name: "{repo}"
 
 github:

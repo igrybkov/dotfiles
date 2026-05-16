@@ -249,8 +249,8 @@ worktrees:
 
 # Zellij terminal multiplexer configuration
 zellij:
-  # Layout name to use (optional, must exist in zellij config if specified)
-  # If not set, uses Zellij's default layout
+  # Layout name to use. Defaults to "agent" (the multi-agent layout shipped by
+  # the agents profile). Set to null to use Zellij's built-in default layout.
   # layout: "agent"
 
   # Session name template

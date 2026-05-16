@@ -608,7 +608,7 @@ worktrees:
 
 # Zellij terminal multiplexer configuration
 zellij:
-  # Layout name (optional, must exist in zellij config if specified)
+  # Layout name. Defaults to "agent". Set to null for Zellij's built-in default.
   # layout: "agent"
 
   # Session name template
@@ -796,7 +796,7 @@ The Zellij layout provides a complete multi-agent environment.
 
 **Layout Structure:**
 
-The `agent.kdl` layout includes these tabs:
+The `agent.kdl` layout (default for `hive zellij`) includes these tabs:
 
 | Tab | Purpose | Panes |
 |-----|---------|-------|
@@ -831,7 +831,7 @@ zc    # Auto-detect agent
 ```yaml
 # .hive.yml
 zellij:
-  layout: "agent"              # Use custom layout
+  layout: "agent"              # Default. Set to null for Zellij's built-in default.
   session_name: "{repo}-{agent}"  # Template for session name
 ```
 

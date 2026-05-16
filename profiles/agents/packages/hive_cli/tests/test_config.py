@@ -192,7 +192,7 @@ class TestLoadConfig:
         assert config.resume.enabled is False
         assert config.worktrees.enabled is True
         assert config.worktrees.parent_dir == "~/.worktrees/{repo}/{branch}"
-        assert config.zellij.layout is None  # No layout by default
+        assert config.zellij.layout == "agent"  # Default layout from default.yml
 
     def test_config_from_file(self, tmp_path, monkeypatch):
         """Loads config from file."""

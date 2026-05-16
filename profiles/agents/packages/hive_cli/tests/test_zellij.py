@@ -55,7 +55,7 @@ class TestZellijCommand:
     def test_zellij_launches_with_agent(
         self, cli_runner: CycloptsTestRunner, temp_git_repo
     ):
-        """Test zellij launches with correct session name (no layout by default)."""
+        """Test zellij launches with default 'agent' layout and correct session name."""
 
         def mock_which(cmd):
             if cmd in ["zellij", "claude"]:
@@ -72,8 +72,9 @@ class TestZellijCommand:
             assert call_args[0][0] == "zellij"
             cmd_list = call_args[0][1]
             assert cmd_list[0] == "zellij"
-            # No layout by default
-            assert "--layout" not in cmd_list
+            # Default layout is "agent"
+            assert "--layout" in cmd_list
+            assert cmd_list[cmd_list.index("--layout") + 1] == "agent"
             assert "attach" in cmd_list
             assert "--create" in cmd_list
             # Default session name is the repo name (no agent suffix)
