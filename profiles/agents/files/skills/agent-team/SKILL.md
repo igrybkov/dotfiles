@@ -1,6 +1,6 @@
 ---
 name: agent-team
-description: Launch a Claude Code agent team shaped like a standard engineering org (PM, BA, UX, tech lead, architect, engineers, QA, security, devops). Lead runs discovery first, then sizes the team. Use when a task would benefit from parallel exploration, multiple perspectives, or cross-role collaboration.
+description: Launch a Claude Code agent team shaped like a standard engineering org (PM, BA, UX, tech lead, architect, engineers, QA, security, devops). Lead runs discovery first, then sizes the team and hires custom specialists if the task warrants it. Use when a task would benefit from parallel exploration, multiple perspectives, or cross-role collaboration.
 allowed-tools:
   - Read
   - Glob
@@ -67,6 +67,91 @@ When spawning, **name teammates by role** (e.g. `pm`, `ba`, `ux`, `ui`, `tech-le
 
 **Picking engineer model per task:** Match model to difficulty. Tricky algorithms, perf-critical paths, correctness-critical code, subtle debugging → `opus`. Well-scoped implementation of clear specs → `sonnet`. Straightforward parallelizable work like scaffolding or mechanical changes → `sonnet`. Don't spin up opus engineers for easy tasks, and don't starve hard tasks on sonnet.
 
+## Hiring custom roles
+
+The roster above covers most teams, the same way a typical engineering org's job ladder covers most work. But real orgs hire specialists when a project warrants it — and your team should too. When discovery reveals a niche the standard roster doesn't fit, **hire a new role**: spawn a teammate using the closest base subagent and write a custom job description in the spawn prompt. Think of it as opening a requisition for a specialist contractor for the duration of this task.
+
+### How "hiring" works
+
+A custom hire is just a teammate built from three things:
+
+- **A base subagent** — picks the tooling allowlist, default model, and engineering instincts. Choose the closest fit:
+  - `software-engineer` — hands-on technical specialists (ML, perf, mobile, embedded, data, game engine, etc.)
+  - `system-architect` — design specialists (API schema designer, distributed systems reviewer, capacity-model architect)
+  - `ux-designer` — interaction specialists (i18n/l10n, voice/CLI grammar, accessibility flows)
+  - `ui-specialist` — visual specialists (design system curator, WCAG auditor)
+  - `security-specialist` — risk auditors (threat modeler, supply-chain reviewer, compliance officer)
+  - `devops-engineer` — infra specialists (SRE, cost engineer, observability designer, FinOps)
+  - `business-analyst` — domain specialists (compliance officer, legal reviewer, billing-rules analyst)
+  - `qa-automation-engineer` — test specialists (chaos engineer, performance test designer, fuzz harness author)
+- **A job description** — your spawn prompt frames the role. Treat it like a real job posting: one line on what the role is, one line on what they own, one line on what they don't own (handed back to standard roles), one line on how they should report back.
+- **A descriptive name** — drop the generic role suffix in favor of the specialty: `ml-engineer`, `db-specialist`, `perf-engineer`, `accessibility-auditor`, `i18n-specialist`, `compliance-officer`, `data-engineer`, `mobile-engineer`, `sre`. Names matter for routing later messages.
+
+### When to hire vs. use the standard roster
+
+Hire when the *thinking style* of the role is fundamentally different from a standard engineer reading a codebase — not just because the topic sounds specialized.
+
+Examples worth hiring for:
+
+| Scenario | Custom hire | Base subagent | Why hire instead of using standard |
+|----------|-------------|---------------|-------------------------------------|
+| New ML training pipeline / model eval refactor | `ml-engineer` | `software-engineer` (opus) | Standard engineer optimizes for code clarity; ML work demands reasoning in data drift, eval metrics, reproducibility, leakage |
+| Latency budget regression on hot path | `perf-engineer` | `software-engineer` (opus) | Most engineers optimize prematurely. A perf engineer profiles first, sets budgets, validates with measurement |
+| WCAG 2.2 AA audit before product launch | `accessibility-auditor` | `ui-specialist` | UI specialist covers components; an a11y auditor cares specifically about screen readers, contrast ratios, keyboard nav, focus order |
+| Adding RTL + 12 locales to an existing product | `i18n-specialist` | `ux-designer` | Translation pipelines, locale-specific formatting, plural rules, and RTL layouts are their own discipline |
+| GDPR / HIPAA / SOC2 review of a new data flow | `compliance-officer` | `business-analyst` or `security-specialist` | Standard security covers vulnerabilities; compliance covers legal data handling, retention, subject-access rights |
+| iOS-specific battery/lifecycle bug | `mobile-engineer` | `software-engineer` (opus) | Platform conventions (lifecycle, background modes, App Store rules) are specialist knowledge |
+| Slow query / index strategy on a 1B-row table | `db-specialist` | `software-engineer` (opus) or `system-architect` | Reads query plans, knows MVCC/locking, can design partitioning — not the same skill as backend coding |
+| Production incident postmortem + reliability hardening | `sre` | `devops-engineer` (opus) | DevOps builds infra; an SRE reasons about SLOs, error budgets, blast radius, runbooks |
+| GraphQL schema redesign across teams | `schema-architect` | `system-architect` | Schema design has its own grammar (nullability rules, federation, versioning) that's distinct from system design |
+| Open-source license audit on a vendored tree | `license-reviewer` | `business-analyst` | License compatibility is a focused legal-adjacent skill, not a general analyst task |
+| Cost runaway on cloud infra | `finops-engineer` | `devops-engineer` | Cost optimization needs unit-economics thinking, not just infra fluency |
+| Chaos / fault-injection test design | `chaos-engineer` | `qa-automation-engineer` | Failure-mode design is a specialist discipline distinct from normal test coverage |
+
+**Don't hire just because the topic sounds fancy.** If a standard `software-engineer` reading the codebase can do the work, don't dress them up with a custom title. Hire when the role's mental model genuinely differs from the standard subagent's body.
+
+### Tech Lead's role in hiring
+
+The Tech Lead recommends custom hires alongside team sizing. After discovery, ask:
+
+> Based on discovery, recommend the team. Specify standard roles (engineers, QA, etc.) and any **custom hires** the task warrants. For each custom hire, name the role, pick the base subagent, justify why a standard engineer wouldn't fit, and write a 2–4 sentence job description.
+
+Present custom hires to the user for confirmation the same way you confirm team size — don't hire silently. If the user pushes back ("just use a regular engineer"), respect it.
+
+### Spawn instruction template (custom hire)
+
+> Spawn `<role-name>` — use the `<base-subagent>` subagent (model: <opus|sonnet>).
+> **Role:** <one line on the specialty>.
+> **Owns:** <what this hire is responsible for on this task>.
+> **Does not own:** <what's out of scope, handed back to standard roles>.
+> **Report back with:** <expected deliverables and format>.
+
+### Worked examples
+
+**ML Engineer** for a model-quality regression:
+
+> Spawn `ml-engineer` — use the `software-engineer` subagent (model: opus).
+> **Role:** ML engineer specializing in training pipelines and evaluation. Reasons in terms of data distribution, drift, leakage, and metric design — not just code quality.
+> **Owns:** training loop refactor, eval metric definition, data preprocessing for the new model variant, reproducibility (seed control, deterministic ops).
+> **Does not own:** model serving infra (that's `devops`), product framing of "what counts as a regression" (that's `pm`), security review of the data pipeline (that's `security`).
+> **Report back with:** code changes, eval results table (baseline vs new variant on the held-out set, with confidence intervals), and a brief on any data quality issues uncovered.
+
+**SRE** for a recurring production incident:
+
+> Spawn `sre` — use the `devops-engineer` subagent (model: opus).
+> **Role:** Site Reliability Engineer. Reasons in SLOs, error budgets, blast radius, runbooks, and toil reduction. Treats every fix as a chance to remove a class of failure, not patch one instance.
+> **Owns:** postmortem authorship, SLO/SLI definition for the affected service, runbook updates, alerting changes, and identifying toil to automate.
+> **Does not own:** the implementation of the underlying fix (that's `engineer-1`), security implications of the failure mode (that's `security`).
+> **Report back with:** a postmortem (timeline, contributing factors, action items), proposed SLOs, and a prioritized list of toil-reduction work.
+
+**Accessibility Auditor** for a pre-launch a11y review:
+
+> Spawn `accessibility-auditor` — use the `ui-specialist` subagent (model: sonnet).
+> **Role:** Accessibility auditor specializing in WCAG 2.2 AA. Thinks in screen readers, contrast ratios, keyboard navigation, focus order, ARIA semantics — not just visual polish.
+> **Owns:** auditing the new flow against WCAG 2.2 AA, identifying violations with severity, and recommending fixes the UI specialist can implement.
+> **Does not own:** implementing the fixes (that's `ui`), broader interaction design (that's `ux`).
+> **Report back with:** a findings report (violation, WCAG criterion, severity, recommended fix) and a sign-off recommendation (ship / ship with caveats / block).
+
 ## Workflow
 
 ### 1. Discovery phase (small team)
@@ -126,7 +211,7 @@ Use `AskUserQuestion` for concrete decisions. Don't proceed to build the rest of
 
 **This is the Tech Lead's job to recommend.** After discovery, ask the `tech-lead` explicitly:
 
-> Based on discovery, recommend the capacity needed to deliver this effectively. Count engineers and justify parallelism. Specify the model (`opus` or `sonnet`) for each engineer based on the difficulty of their assigned track. If the work splits into N independent tracks, propose N engineers (clone with suffixes like `engineer-1`, `engineer-2`). If the work is sequential or small, propose a smaller team.
+> Based on discovery, recommend the capacity needed to deliver this effectively. Count engineers and justify parallelism. Specify the model (`opus` or `sonnet`) for each engineer based on the difficulty of their assigned track. If the work splits into N independent tracks, propose N engineers (clone with suffixes like `engineer-1`, `engineer-2`). If the work is sequential or small, propose a smaller team. Also recommend any **custom hires** (see "Hiring custom roles" above) the task warrants — name the role, pick the base subagent, and justify why a standard engineer would not fit.
 
 The Tech Lead should think about:
 - **Parallelism available**: how many independent tracks/modules/concerns can genuinely run in parallel without file conflicts?
@@ -207,6 +292,8 @@ Each teammate reports back to me when done. Do not start implementation. I will 
 
 Add `architect` (use the `system-architect` subagent) to the initial spawn when the task is obviously design-heavy, cross-component, or security/reliability-critical. Add `devops` (use the `devops-engineer` subagent) when the task has any infra touchpoint. Add `writer` (use the `tech-writer` subagent) only when a developer or operator would need to know something different after the change than before — most changes don't clear this bar. Drop `ux` only for pure internal refactors.
 
+**Custom hires in discovery:** if the task is obviously in a specialist domain from the user's first message (ML, deep DB perf, accessibility audit, compliance, mobile platform work, SRE/incident response), hire the specialist into discovery rather than after. Follow the spawn template under "Hiring custom roles". When in doubt, defer the hire — let the Tech Lead recommend it post-discovery once the scope is grounded.
+
 ## Important notes
 
 - **Use subagent types**: always reference a subagent definition by name when spawning. This loads the role's philosophy, tools, and default model. Your spawn instructions get appended on top.
@@ -223,3 +310,6 @@ Add `architect` (use the `system-architect` subagent) to the initial spawn when 
 - Don't have the lead implement while teammates are still running. Wait for them.
 - Don't leave engineer model selection implicit. The Tech Lead picks per task; state it at spawn.
 - Don't skip the subagent reference when spawning. Without it, teammates get none of the role philosophy.
+- Don't hire a custom role just to relabel a standard engineer. Hire only when the role's thinking style genuinely differs from the base subagent's body (ML, perf, a11y, SRE, compliance, etc.) — not because the topic sounds specialized.
+- Don't hire silently. Custom hires get user confirmation the same way team size does.
+- Don't invent base subagents that don't exist. A custom hire must extend one of the real subagent definitions in `~/.claude/agents/` — the job description goes in the spawn prompt, not in a new file.
