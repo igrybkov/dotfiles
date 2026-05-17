@@ -18,7 +18,7 @@ classifiers = [
 ]
 dependencies = [
   "ansible-runner~=2.4.2",
-  "click~=8.3.1",
+  "click~=8.4.0",
   "click-aliases~=1.0.1",
   "dotfiles-profile-discovery",
   "keyring>=25; sys_platform=='darwin'",
