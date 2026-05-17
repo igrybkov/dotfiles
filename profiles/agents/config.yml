@@ -44,6 +44,9 @@ pipx_packages:
   - name: apple-mail-mcp
     path: packages/apple-mail
     editable: true
+  - name: mcp-hub
+    path: packages/mcp-hub
+    editable: true
 
 # Enable Cursor CLI installation (via cursor_cli role)
 install_cursor_cli: true
@@ -261,3 +264,7 @@ mcp_servers:
     config_files:
       - path: ~/.config/mcp-hub/servers.json
         state: present
+
+  # Removed: replaced by mcp-hub as the aggregator. Keeps ~/.mcp.json clean.
+  - name: mcp-exec
+    state: absent
