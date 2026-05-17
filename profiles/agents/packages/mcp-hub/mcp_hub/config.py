@@ -1,7 +1,9 @@
 """Config loader — merges multiple JSON/YAML files into a unified server registry.
 
 Sources are taken from CONFIG_FILE env var (comma-separated paths).
-When unset, defaults to ~/.config/mcp-hub/servers.json and ~/.config/mcp-hub/servers.yml.
+When unset, defaults to ~/.config/mcp-hub/servers.json, ~/.config/mcp-hub/servers.yml,
+.mcp.local.json, and .mcp.local.yml (relative paths resolved from CWD at startup,
+which is typically the project root when spawned by Claude Code).
 Both JSON and YAML formats are supported. Later files override earlier ones on
 matching server name.
 
@@ -52,6 +54,8 @@ logger = logging.getLogger(__name__)
 DEFAULT_CONFIG_FILES = [
     "~/.config/mcp-hub/servers.json",
     "~/.config/mcp-hub/servers.yml",
+    ".mcp.local.json",
+    ".mcp.local.yml",
 ]
 
 

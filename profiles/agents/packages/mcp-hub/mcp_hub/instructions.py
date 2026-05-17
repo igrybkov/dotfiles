@@ -12,7 +12,8 @@ def build_instructions(servers: dict[str, ServerSpec]) -> str:
     if not servers:
         return (
             "MCP Hub — aggregator for child MCP servers. No servers are currently "
-            "configured. Set CONFIG_FILE to point at a JSON or YAML config."
+            "configured. Add servers to ~/.config/mcp-hub/servers.yml or a local "
+            ".mcp.local.json/.mcp.local.yml in the project root."
         )
 
     exposed = [s for s in servers.values() if s.is_exposed]

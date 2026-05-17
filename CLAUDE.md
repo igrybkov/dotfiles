@@ -261,7 +261,7 @@ The global `~/.claude/CLAUDE.md` is assembled from Markdown fragments in `profil
 
 #### MCP Servers
 MCP servers are configured via `mcp_servers:` in a profile's `config.yml`. The `agents` profile provides one server by default:
-- **mcp-hub** — aggregator that lazy-loads child MCP servers, merging configs from `~/.config/mcp-hub/servers.json` and `~/.config/mcp-hub/servers.yml` (both JSON and YAML are accepted). Exposes `list_servers`, `get_server_tools`, `call_tool`, `search` tools and ships a `mcp-hub` CLI for shell scripting. Set `CONFIG_FILE` env var (comma-separated paths) to override the source list.
+- **mcp-hub** — aggregator that lazy-loads child MCP servers, merging configs from `~/.config/mcp-hub/servers.json`, `~/.config/mcp-hub/servers.yml`, and (from the project root) `.mcp.local.json` / `.mcp.local.yml`. Both JSON and YAML are accepted; later sources override earlier ones. Exposes `list_servers`, `get_server_tools`, `call_tool`, `search` tools and ships a `mcp-hub` CLI for shell scripting. Set `CONFIG_FILE` env var (comma-separated paths) to override the source list entirely.
 
 **To add an MCP server:**
 ```yaml

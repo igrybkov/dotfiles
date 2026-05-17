@@ -250,8 +250,6 @@ mcp_servers:
       call_tool, search, and recommend_servers.
     tags: [mcp-hub, aggregator, meta]
     command: mcp-hub-server
-    env:
-      CONFIG_FILE: "~/.config/mcp-hub/servers.json,~/.config/mcp-hub/servers.yml,.mcp.local.json,.mcp.local.yml"
 
   # Apple Mail bridge — drives Mail.app via JXA (osascript). No auth/tokens needed;
   # uses the existing Mail.app session. Set APPLE_MAIL_ACCOUNT to scope to a specific
