@@ -279,11 +279,8 @@ def fuzzy_select(
             matches.sort(key=lambda x: x[0])
             filtered_items = [item for _, item in matches]
 
-        # Reset selection if out of bounds
-        if filtered_items:
-            selected_idx = min(selected_idx, len(filtered_items) - 1)
-        else:
-            selected_idx = 0
+        # Reset to top match whenever filter changes
+        selected_idx = 0
 
     def _on_text_changed(_):
         """Handle text change - cancel auto-select and filter items."""
