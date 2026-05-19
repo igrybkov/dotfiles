@@ -96,7 +96,10 @@ def main(verbose: bool) -> None:
 @click.option(
     "-f", "--filter", "needle", help="Substring filter on name/description/tags."
 )
-def cmd_list(needle: str | None) -> None:
+@click.option(
+    "--names-only", is_flag=True, help="Print server names only, one per line."
+)
+def cmd_list(needle: str | None, names_only: bool) -> None:
     """List configured MCP servers."""
     servers = load_servers()
     rows = []
@@ -106,15 +109,25 @@ def cmd_list(needle: str | None) -> None:
             hay = " ".join([s.name, s.description or "", " ".join(s.tags)]).lower()
             if needle.lower() not in hay:
                 continue
-        rows.append(
-            {
-                "name": s.name,
-                "transport": s.transport,
-                "description": s.description,
-                "tags": s.tags,
-            }
-        )
-    _print({"count": len(rows), "servers": rows})
+        rows.append(s)
+    if names_only:
+        for s in rows:
+            click.echo(s.name)
+        return
+    _print(
+        {
+            "count": len(rows),
+            "servers": [
+                {
+                    "name": s.name,
+                    "transport": s.transport,
+                    "description": s.description,
+                    "tags": s.tags,
+                }
+                for s in rows
+            ],
+        }
+    )
 
 
 @main.command("tools")
