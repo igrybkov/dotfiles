@@ -21,7 +21,7 @@ def get_git_root() -> Path | None:
             check=True,
         )
         return Path(result.stdout.strip()).resolve()
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, FileNotFoundError, OSError):
         return None
 
 
@@ -44,8 +44,14 @@ def get_main_repo() -> Path:
         git_common_dir = Path(result.stdout.strip())
         # Main repo is parent of .git directory
         return git_common_dir.resolve().parent
-    except subprocess.CalledProcessError:
-        return Path.cwd()
+    except (subprocess.CalledProcessError, FileNotFoundError, OSError):
+        try:
+            return Path.cwd()
+        except (FileNotFoundError, OSError):
+            raise RuntimeError(
+                "Current directory no longer exists. "
+                "Run 'cd ~' or navigate to a valid directory first."
+            ) from None
 
 
 def get_session_name() -> str:
