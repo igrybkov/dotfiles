@@ -49,8 +49,7 @@ def get_main_repo() -> Path:
             return Path.cwd()
         except (FileNotFoundError, OSError):
             raise RuntimeError(
-                "Current directory no longer exists. "
-                "Run 'cd ~' or navigate to a valid directory first."
+                "Current directory no longer exists — navigate to a valid path first."
             ) from None
 
 
