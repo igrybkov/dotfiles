@@ -1,0 +1,136 @@
+#!/usr/bin/env bash
+# git-task-id - Detect probable task ID for the current change.
+#
+# Sources, in priority order:
+#   1. .claude/task.local.md          (per-worktree task note)
+#   2. Current branch name            (e.g. feature/AB-123-foo)
+#   3. Recent commits not on base     (subjects of HEAD ^base)
+#
+# Prints the detected ID to stdout and exits 0.
+# Exits 1 if nothing matches.
+#
+# Diff hunks are intentionally NOT scanned: TODO comments and in-source
+# ticket references describe other work, not necessarily the current
+# change, and doc examples produce false positives.
+#
+# Usage:
+#   git-task-id [--verbose] [--base BRANCH] [--all]
+#
+# Options:
+#   -v, --verbose   Print source and per-source candidates to stderr
+#   --base BRANCH   Base branch to diff commits against (default: main, then master)
+#   --all           Print all unique IDs found across all sources, ranked
+#
+# Env:
+#   GIT_TASK_ID_REGEX   Override the detection regex
+#                       (default: [A-Z][A-Z0-9]+-[0-9]+)
+
+set -euo pipefail
+
+regex="${GIT_TASK_ID_REGEX:-[A-Z][A-Z0-9]+-[0-9]+}"
+verbose=0
+all=0
+base=""
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -v|--verbose) verbose=1 ;;
+        --all) all=1 ;;
+        --base) base="${2:-}"; shift ;;
+        --base=*) base="${1#--base=}" ;;
+        -h|--help)
+            sed -n '2,25p' "$0" | sed 's/^# \?//'
+            exit 0
+            ;;
+        *)
+            echo "git-task-id: unknown argument: $1" >&2
+            exit 2
+            ;;
+    esac
+    shift
+done
+
+# Must be inside a git repo
+if ! repo_root=$(git rev-parse --show-toplevel 2>/dev/null); then
+    echo "git-task-id: not inside a git repository" >&2
+    exit 2
+fi
+
+# Resolve base branch if not given
+if [ -z "$base" ]; then
+    for candidate in main master; do
+        if git -C "$repo_root" show-ref --verify --quiet "refs/heads/$candidate"; then
+            base="$candidate"
+            break
+        fi
+    done
+fi
+
+log() { [ "$verbose" -eq 1 ] && echo "git-task-id: $*" >&2 || true; }
+
+# Extract regex matches from stdin, rank by frequency, emit "<count> <id>" lines.
+rank_matches() {
+    grep -oE "$regex" || true
+}
+
+# Print top match (and exit) or, with --all, print all unique IDs ranked.
+emit() {
+    local source="$1"
+    local input="$2"
+    local ranked
+    ranked=$(printf '%s\n' "$input" | sort | uniq -c | sort -rn | awk '{print $2}')
+    [ -z "$ranked" ] && return 1
+
+    if [ "$all" -eq 1 ]; then
+        log "source=$source candidates=$(echo "$ranked" | tr '\n' ' ')"
+        printf '%s\n' "$ranked"
+    else
+        local top
+        top=$(printf '%s\n' "$ranked" | head -n1)
+        log "source=$source pick=$top"
+        printf '%s\n' "$top"
+    fi
+    return 0
+}
+
+found=""
+
+# 1. .claude/task.local.md
+task_file="$repo_root/.claude/task.local.md"
+if [ -f "$task_file" ]; then
+    matches=$(rank_matches < "$task_file")
+    if [ -n "$matches" ]; then
+        if emit "task.local.md" "$matches"; then
+            found=1
+            [ "$all" -eq 0 ] && exit 0
+        fi
+    fi
+fi
+
+# 2. Branch name
+branch=$(git -C "$repo_root" symbolic-ref --short HEAD 2>/dev/null || true)
+if [ -n "$branch" ]; then
+    matches=$(printf '%s\n' "$branch" | rank_matches)
+    if [ -n "$matches" ]; then
+        if emit "branch:$branch" "$matches"; then
+            found=1
+            [ "$all" -eq 0 ] && exit 0
+        fi
+    fi
+fi
+
+# 3. Recent commits not on base
+if [ -n "$base" ] && git -C "$repo_root" rev-parse --verify --quiet "$base" >/dev/null; then
+    subjects=$(git -C "$repo_root" log "$base..HEAD" --pretty=%s 2>/dev/null || true)
+    if [ -n "$subjects" ]; then
+        matches=$(printf '%s\n' "$subjects" | rank_matches)
+        if [ -n "$matches" ]; then
+            if emit "commits($base..HEAD)" "$matches"; then
+                found=1
+                [ "$all" -eq 0 ] && exit 0
+            fi
+        fi
+    fi
+fi
+
+[ -n "$found" ] || exit 1
