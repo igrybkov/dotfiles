@@ -140,6 +140,9 @@ def get_outlook_tools() -> list[Tool]:
                 "Create a draft email in the Drafts folder. Does NOT send. Returns the "
                 "resulting draft's stable message_id which can be passed to "
                 "mail_delete_draft to discard. "
+                "Set `body_format` to 'html' or 'markdown' for rich-text drafts; "
+                "markdown is rendered with GFM-like rules (tables, strikethrough, "
+                "autolinks). Mail.app auto-derives the plain-text part. "
                 "When multiple Mail accounts exist, `account` is required unless the "
                 "client supports elicitation (in which case you will be prompted). "
                 "Use mail_get_accounts to discover available account names."
@@ -152,7 +155,24 @@ def get_outlook_tools() -> list[Tool]:
                         "description": "Recipient addresses, comma-separated.",
                     },
                     "subject": {"type": "string", "description": "Email subject."},
-                    "body": {"type": "string", "description": "Plain-text body."},
+                    "body": {
+                        "type": "string",
+                        "description": (
+                            "Body content. Interpreted according to body_format "
+                            "(plain text by default; pass HTML or Markdown source "
+                            "when body_format is set accordingly)."
+                        ),
+                    },
+                    "body_format": {
+                        "type": "string",
+                        "enum": ["plain", "html", "markdown"],
+                        "default": "plain",
+                        "description": (
+                            "How to interpret `body`. 'plain' sends as text. "
+                            "'html' sends raw HTML (e.g. <p>, <b>, <ul>). "
+                            "'markdown' renders GFM-like Markdown to HTML server-side."
+                        ),
+                    },
                     "cc": {
                         "type": "string",
                         "description": "CC addresses, comma-separated (optional).",
@@ -188,6 +208,10 @@ def get_outlook_tools() -> list[Tool]:
                 "Edit an existing draft in the Drafts folder by its RFC Message-ID. "
                 "Only the fields you supply are changed; omitted fields keep their current values. "
                 "Returns the new message_id (the old one is invalidated). "
+                "Caveat: Apple Mail does not expose the saved HTML body to scripts, "
+                "so if the draft was created as HTML/Markdown and `body` is omitted "
+                "here, the rebuilt draft will be plain text only — re-supply `body` "
+                "with the matching `body_format` to preserve formatting. "
                 "When multiple Mail accounts exist, `account` is required unless the "
                 "client supports elicitation. "
                 "Use mail_get_accounts to discover available account names."
@@ -209,7 +233,20 @@ def get_outlook_tools() -> list[Tool]:
                     },
                     "body": {
                         "type": "string",
-                        "description": "New plain-text body (optional).",
+                        "description": (
+                            "New body content (optional). Interpreted according to "
+                            "body_format. Omit to keep the current plain-text body "
+                            "(HTML formatting cannot be preserved — see caveat above)."
+                        ),
+                    },
+                    "body_format": {
+                        "type": "string",
+                        "enum": ["plain", "html", "markdown"],
+                        "default": "plain",
+                        "description": (
+                            "How to interpret `body`. Only meaningful when `body` "
+                            "is supplied. Same semantics as mail_create_draft."
+                        ),
                     },
                     "cc": {
                         "type": "string",
@@ -260,6 +297,7 @@ async def handle_outlook_tool(
                 body=arguments["body"],
                 cc=arguments.get("cc"),
                 account=account,
+                body_format=arguments.get("body_format", "plain"),
             )
         elif name == "mail_delete_draft":
             result = await client.delete_draft(
@@ -274,6 +312,7 @@ async def handle_outlook_tool(
                 body=arguments.get("body"),
                 cc=arguments.get("cc"),
                 account=account,
+                body_format=arguments.get("body_format", "plain"),
             )
         else:
             raise ValueError(f"Unknown tool: {name}")
