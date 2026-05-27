@@ -191,6 +191,12 @@ json_configs:
         vimMode: true
       attribution:
         attributeCommitsToAgent: false
+  - file: ~/.cursor/permissions.json
+    create_file: true
+    content:
+      mcpAllowlist:
+        - "scout:*"
+        - "mcp-hub:*"
 
 # YAML config settings (via yaml_config role)
 yaml_configs:
