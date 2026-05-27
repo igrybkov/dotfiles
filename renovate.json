@@ -3,11 +3,22 @@
   "extends": [
     "config:recommended"
   ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "fileMatch": ["(^|/)profiles/.*/config\\.yml$"],
+      "matchStrings": [
+        "name: \"(?<depName>@[\\w.-]+/[\\w.-]+)@(?<currentValue>[\\d]+\\.[\\d]+\\.[\\d]+)\""
+      ],
+      "datasourceTemplate": "npm"
+    }
+  ],
   "automerge": true,
   "lockFileMaintenance": {
     "enabled": true,
     "automerge": true
   },
+  "minimumReleaseAge": "7 days",
   "packageRules": [
     {
       "matchManagers": ["mise"],
