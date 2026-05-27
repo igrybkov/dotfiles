@@ -9,6 +9,8 @@ allowed-tools:
   - Bash(git add:*)
   - Bash(git commit:*)
   - Bash(git -C:*)
+  - Bash(~/.claude/skills/git-commit/git-task-id:*)
+  - Bash(~/.cursor/skills/git-commit/git-task-id:*)
   - Bash(find:*)
   - Read
   - Glob
@@ -21,36 +23,36 @@ Create well-organized git commits with automatic task ID prefixing. **Default to
 ## Workflow
 
 1. **Gather metadata (parallel)** - Run all these commands in a single message with parallel tool calls:
-   - `git branch --show-current` - Get current branch for task ID extraction
-   - `git log main..HEAD --oneline --max-count=10` - Recent commits for task ID pattern
+   - `${CLAUDE_SKILL_DIR}/git-task-id -v` - Detect probable task ID from `.claude/task.local.md`, branch name, and recent commits. See [Task ID Detection](#task-id-detection).
    - `git status` - List all modified, staged, and untracked files
    - Nested-repo scan (see [Nested Repositories](#nested-repositories))
-2. **Extract task ID** - Parse branch name or recent commits for task ID pattern
-3. **Inspect changes selectively** - Based on file list from status:
+2. **Inspect changes selectively** - Based on file list from status:
    - For small/focused changes: read diff for specific files with `git diff -- <file>`
    - For config/simple changes: may not need diff at all
    - Avoid running `git diff` without file paths on large changesets
-4. **Decide whether to split** - Default is a single commit. Only split if changes are genuinely unrelated (see Grouping Strategy)
-5. **Create commit(s)** - Stage and commit, preferring one commit unless splitting is clearly warranted
-6. **Handle nested repos** - If the scan found nested repos with changes, ask the user whether to commit those too (see [Nested Repositories](#nested-repositories))
+3. **Decide whether to split** - Default is a single commit. Only split if changes are genuinely unrelated (see Grouping Strategy)
+4. **Create commit(s)** - Stage and commit, preferring one commit unless splitting is clearly warranted
+5. **Handle nested repos** - If the scan found nested repos with changes, ask the user whether to commit those too (see [Nested Repositories](#nested-repositories))
 
 ## Task ID Detection
 
-Check these sources in order:
+Use the `git-task-id` helper bundled with this skill (at `${CLAUDE_SKILL_DIR}/git-task-id`). It scans, in priority order:
 
-1. **Branch name patterns**:
-   - `feature/AB-123-description` → `AB-123`
-   - `AB-123/description` → `AB-123`
-   - `fix/AB-123` → `AB-123`
-   - Pattern: uppercase letters + hyphen + numbers (e.g., `PROJ-1234`, `AB-1`)
+1. `.claude/task.local.md` (per-worktree task note written when the worktree was created)
+2. Current branch name (e.g. `feature/AB-123-description` → `AB-123`)
+3. Recent commit subjects not yet on the base branch (`main` or `master`)
 
-2. **Recent commits on branch** (not yet in main):
-   ```bash
-   git log main..HEAD --oneline
-   ```
-   Look for existing task ID prefixes in commit messages.
+Diff hunks are deliberately not scanned — TODO comments and in-source ticket references describe other work, not the current change.
 
-3. **If no task ID found**: Proceed without prefix, but mention this to the user.
+```bash
+${CLAUDE_SKILL_DIR}/git-task-id              # prints the detected ID, or exits 1
+${CLAUDE_SKILL_DIR}/git-task-id -v           # also prints the source on stderr
+${CLAUDE_SKILL_DIR}/git-task-id --all -v     # all ranked candidates per source (use when sources disagree)
+```
+
+The default regex is `[A-Z][A-Z0-9]+-[0-9]+` (Jira-style); override with `GIT_TASK_ID_REGEX`.
+
+If exit status is 1, no ID was found — proceed without a prefix and mention it to the user.
 
 ## Commit Message Format
 
@@ -150,8 +152,7 @@ Do **not** auto-push any of the nested repo commits. Pushing follows the same "o
 
 ```bash
 # 1. Gather metadata (run these in PARALLEL - single message, multiple tool calls)
-git branch --show-current           # → feature/PROJ-123-user-auth
-git log main..HEAD --oneline --max-count=10
+${CLAUDE_SKILL_DIR}/git-task-id -v                      # → PROJ-123 (source=branch:feature/PROJ-123-user-auth)
 git status                          # → lists modified files
 
 # 2. Inspect specific files as needed (based on status output)

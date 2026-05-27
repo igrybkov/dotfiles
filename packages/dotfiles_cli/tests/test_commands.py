@@ -163,17 +163,17 @@ class TestCompletionCommand:
         assert result.exit_code == 0
         assert "_DOTFILES_COMPLETE" in result.output
 
-    def test_completion_install_fish(self, cli_runner, temp_home):
-        """Test completion installation for fish."""
+    def test_completion_install_fish_refuses(self, cli_runner, temp_home):
+        """Fish --install refuses (click 8.4's fish template is broken; we
+        ship a hand-maintained script via the dotfiles role instead)."""
         fish_dir = temp_home / ".config" / "fish" / "completions"
         fish_dir.mkdir(parents=True)
 
         result = cli_runner.invoke(cli, ["completion", "fish", "--install"])
 
-        assert result.exit_code == 0
-        completion_file = fish_dir / "dotfiles.fish"
-        assert completion_file.exists()
-        assert "_DOTFILES_COMPLETE" in completion_file.read_text()
+        assert result.exit_code != 0
+        assert "hand-maintained" in result.output
+        assert not (fish_dir / "dotfiles.fish").exists()
 
     def test_completion_install_unsupported_shell(self, cli_runner):
         """Test completion installation for unsupported shell."""
@@ -184,6 +184,41 @@ class TestCompletionCommand:
         # The exception is stored in result.exception, not shown in output
         assert result.exception is not None
         assert "not supported" in str(result.exception)
+
+    def test_click_fish_template_still_broken(self):
+        """Canary: when click ships a working fish template, this fails and
+        we can delete the hand-maintained dotfiles.fish + --install guard.
+
+        Two independent symptoms of the bug — assert both so a partial fix
+        upstream still trips the test:
+
+        1. `string split \\n` in the template renders as a real newline,
+           producing a fish script that won't parse.
+        2. Each completion item is emitted as 3 newline-separated lines
+           (type/value/help) but `set -l response (cmd)` flattens them, so
+           per-element splitting can't recover the records.
+        """
+        import click as _click
+        from click.shell_completion import (
+            CompletionItem,
+            FishComplete,
+            _SOURCE_FISH,
+        )
+
+        # Symptom 1: literal newline mid-statement in the rendered template.
+        assert "string split \n" in _SOURCE_FISH, (
+            "click's fish template no longer embeds a literal newline in "
+            "`string split` — check if upstream fixed it and drop the workaround"
+        )
+
+        # Symptom 2: format_completion emits 3 newline-separated lines per item.
+        formatted = FishComplete(
+            cli=_click.Command("x"), ctx_args={}, prog_name="x", complete_var="X"
+        ).format_completion(CompletionItem("value", type="plain", help=None))
+        assert formatted.count("\n") == 2, (
+            "click's fish format_completion no longer emits 3-line records — "
+            "check if upstream changed the wire format and drop the workaround"
+        )
 
 
 class TestInstallCommand:

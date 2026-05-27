@@ -14,8 +14,13 @@ Surface:
   - list_messages(mailbox, limit, offset)
   - read_message(mailbox, message_id)
   - search_subject(mailbox, query, limit)
-  - create_draft(to, subject, body, cc)
+  - create_draft(to, subject, body, cc, body_format)
+  - edit_draft(message_id, ..., body_format)
   - delete_draft(message_id)
+
+Drafts accept body_format = "plain" (default), "html", or "markdown". Markdown
+is rendered server-side to HTML with GFM-like rules (tables, strikethrough,
+autolinks). Mail.app auto-derives the plain-text part from HTML.
 
 Message IDs returned are the RFC Message-ID headers (stable across restarts),
 not Mail.app's local integer ids.
@@ -28,11 +33,32 @@ import json
 import logging
 import os
 import subprocess
+from typing import Literal
+
+from markdown_it import MarkdownIt
 
 logger = logging.getLogger(__name__)
 
 ACCOUNT = os.getenv("APPLE_MAIL_ACCOUNT") or None
 DEFAULT_TIMEOUT = 60
+
+BodyFormat = Literal["plain", "html", "markdown"]
+_MD = MarkdownIt("gfm-like")
+
+
+def _render_body(body: str, fmt: BodyFormat) -> tuple[str | None, str | None]:
+    """Return (plain_content, html_content) for a body in the given format.
+
+    Mail.app auto-derives the plain-text part from htmlContent when content is
+    omitted, so for html/markdown we return None for the plain part.
+    """
+    if fmt == "plain":
+        return body, None
+    if fmt == "html":
+        return None, body
+    if fmt == "markdown":
+        return None, _MD.render(body)
+    raise ValueError(f"unknown body format: {fmt!r}")
 
 
 class AppleScriptError(RuntimeError):
@@ -180,12 +206,13 @@ function main(args) {
 JXA_CREATE_DRAFT = r"""
 function main(args) {
   const Mail = Application("Mail");
-  const d = Mail.OutgoingMessage({
-    subject: args.subject,
-    content: args.body,
-    visible: false,
-  });
+  const props = { subject: args.subject, visible: false };
+  if (args.body !== null && args.body !== undefined) props.content = args.body;
+  const d = Mail.OutgoingMessage(props);
   Mail.outgoingMessages.push(d);
+  if (args.html !== null && args.html !== undefined) {
+    d.htmlContent = args.html;
+  }
   for (const addr of args.to) {
     d.toRecipients.push(Mail.Recipient({ address: addr }));
   }
@@ -238,7 +265,8 @@ function main(args) {
   if (!hits || hits.length === 0) return { error: "draft not found" };
   const old = hits[0];
 
-  // Read current values (before deleting)
+  // Read current values (before deleting). htmlContent is not readable from
+  // saved drafts, so HTML formatting is lost unless the caller re-supplies body.
   const curSubject = old.subject();
   let curBody = "";
   try { curBody = old.content(); } catch(e) {}
@@ -249,16 +277,32 @@ function main(args) {
 
   // Merge: use provided values where given, keep current where not
   const newSubject = args.subject !== undefined ? args.subject : curSubject;
-  const newBody    = args.body    !== undefined ? args.body    : curBody;
   const newTo      = args.to      !== undefined ? args.to      : curTo;
   const newCc      = args.cc      !== undefined ? args.cc      : curCc;
+
+  // Body precedence:
+  //   - html provided  -> use html (plain auto-derived by Mail)
+  //   - body provided  -> use body as plain
+  //   - neither        -> keep old plain content
+  let newPlain = null, newHtml = null;
+  if (args.html !== null && args.html !== undefined) {
+    newHtml = args.html;
+    if (args.body !== null && args.body !== undefined) newPlain = args.body;
+  } else if (args.body !== null && args.body !== undefined) {
+    newPlain = args.body;
+  } else {
+    newPlain = curBody;
+  }
 
   // Delete old draft (moves to Trash)
   try { Mail.delete(old); } catch(e) {}
 
   // Create replacement draft
-  const d = Mail.OutgoingMessage({ subject: newSubject, content: newBody, visible: false });
+  const props = { subject: newSubject, visible: false };
+  if (newPlain !== null) props.content = newPlain;
+  const d = Mail.OutgoingMessage(props);
   Mail.outgoingMessages.push(d);
+  if (newHtml !== null) d.htmlContent = newHtml;
   for (const addr of newTo) {
     d.toRecipients.push(Mail.Recipient({ address: addr }));
   }
@@ -383,6 +427,7 @@ class MailClient:
         body: str,
         cc: str | list[str] | None = None,
         account: str | None = None,
+        body_format: BodyFormat = "plain",
     ) -> dict:
         def _split(v):
             if v is None:
@@ -396,7 +441,14 @@ class MailClient:
             raise ValueError(
                 "account is required for create_draft when multiple Mail accounts exist"
             )
-        args = {"to": _split(to), "cc": _split(cc), "subject": subject, "body": body}
+        plain, html = _render_body(body, body_format)
+        args = {
+            "to": _split(to),
+            "cc": _split(cc),
+            "subject": subject,
+            "body": plain,
+            "html": html,
+        }
         return await self._run(
             JXA_CREATE_DRAFT, {"account": resolved_account, **args}
         ) or {"message_id": "", "warning": "created but not found in Drafts yet"}
@@ -420,6 +472,7 @@ class MailClient:
         body: str | None = None,
         cc: str | list[str] | None = None,
         account: str | None = None,
+        body_format: BodyFormat = "plain",
     ) -> dict:
         def _split(v):
             if v is None:
@@ -437,7 +490,11 @@ class MailClient:
         if subject is not None:
             args["subject"] = subject
         if body is not None:
-            args["body"] = body
+            plain, html = _render_body(body, body_format)
+            if plain is not None:
+                args["body"] = plain
+            if html is not None:
+                args["html"] = html
         split_to = _split(to)
         if split_to is not None:
             args["to"] = split_to

@@ -10,6 +10,10 @@
   },
   "packageRules": [
     {
+      "matchManagers": ["mise"],
+      "lockFileMaintenance": { "enabled": false }
+    },
+    {
       "groupName": "ansible dependencies",
       "matchManagers": ["ansible-galaxy"],
       "matchDepTypes": ["collection", "role"]

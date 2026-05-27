@@ -45,6 +45,24 @@ def _die(msg: str, code: int = 1) -> None:
     sys.exit(code)
 
 
+def _run_async(coro, *, server: str | None = None) -> Any:
+    """Run a coroutine, converting unhandled exceptions to clean CLI errors.
+
+    Re-raises SystemExit (from _die calls inside the coroutine) unchanged.
+    Converts ExceptionGroups (anyio task-group failures) to a one-line error
+    that points the user at the server's own stderr output.
+    """
+    try:
+        return asyncio.run(coro)
+    except SystemExit:
+        raise
+    except BaseException as exc:
+        prefix = f"server '{server}': " if server else ""
+        if hasattr(exc, "exceptions"):  # BaseExceptionGroup / ExceptionGroup
+            _die(f"{prefix}failed to connect — see server output above")
+        _die(f"{prefix}{exc}")
+
+
 def _parse_args(args: str | None, args_file: str | None) -> dict[str, Any]:
     if args and args_file:
         _die("use either --args or --args-file, not both")
@@ -78,7 +96,10 @@ def main(verbose: bool) -> None:
 @click.option(
     "-f", "--filter", "needle", help="Substring filter on name/description/tags."
 )
-def cmd_list(needle: str | None) -> None:
+@click.option(
+    "--names-only", is_flag=True, help="Print server names only, one per line."
+)
+def cmd_list(needle: str | None, names_only: bool) -> None:
     """List configured MCP servers."""
     servers = load_servers()
     rows = []
@@ -88,15 +109,25 @@ def cmd_list(needle: str | None) -> None:
             hay = " ".join([s.name, s.description or "", " ".join(s.tags)]).lower()
             if needle.lower() not in hay:
                 continue
-        rows.append(
-            {
-                "name": s.name,
-                "transport": s.transport,
-                "description": s.description,
-                "tags": s.tags,
-            }
-        )
-    _print({"count": len(rows), "servers": rows})
+        rows.append(s)
+    if names_only:
+        for s in rows:
+            click.echo(s.name)
+        return
+    _print(
+        {
+            "count": len(rows),
+            "servers": [
+                {
+                    "name": s.name,
+                    "transport": s.transport,
+                    "description": s.description,
+                    "tags": s.tags,
+                }
+                for s in rows
+            ],
+        }
+    )
 
 
 @main.command("tools")
@@ -150,7 +181,7 @@ def cmd_tools(server: str, summary: bool, tool_names: tuple[str, ...]) -> None:
             ],
         }
 
-    _print(asyncio.run(_run()))
+    _print(_run_async(_run(), server=server))
 
 
 @main.command("call")
@@ -185,7 +216,7 @@ def cmd_call(
             "content": content,
         }
 
-    _print(asyncio.run(_run()))
+    _print(_run_async(_run(), server=server))
 
 
 @main.command("search")

@@ -497,16 +497,16 @@ class TestCompletionGeneration:
         assert "_DOTFILES_COMPLETE" in result.output
         assert "dotfiles" in result.output
 
-    def test_completion_install_creates_file(self, cli_runner, temp_home):
-        """Test completion --install creates completion file."""
+    def test_completion_install_fish_refuses(self, cli_runner, temp_home):
+        """Fish --install refuses with a pointer to the hand-maintained script."""
         fish_dir = temp_home / ".config" / "fish" / "completions"
         fish_dir.mkdir(parents=True)
 
         result = cli_runner.invoke(cli, ["completion", "fish", "--install"])
 
-        assert result.exit_code == 0
-        completion_file = fish_dir / "dotfiles.fish"
-        assert completion_file.exists()
+        assert result.exit_code != 0
+        assert "hand-maintained" in result.output
+        assert not (fish_dir / "dotfiles.fish").exists()
 
 
 class TestEndToEndScenarios:
