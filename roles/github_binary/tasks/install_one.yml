@@ -19,6 +19,7 @@
     gh release view --repo {{ _gh_bin.repo }} --json tagName -q .tagName
   register: _gh_latest_tag
   changed_when: false
+  environment: "{{ _gh_bin.env | default({}) }}"
 
 - name: "[⬇ github_binary] Read installed version file for {{ _gh_bin.name }}"
   ansible.builtin.slurp:
@@ -83,6 +84,7 @@
     chmod 755 {{ github_binary_install_dir }}/{{ _gh_bin.name }}
   when: _gh_latest != _gh_installed and (_gh_bin.type | default('binary')) == 'tarball'
   changed_when: true
+  environment: "{{ _gh_bin.env | default({}) }}"
 
 - name: "[⬇ github_binary] Write version file: {{ _gh_bin.name }}"
   ansible.builtin.copy:
