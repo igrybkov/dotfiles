@@ -135,6 +135,41 @@ def get_hub_tools() -> list[types.Tool]:
             },
         ),
         types.Tool(
+            name="authenticate",
+            description=(
+                "Authenticate a server by collecting and storing its required secrets "
+                "in macOS Keychain. If the server has no auth schema, asks Claude to "
+                "infer it. Uses MCP elicitation so secrets never enter the assistant's "
+                "context. After storing, the server session is refreshed automatically."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "server": {
+                        "type": "string",
+                        "description": "Server name to authenticate",
+                    },
+                },
+                "required": ["server"],
+            },
+        ),
+        types.Tool(
+            name="auth_status",
+            description=(
+                "Show authentication status for one or all servers with auth schemas. "
+                "Returns per-server status: authenticated, partial, or unauthenticated."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "server": {
+                        "type": "string",
+                        "description": "If set, return status for this server only. Otherwise all servers.",
+                    },
+                },
+            },
+        ),
+        types.Tool(
             name="recommend_servers",
             description=(
                 "Given a natural-language task description, asks the host's LLM "
@@ -173,12 +208,18 @@ def _filter_match(spec: ServerSpec, needle: str) -> bool:
 
 
 def _server_summary(spec: ServerSpec) -> dict[str, Any]:
-    return {
+    from mcp_hub.auth import resolve_auth, auth_status as get_auth_status
+
+    summary: dict[str, Any] = {
         "name": spec.name,
         "description": spec.description,
         "tags": spec.tags,
         "transport": spec.transport,
     }
+    auth = resolve_auth(spec.name, spec.auth)
+    if auth is not None:
+        summary["auth"] = get_auth_status(spec.name, auth)
+    return summary
 
 
 def _tool_summary(tool: types.Tool) -> dict[str, Any]:
@@ -224,6 +265,20 @@ async def _handle_reload(
         if target not in servers:
             return _text({"error": f"unknown server: {target}"})
         await proxy.invalidate_server(target)
+        # Re-merge learned auth schema in case it changed out-of-process
+        from mcp_hub.auth import (
+            resolve_auth as _resolve_auth,
+            load_learned as _load_learned,
+            reconcile_absent as _reconcile_absent,
+        )
+
+        learned_all = _load_learned()
+        learned = learned_all.get(target)
+        spec = servers[target]
+        if learned is not None or spec.auth is not None:
+            spec.auth = _resolve_auth(target, spec.auth)
+            if spec.auth is not None:
+                _reconcile_absent(target, spec.auth)
         result: dict[str, Any] = {"reloaded": target}
         if state is not None and servers[target].is_exposed:
             # Refresh catalog before notifying so the host's re-fetch sees the new state.
@@ -296,6 +351,196 @@ async def _handle_reload(
             "unchanged": sorted(kept - set(changed)),
         }
     )
+
+
+async def _handle_authenticate(
+    arguments: dict[str, Any],
+    servers: dict[str, ServerSpec],
+    proxy: ProxyClient,
+    state,
+) -> list[types.TextContent]:
+    from mcp_hub.auth import (
+        get_secret,
+        set_secret,
+        resolve_auth,
+        auth_status as get_auth_status,
+    )
+
+    server_name = arguments.get("server", "")
+    if server_name not in servers:
+        return _text({"error": f"unknown server: {server_name}"})
+
+    spec = servers[server_name]
+
+    # Capture host session
+    if state is not None:
+        try:
+            ctx = request_ctx.get()
+            state.capture_host_session(ctx.session)
+        except LookupError:
+            pass
+
+    auth = resolve_auth(server_name, spec.auth)
+    source = "declared"
+
+    if auth is None:
+        # Tier-2: no schema — return instructions for now (full sampling inference is future work)
+        return _text(
+            {
+                "error": "no_auth_schema",
+                "server": server_name,
+                "message": (
+                    f"Server '{server_name}' has no auth schema. "
+                    f"Run `mcp-hub auth {server_name}` in a terminal to provision secrets interactively, "
+                    f"then `mcp-hub auth promote {server_name}` to see the config to add to your profile."
+                ),
+            }
+        )
+
+    # Elicitation path
+    host = state.host_session if state is not None else None
+    stored_count = 0
+    failed_secrets = []
+
+    for secret in auth.secrets:
+        if secret.state != "present":
+            continue
+        if get_secret(server_name, secret.env_var) is not None:
+            stored_count += 1
+            continue  # already stored, skip unless we want to re-auth
+
+    # Check if all secrets are already stored
+    present_secrets = [s for s in auth.secrets if s.state == "present"]
+    all_stored = all(
+        get_secret(server_name, s.env_var) is not None for s in present_secrets
+    )
+    if all_stored and present_secrets:
+        # Still invalidate to pick up fresh creds
+        await proxy.invalidate_server(server_name)
+        return _text(
+            {
+                "status": "already_authenticated",
+                "server": server_name,
+                "message": "All secrets already stored. Server session refreshed.",
+                "session": "refreshed",
+            }
+        )
+
+    if host is None:
+        return _text(
+            {
+                "status": "elicitation_unavailable",
+                "server": server_name,
+                "message": f"Run `mcp-hub auth {server_name}` in a terminal to store secrets.",
+            }
+        )
+
+    # Try elicitation for each missing secret
+    for secret in present_secrets:
+        if get_secret(server_name, secret.env_var) is not None:
+            continue  # already have it
+
+        schema: dict[str, Any] = {
+            "type": "object",
+            "properties": {
+                "value": {
+                    "type": "string",
+                    "title": secret.label,
+                    **(
+                        {"description": f"Get it at: {secret.create_url}"}
+                        if secret.create_url
+                        else {}
+                    ),
+                }
+            },
+            "required": ["value"],
+        }
+        message = f"Enter {secret.label} for server '{server_name}'"
+        if secret.create_url:
+            message += f"\n\nCreate one at: {secret.create_url}"
+
+        try:
+            result = await host.elicit_form(message=message, requestedSchema=schema)
+            # result is ElicitResult with action and content
+            action = getattr(result, "action", None)
+            if action == "cancel":
+                return _text(
+                    {
+                        "status": "cancelled",
+                        "server": server_name,
+                        "message": f"Authentication cancelled by user at secret '{secret.label}'",
+                    }
+                )
+            content = getattr(result, "content", None)
+            if content and isinstance(content, dict):
+                value = content.get("value", "")
+            else:
+                value = ""
+            if not value:
+                failed_secrets.append(secret.env_var)
+                continue
+            set_secret(server_name, secret.env_var, value)
+        except Exception as exc:
+            logger.warning(
+                "elicitation failed for %s/%s: %s", server_name, secret.env_var, exc
+            )
+            return _text(
+                {
+                    "status": "elicitation_unavailable",
+                    "server": server_name,
+                    "message": f"Elicitation not supported by this client. Run `mcp-hub auth {server_name}` in a terminal.",
+                    "error": str(exc),
+                }
+            )
+
+    if failed_secrets:
+        return _text(
+            {
+                "status": "partial",
+                "server": server_name,
+                "failed": failed_secrets,
+                "message": "Some secrets could not be collected.",
+            }
+        )
+
+    # Invalidate server so next call spawns with new creds
+    await proxy.invalidate_server(server_name)
+
+    final_status = get_auth_status(server_name, auth)
+    return _text(
+        {
+            "status": "authenticated",
+            "server": server_name,
+            "source": source,
+            "session": "refreshed",
+            "auth": final_status,
+        }
+    )
+
+
+def _handle_auth_status(
+    arguments: dict[str, Any],
+    servers: dict[str, ServerSpec],
+) -> list[types.TextContent]:
+    from mcp_hub.auth import resolve_auth, auth_status as get_auth_status
+
+    target = (arguments or {}).get("server")
+    results = []
+
+    check_servers = (
+        {target: servers[target]} if target and target in servers else servers
+    )
+    if target and target not in servers:
+        return _text({"error": f"unknown server: {target}"})
+
+    for name, spec in sorted(check_servers.items()):
+        auth = resolve_auth(name, spec.auth)
+        if auth is None:
+            continue
+        status = get_auth_status(name, auth)
+        results.append({"server": name, **status})
+
+    return _text({"count": len(results), "servers": results})
 
 
 async def handle_tool(
@@ -384,5 +629,15 @@ async def handle_tool(
         from mcp_hub.recommender import handle_recommend_servers
 
         return await handle_recommend_servers(state, arguments)
+
+    if name == "authenticate":
+        if state is None:
+            return _text(
+                {"error": "authenticate requires hub state (not available in CLI mode)"}
+            )
+        return await _handle_authenticate(arguments or {}, servers, proxy, state)
+
+    if name == "auth_status":
+        return _handle_auth_status(arguments or {}, servers)
 
     return _text({"error": f"unknown tool: {name}"})

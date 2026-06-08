@@ -80,10 +80,17 @@ def _open_transport(spec: ServerSpec):
     if spec.transport == "stdio":
         if not spec.command:
             raise ValueError(f"server {spec.name!r} missing 'command'")
+        from mcp_hub.auth import resolve_auth, resolve_secrets
+
+        injected: dict[str, str] = {}
+        auth = resolve_auth(spec.name, spec.auth)
+        if auth:
+            injected = resolve_secrets(spec.name, auth)
+        env = {**os.environ, **spec.env, **injected}
         params = StdioServerParameters(
             command=spec.command,
             args=list(spec.args),
-            env={**os.environ, **spec.env} if spec.env else None,
+            env=env,
         )
         return _StdioAdapter(stdio_client(params))
     if spec.transport == "streamable-http":

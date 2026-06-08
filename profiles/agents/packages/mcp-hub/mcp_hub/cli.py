@@ -18,6 +18,7 @@ Examples:
 from __future__ import annotations
 
 import asyncio
+import getpass
 import json
 import logging
 import sys
@@ -244,6 +245,174 @@ def cmd_search(query: str, limit: int, load: bool) -> None:
         return {"count": len(hits), "hits": [h.to_dict() for h in hits]}
 
     _print(asyncio.run(_run()))
+
+
+@main.group("auth")
+def cmd_auth() -> None:
+    """Manage keychain secrets for MCP servers."""
+
+
+@cmd_auth.command("status")
+@click.option("--server", default=None, help="Show status for a specific server only.")
+def cmd_auth_status(server: str | None) -> None:
+    """Show auth status for all servers with auth schemas."""
+    from mcp_hub.auth import resolve_auth, auth_status as get_auth_status
+
+    servers = load_servers()
+    rows = []
+    check = {server: servers[server]} if server and server in servers else servers
+    if server and server not in servers:
+        _die(f"unknown server: {server}")
+    for name in sorted(check):
+        spec = check[name]
+        auth = resolve_auth(name, spec.auth)
+        if auth is None:
+            continue
+        status = get_auth_status(name, auth)
+        for s in status["secrets"]:
+            rows.append(
+                (
+                    name,
+                    s["env_var"],
+                    s["label"],
+                    "✓" if s["stored"] else "✗",
+                    status["status"],
+                )
+            )
+    if not rows:
+        click.echo("No servers with auth schemas found.")
+        return
+    click.echo(f"{'SERVER':<25} {'ENV_VAR':<40} {'LABEL':<35} {'STORED':<8} {'STATUS'}")
+    click.echo("-" * 115)
+    for name, env_var, label, stored, status_val in rows:
+        click.echo(f"{name:<25} {env_var:<40} {label:<35} {stored:<8} {status_val}")
+
+
+@cmd_auth.command("provision")
+@click.argument("server", required=False)
+@click.option(
+    "--all",
+    "all_servers",
+    is_flag=True,
+    help="Provision all servers with auth schemas.",
+)
+def cmd_auth_provision(server: str | None, all_servers: bool) -> None:
+    """Collect and store secrets for SERVER (or all servers with --all)."""
+    from mcp_hub.auth import resolve_auth, get_secret, set_secret
+
+    servers = load_servers()
+    targets: list[str] = []
+
+    if all_servers:
+        targets = sorted(
+            name
+            for name, spec in servers.items()
+            if resolve_auth(name, spec.auth) is not None
+        )
+        if not targets:
+            click.echo("No servers with auth schemas found.")
+            return
+    elif server:
+        if server not in servers:
+            _die(f"unknown server: {server}")
+        auth = resolve_auth(server, servers[server].auth)
+        if auth is None:
+            _die(f"server '{server}' has no auth schema")
+        targets = [server]
+    else:
+        click.echo("Specify a server name or use --all")
+        raise SystemExit(1)
+
+    for name in targets:
+        spec = servers[name]
+        auth = resolve_auth(name, spec.auth)
+        if auth is None:
+            continue
+        present = [s for s in auth.secrets if s.state == "present"]
+        if not present:
+            continue
+        click.echo(f"\n--- {name} ---")
+        for secret in present:
+            existing = get_secret(name, secret.env_var)
+            if existing is not None:
+                click.echo(
+                    f"  {secret.label} ({secret.env_var}): already stored [skip]"
+                )
+                continue
+            if secret.create_url:
+                click.echo(f"  {secret.label} ({secret.env_var})")
+                click.echo(f"    Create one at: {secret.create_url}")
+            if secret.sensitive:
+                value = getpass.getpass(f"  Enter {secret.label}: ")
+            else:
+                value = click.prompt(f"  Enter {secret.label}")
+            if value:
+                set_secret(name, secret.env_var, value)
+                click.echo("  Stored ✓")
+            else:
+                click.echo("  Skipped (empty input)")
+
+    click.echo(
+        "\nDone. If mcp-hub is running, call the 'reload' tool or restart to pick up changes."
+    )
+
+
+@cmd_auth.command("rm")
+@click.argument("server")
+@click.argument("env_var", required=False)
+def cmd_auth_rm(server: str, env_var: str | None) -> None:
+    """Delete stored secret(s) for SERVER. If ENV_VAR given, remove only that secret."""
+    from mcp_hub.auth import get_secret, delete_secret, delete_learned
+
+    servers = load_servers()
+    if server not in servers:
+        _die(f"unknown server: {server}")
+
+    if env_var:
+        if get_secret(server, env_var) is None:
+            click.echo(f"No secret stored for {server}/{env_var}")
+        else:
+            delete_secret(server, env_var)
+            click.echo(f"Deleted {server}/{env_var} from keychain")
+        delete_learned(server, env_var)
+    else:
+        from mcp_hub.auth import resolve_auth
+
+        auth = resolve_auth(server, servers[server].auth)
+        if auth is None:
+            click.echo(f"No auth schema for server '{server}'")
+            return
+        removed = 0
+        for s in auth.secrets:
+            if get_secret(server, s.env_var) is not None:
+                delete_secret(server, s.env_var)
+                click.echo(f"Deleted {server}/{s.env_var}")
+                removed += 1
+        delete_learned(server)
+        if removed == 0:
+            click.echo(f"No secrets stored for '{server}'")
+
+
+@cmd_auth.command("promote")
+@click.argument("server")
+def cmd_auth_promote(server: str) -> None:
+    """Print YAML auth.secrets block for a learned schema (to paste into profile config)."""
+    from mcp_hub.auth import load_learned
+
+    learned = load_learned()
+    if server not in learned:
+        _die(f"no learned schema for server '{server}'")
+    auth = learned[server]
+    click.echo(f"# Add to your profile config under mcp_servers entry for '{server}':")
+    click.echo("auth:")
+    click.echo("  secrets:")
+    for s in auth.secrets:
+        click.echo(f"    - env_var: {s.env_var}")
+        click.echo(f"      label: {s.label}")
+        if s.create_url:
+            click.echo(f"      create_url: {s.create_url}")
+        if not s.sensitive:
+            click.echo("      sensitive: false")
 
 
 if __name__ == "__main__":

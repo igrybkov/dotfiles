@@ -97,7 +97,13 @@
                 {%- set _ = expanded_args.append(arg) -%}
               {%- endif -%}
             {%- endfor -%}
-            {%- if server.secret_env is defined and server.secret_env -%}
+            {%- if server.auth is defined and server.auth -%}
+              {# Auth managed by mcp-hub keychain — use command directly, output auth block #}
+              {%- set _ = server_config.update({'command': server.command | expanduser}) -%}
+              {%- if expanded_args -%}
+                {%- set _ = server_config.update({'args': expanded_args}) -%}
+              {%- endif -%}
+            {%- elif server.secret_env is defined and server.secret_env -%}
               {# Secrets resolved at spawn time by the wrapper — rewrite command/args #}
               {%- set _ = server_config.update({'command': mcp_run_with_secrets_bin}) -%}
               {%- set wrapped = ['-p', server._profile | default('')] -%}
@@ -130,6 +136,10 @@
               {%- endfor -%}
               {%- set _ = server_config.update({'env': expanded_env}) -%}
             {%- endif -%}
+          {%- endif -%}
+          {# Auth block for mcp-hub keychain injection #}
+          {%- if server.auth is defined and server.auth -%}
+            {%- set _ = server_config.update({'auth': server.auth}) -%}
           {%- endif -%}
           {# Shared metadata: description and tags (surfaced by mcp-hub) #}
           {%- if server.description is defined and server.description -%}

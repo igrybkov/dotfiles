@@ -49,6 +49,8 @@ from typing import Any
 
 import yaml
 
+from mcp_hub.auth import AuthConfig, SecretSpec, reconcile_absent, resolve_auth
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_CONFIG_FILES = [
@@ -83,6 +85,7 @@ class ServerSpec:
     # Per-server connect + enumerate budget. Raise for Docker-backed or uvx
     # cold-start servers. Applies to exposed servers only.
     connect_timeout_seconds: float = 5.0
+    auth: AuthConfig | None = None
 
     @property
     def is_exposed(self) -> bool:
@@ -98,6 +101,23 @@ class ServerSpec:
             "expose_resources": bool(data.get("expose_resources", False)),
             "connect_timeout_seconds": float(data.get("connect_timeout_seconds", 5.0)),
         }
+        # Parse auth block
+        auth: AuthConfig | None = None
+        auth_data = data.get("auth")
+        if auth_data and isinstance(auth_data, dict):
+            secrets = []
+            for s in auth_data.get("secrets", []):
+                if isinstance(s, dict) and "env_var" in s:
+                    secrets.append(
+                        SecretSpec(
+                            env_var=s["env_var"],
+                            label=s.get("label", s["env_var"]),
+                            create_url=s.get("create_url"),
+                            sensitive=bool(s.get("sensitive", True)),
+                            state=s.get("state", "present"),
+                        )
+                    )
+            auth = AuthConfig(secrets=secrets) if secrets else None
         if "url" in data:
             transport = data.get("transport", "streamable-http")
             return cls(
@@ -105,6 +125,7 @@ class ServerSpec:
                 transport=transport,
                 url=data["url"],
                 headers=dict(data.get("headers", {})),
+                auth=auth,
                 **common_kwargs,
             )
         return cls(
@@ -113,6 +134,7 @@ class ServerSpec:
             command=data.get("command"),
             args=list(data.get("args", [])),
             env=dict(data.get("env", {})),
+            auth=auth,
             **common_kwargs,
         )
 
@@ -198,4 +220,16 @@ def load_servers() -> dict[str, ServerSpec]:
             logger.info("Server %r is disabled — skipping", name)
             continue
         result[name] = server
+
+    # Merge learned schemas and reconcile absent entries
+    from mcp_hub.auth import load_learned
+
+    learned_all = load_learned()
+    for name, spec in result.items():
+        learned = learned_all.get(name)
+        if learned is not None or spec.auth is not None:
+            merged_auth = resolve_auth(name, spec.auth)
+            if merged_auth is not None:
+                spec.auth = merged_auth
+                reconcile_absent(name, merged_auth)
     return result
