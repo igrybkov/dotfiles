@@ -46,7 +46,7 @@ pipx_packages:
     editable: true
   - name: mcp-hub
     path: packages/mcp-hub
-    editable: true
+    state: absent
 
 # Enable Cursor CLI installation (via cursor_cli role)
 install_cursor_cli: true
@@ -251,7 +251,8 @@ claude_plugins:
 
 # MCP servers
 # mcp-hub is the aggregator: it lazy-loads child servers defined by other
-# profiles (e.g. adobe) and writes them into ~/.config/mcp-hub/servers.json.
+# profiles (e.g. adobe) via ~/.config/mcp-hub/servers.json.
+# Launched via `uv tool run --from git+https://github.com/igrybkov/mcp-hub.git`.
 mcp_servers:
   - name: mcp-hub
     description: >-
@@ -259,7 +260,14 @@ mcp_servers:
       prompts, and resources. Exposes list_servers, get_server_tools,
       call_tool, search, and recommend_servers.
     tags: [mcp-hub, aggregator, meta]
-    command: mcp-hub-server
+    command: uv
+    args:
+      - tool
+      - run
+      - --from
+      - git+https://github.com/igrybkov/mcp-hub.git
+      - mcp-hub
+      - server
     config_files:
       - path: ~/.mcp.json
         state: present

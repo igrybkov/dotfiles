@@ -111,6 +111,35 @@ argument_specs:
             type: list
             elements: str
             required: false
+          auth:
+            description: >
+              Authentication block passed through to mcp-hub for keychain-managed
+              secrets. mcp-hub injects the resolved values at server spawn time
+              instead of storing them in the config file.
+            type: dict
+            required: false
+            options:
+              secrets:
+                description: List of secrets to resolve from the keychain.
+                type: list
+                elements: dict
+                required: false
+                options:
+                  env_var:
+                    description: Environment variable name to inject into the server process
+                    type: str
+                    required: true
+                  label:
+                    description: Human-readable label used to look up the secret in the keychain
+                    type: str
+                    required: true
+                  extra:
+                    description: >
+                      Free-form metadata passed through to the mcp-hub config
+                      (e.g. create_url, sensitive). Flattened into the secret
+                      entry at render time so mcp-hub sees a flat dict.
+                    type: dict
+                    required: false
           _profile:
             description: Profile name that contributed this server (injected by playbook aggregation)
             type: str

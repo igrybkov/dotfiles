@@ -48,6 +48,20 @@
                     | map(attribute='stdout'))) }}
   when: _pipx_brew_prefixes.results is defined
 
+# Uninstall absent local packages FIRST so source-based reinstalls in the next
+# step can replace them cleanly (e.g., switching from editable local to git URL).
+- name: "[⚡ uv] Uninstall absent local packages (pre-phase)"
+  ansible.builtin.command:
+    cmd: "{{ uv_check.stdout }} tool uninstall {{ item.name }}"
+  loop: "{{ pipx_packages | selectattr('path', 'defined') | list }}"
+  when:
+    - pipx_packages is defined and pipx_packages | length > 0
+    - uv_check.rc == 0
+    - item.state | default('present') == 'absent'
+  register: _uv_pre_uninstall
+  failed_when: _uv_pre_uninstall.rc != 0 and 'is not installed' not in (_uv_pre_uninstall.stderr | default(''))
+  changed_when: _uv_pre_uninstall.rc == 0
+
 # PyPI packages (no path specified) - always use pipx
 - name: "[🐍 pipx] Install pipx packages from PyPI"
   community.general.pipx:

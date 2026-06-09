@@ -467,6 +467,10 @@
               "type": "string"
             }
           },
+          "auth": {
+            "description": "Authentication block passed through to mcp-hub for keychain-managed secrets. mcp-hub injects the resolved values at server spawn time instead of storing them in the config file.",
+            "type": "object"
+          },
           "command": {
             "description": "Command to run the server (stdio transport)",
             "type": "string"

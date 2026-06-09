@@ -137,9 +137,18 @@
               {%- set _ = server_config.update({'env': expanded_env}) -%}
             {%- endif -%}
           {%- endif -%}
-          {# Auth block for mcp-hub keychain injection #}
+          {# Auth block for mcp-hub keychain injection.
+             Flatten `extra` dict from each secret into the secret entry so
+             mcp-hub receives a flat dict (env_var, label, create_url, …). #}
           {%- if server.auth is defined and server.auth -%}
-            {%- set _ = server_config.update({'auth': server.auth}) -%}
+            {%- set _secrets = [] -%}
+            {%- for secret in server.auth.secrets | default([]) -%}
+              {%- set _flat = {} -%}
+              {%- for k, v in secret.items() if k != 'extra' -%}{%- set _ = _flat.update({k: v}) -%}{%- endfor -%}
+              {%- for k, v in (secret.extra | default({})).items() -%}{%- set _ = _flat.update({k: v}) -%}{%- endfor -%}
+              {%- set _ = _secrets.append(_flat) -%}
+            {%- endfor -%}
+            {%- set _ = server_config.update({'auth': server.auth | combine({'secrets': _secrets})}) -%}
           {%- endif -%}
           {# Shared metadata: description and tags (surfaced by mcp-hub) #}
           {%- if server.description is defined and server.description -%}
