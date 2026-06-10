@@ -216,7 +216,7 @@ yaml_configs:
 
 # npm packages for LSP language servers (used by Claude Code LSP plugins)
 npm_packages:
-  - name: "@fission-ai/openspec@1.4.0"
+  - name: "@fission-ai/openspec@1.4.1"
     state: present
   - name: "@ansible/ansible-language-server"
   # pyright must be removed before basedpyright installs — both own the
