@@ -193,8 +193,8 @@ layout {
     // Git operations tab
     tab name="6. Git" {
         pane split_direction="horizontal" {
-            // Top: lazygit (70%)
-            pane size="70%" name="lazygit" {
+            // Top: lazygit (70%) — Enter to start
+            pane size="70%" name="lazygit" start_suspended=true {
                 command "fish"
                 args "-c" "cd (hive wt parent) && exec lazygit"
             }
