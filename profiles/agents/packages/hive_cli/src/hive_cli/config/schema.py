@@ -14,6 +14,29 @@ from pydantic_settings import SettingsConfigDict
 from .base import HiveBaseSettings
 
 
+class AgentProfileConfig(BaseModel):
+    """Configuration for per-agent config-dir profiles.
+
+    When a named profile is selected (e.g. "work"), the agent's config home is
+    redirected to ``$XDG_CONFIG_HOME/hive/profiles/<agent>/<profile>/`` by
+    setting ``config_dir_env``.  ``extra_env`` holds additional vars that must
+    be set for that profile to fully isolate credentials (e.g.
+    ``GEMINI_FORCE_FILE_STORAGE`` for gemini).  ``seed_files`` names files that
+    are written into the profile directory on first creation but never
+    overwritten afterward (e.g. codex ``config.toml`` to force file-based auth).
+
+    Attributes:
+        config_dir_env: Env var that points the agent at a custom config home.
+        extra_env: Extra env vars set only when a named profile is active.
+        seed_files: Mapping of filename → contents, written once on profile
+            creation (skipped if the file already exists).
+    """
+
+    config_dir_env: str | None = None
+    extra_env: Annotated[dict[str, str], Field(default_factory=dict)]
+    seed_files: Annotated[dict[str, str], Field(default_factory=dict)]
+
+
 class AgentConfig(BaseModel):
     """Configuration for a specific AI coding agent.
 
@@ -23,12 +46,14 @@ class AgentConfig(BaseModel):
         extra_args: Arguments always appended to the agent command.
         extra_dirs_flag: CLI flag the agent uses for additional directories
             (e.g., "--add-dir" for Claude, "--directory" for Cursor).
+        profile: Config-dir profile support configuration.
     """
 
     resume_args: Annotated[list[str], Field(default_factory=list)]
     skip_permissions_args: Annotated[list[str], Field(default_factory=list)]
     extra_args: Annotated[list[str], Field(default_factory=list)]
     extra_dirs_flag: str | None = None
+    profile: AgentProfileConfig | None = None
 
 
 class AgentsConfig(HiveBaseSettings):

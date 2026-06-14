@@ -49,6 +49,7 @@ from ..utils import (
     success,
     warn,
 )
+from ..utils.profiles import select_profile
 
 console = Console()
 
@@ -60,6 +61,7 @@ ACTION_ISSUE_PREFIX = "__issue__:"
 ACTION_CHANGE_AGENT = "__change_agent__"
 ACTION_TOGGLE_SKIP_PERMISSIONS = "__toggle_skip_permissions__"
 ACTION_CHANGE_WORKDIR = "__change_workdir__"
+ACTION_CHANGE_PROFILE = "__change_profile__"
 
 # Emoji prefix for GitHub issues to distinguish them from branches
 ISSUE_EMOJI = "🎫"
@@ -824,8 +826,10 @@ def _interactive_ensure(
         # Base header text
         skip_perms_tag = " [skip-perms]" if skip_permissions else ""
         workdir_tag = f" [workdir: {rt.workdir}]" if rt.workdir else ""
+        profile_tag = f" [profile: {rt.agent_profile}]" if rt.agent_profile else ""
         base_header = (
-            f"Agent {agent_num} [{selected_agent}]{skip_perms_tag}{workdir_tag}"
+            f"Agent {agent_num} [{selected_agent}]{skip_perms_tag}"
+            f"{workdir_tag}{profile_tag}"
             f" - Select worktree or branch"
         )
         # Start with "Fetching..." indicator
@@ -854,6 +858,10 @@ def _interactive_ensure(
         # Define ctrl+w handler - returns sentinel to trigger workdir override
         def on_ctrl_w() -> str | None:
             return ACTION_CHANGE_WORKDIR
+
+        # Define ctrl+p handler - returns sentinel to trigger profile selection
+        def on_ctrl_p() -> str | None:
+            return ACTION_CHANGE_PROFILE
 
         # List to receive update functions (populated before app.run())
         update_callbacks: list = []
@@ -1008,6 +1016,7 @@ def _interactive_ensure(
                 "</dim><b>^A</b><dim> agent  "
                 f"</dim><b>^S</b><dim> skip-perms:{skip_perms_indicator}  "
                 "</dim><b>^W</b><dim> workdir  "
+                "</dim><b>^P</b><dim> profile  "
                 "</dim><b>Esc</b><dim> new  "
                 "</dim><b>^C</b><dim> quit"
             ),
@@ -1018,6 +1027,7 @@ def _interactive_ensure(
             on_ctrl_a=on_ctrl_a,
             on_ctrl_s=on_ctrl_s,
             on_ctrl_w=on_ctrl_w,
+            on_ctrl_p=on_ctrl_p,
             update_callbacks=update_callbacks,
             update_callbacks_ready=update_callbacks_ready,
             auto_select_value=resolved_auto_select,
@@ -1042,9 +1052,11 @@ def _interactive_ensure(
         # Handle "change agent" action (triggered by Ctrl+A)
         if selected == ACTION_CHANGE_AGENT:
             new_agent = select_agent(current_agent=selected_agent)
-            if new_agent:
+            if new_agent and new_agent != selected_agent:
                 selected_agent = new_agent
                 rt.agent = selected_agent
+                # Profile is agent-scoped; reset it when the agent changes
+                rt.agent_profile = None
             # Loop back to picker (whether changed or cancelled)
             continue
 
@@ -1052,6 +1064,18 @@ def _interactive_ensure(
         if selected == ACTION_TOGGLE_SKIP_PERMISSIONS:
             skip_permissions = not skip_permissions
             rt.skip_permissions = skip_permissions
+            # Loop back to picker
+            continue
+
+        # Handle "change profile" action (triggered by Ctrl+P)
+        if selected == ACTION_CHANGE_PROFILE:
+            new_profile = select_profile(
+                agent_name=selected_agent,
+                current_profile=rt.agent_profile,
+            )
+            if new_profile is not None:
+                # "" means <default> (passthrough); any other string is a named profile
+                rt.agent_profile = new_profile if new_profile else None
             # Loop back to picker
             continue
 

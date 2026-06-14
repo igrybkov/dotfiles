@@ -15,6 +15,7 @@ from ..config import (
     get_extra_dirs_args,
     get_runtime_settings,
     get_settings,
+    resolve_profile_env,
 )
 from ..utils import error, format_yellow
 from .exec_runner import run_in_worktree
@@ -128,6 +129,18 @@ def run(
             help="Skip permission prompts (default from config).",
         ),
     ] = None,
+    profile: Annotated[
+        str | None,
+        Parameter(
+            name=["--profile", "-p"],
+            env_var="HIVE_AGENT_PROFILE",
+            help=(
+                "Agent config-dir profile to use. Redirects the agent's config/history "
+                "to $XDG_CONFIG_HOME/hive/profiles/<agent>/<profile>. "
+                "Omit (or use 'default') to use the agent's default config dir."
+            ),
+        ),
+    ] = None,
     auto_select: Annotated[
         str | None,
         Parameter(
@@ -170,6 +183,8 @@ def run(
         hive run --help               # Pass --help to the agent
         hive run -a claude            # Use Claude specifically
         HIVE_AGENT=gemini hive run    # Use Gemini via env var
+        hive run -p work              # Use 'work' config profile for the agent
+        hive run --profile work       # Same, long form
     """
     # Load config once at the start
     config = get_settings()
@@ -190,6 +205,12 @@ def run(
     elif not rt.skip_permissions:
         # No CLI flag, no env var — fall back to config
         rt.skip_permissions = config.worktrees.skip_permissions
+
+    # Resolve profile: CLI flag > HIVE_AGENT_PROFILE env var
+    # (already in rt.agent_profile if set via env)
+    if profile is not None:
+        # Normalize "default" (or empty string) to None (passthrough semantics)
+        rt.agent_profile = profile if profile and profile != "default" else None
 
     # Initial agent detection (for validation and pane name)
     # This may be overridden by HIVE_AGENT set during worktree selection (Ctrl+A)
@@ -259,6 +280,12 @@ def run(
                     *args,
                 ]
                 child_env = get_runtime_settings().build_child_env()
+                child_env.update(
+                    resolve_profile_env(
+                        current_agent_name,
+                        get_runtime_settings().agent_profile,
+                    )
+                )
                 result = subprocess.run(
                     resume_cmd,
                     stderr=subprocess.DEVNULL,
@@ -279,8 +306,14 @@ def run(
         else:
             final_cmd = current_cmd
 
-        # Run the agent
+        # Run the agent; inject profile env vars (config-dir redirect + creds)
         child_env = get_runtime_settings().build_child_env()
+        child_env.update(
+            resolve_profile_env(
+                current_agent_name,
+                get_runtime_settings().agent_profile,
+            )
+        )
         result = subprocess.run(final_cmd, env=child_env)
         return result.returncode
 
@@ -293,17 +326,25 @@ def run(
 
     # Use dynamic runner when:
     # - restart/restart_confirmation mode (needs restart loop)
+    # - interactive worktree selection (-w=-): the picker can mutate agent,
+    #   profile, skip-permissions, and workdir after use_dynamic_runner is computed,
+    #   so we must always use the dynamic runner when selection is in play.
     # - resume is enabled AND agent has resume_args (needs retry logic)
     # - skip-permissions is enabled (needs arg injection)
     # - extra_args configured (needs arg injection per agent)
     # - extra_dirs configured (needs arg injection per agent)
+    # - profile is active upfront (via --profile flag or HIVE_AGENT_PROFILE env)
+    has_profile = bool(rt.agent_profile)
+    is_interactive_selection = worktree == "-"
     use_dynamic_runner = (
         restart
         or restart_confirmation
+        or is_interactive_selection
         or has_resume_args
         or has_skip_permissions
         or has_agent_extra_args
         or has_extra_dirs
+        or has_profile
     )
 
     # Determine auto_select settings: CLI overrides config

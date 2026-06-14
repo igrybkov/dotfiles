@@ -87,6 +87,7 @@ def clean_environment(tmp_path, monkeypatch):
     # Clear config-related env vars (both new HIVE_* and legacy)
     monkeypatch.delenv("AGENT", raising=False)
     monkeypatch.delenv("HIVE_AGENT", raising=False)
+    monkeypatch.delenv("HIVE_AGENT_PROFILE", raising=False)
     monkeypatch.delenv("HIVE_SKIP_PERMISSIONS", raising=False)
     monkeypatch.delenv("HIVE_AGENTS_ORDER", raising=False)
     monkeypatch.delenv("HIVE_RESUME_ENABLED", raising=False)

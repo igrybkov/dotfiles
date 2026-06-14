@@ -640,6 +640,115 @@ extra_dirs:
             assert "/some/dir" not in call_args
 
 
+class TestRunProfile:
+    """Tests for run command --profile flag and profile env injection."""
+
+    def test_run_help_shows_profile(self, cli_runner: CycloptsTestRunner):
+        """Test that --help shows --profile flag."""
+        result = cli_runner.invoke(app, ["run", "--help"])
+        assert result.exit_code == 0
+        assert "--profile" in result.output
+        assert "-p" in result.output
+
+    def test_profile_flag_injects_config_dir_env(
+        self, cli_runner: CycloptsTestRunner, monkeypatch, tmp_path
+    ):
+        """Named profile sets the agent's config_dir_env in child environment."""
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+
+        captured_env: dict = {}
+
+        def fake_run(cmd, **kwargs):
+            captured_env.update(kwargs.get("env", {}))
+            return type("R", (), {"returncode": 0})()
+
+        with (
+            patch("shutil.which", return_value="/usr/bin/claude"),
+            patch("hive_cli.commands.exec_runner.get_git_root", return_value=tmp_path),
+            patch("hive_cli.config.loader.find_config_files", return_value=[]),
+            patch("hive_cli.commands.run.subprocess.run", side_effect=fake_run),
+        ):
+            reload_config()
+            cli_runner.invoke(app, ["run", "-a", "claude", "-p", "work", "--resume"])
+
+        expected_path = tmp_path / "hive" / "profiles" / "claude" / "work"
+        assert "CLAUDE_CONFIG_DIR" in captured_env
+        assert captured_env["CLAUDE_CONFIG_DIR"] == str(expected_path)
+
+    def test_default_profile_does_not_inject_env(
+        self, cli_runner: CycloptsTestRunner, monkeypatch, tmp_path
+    ):
+        """'default' profile string → passthrough; no CLAUDE_CONFIG_DIR injected."""
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+        monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+
+        captured_env: dict = {}
+
+        def fake_run(cmd, **kwargs):
+            captured_env.update(kwargs.get("env", {}))
+            return type("R", (), {"returncode": 0})()
+
+        with (
+            patch("shutil.which", return_value="/usr/bin/claude"),
+            patch("hive_cli.commands.exec_runner.get_git_root", return_value=tmp_path),
+            patch("hive_cli.config.loader.find_config_files", return_value=[]),
+            patch("hive_cli.commands.run.subprocess.run", side_effect=fake_run),
+        ):
+            reload_config()
+            cli_runner.invoke(app, ["run", "-a", "claude", "-p", "default", "--resume"])
+
+        assert "CLAUDE_CONFIG_DIR" not in captured_env
+
+    def test_gemini_profile_adds_force_file_storage(
+        self, cli_runner: CycloptsTestRunner, monkeypatch, tmp_path
+    ):
+        """Gemini named profile injects GEMINI_FORCE_FILE_STORAGE=true as well."""
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+
+        captured_env: dict = {}
+
+        def fake_run(cmd, **kwargs):
+            captured_env.update(kwargs.get("env", {}))
+            return type("R", (), {"returncode": 0})()
+
+        with (
+            patch("shutil.which", return_value="/usr/bin/gemini"),
+            patch("hive_cli.commands.exec_runner.get_git_root", return_value=tmp_path),
+            patch("hive_cli.config.loader.find_config_files", return_value=[]),
+            patch("hive_cli.commands.run.subprocess.run", side_effect=fake_run),
+        ):
+            reload_config()
+            cli_runner.invoke(app, ["run", "-a", "gemini", "-p", "work", "--resume"])
+
+        assert "GEMINI_CLI_HOME" in captured_env
+        assert captured_env.get("GEMINI_FORCE_FILE_STORAGE") == "true"
+
+    def test_profile_env_var_read_from_env(
+        self, cli_runner: CycloptsTestRunner, monkeypatch, tmp_path
+    ):
+        """HIVE_AGENT_PROFILE env var is picked up without --profile flag."""
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+        monkeypatch.setenv("HIVE_AGENT_PROFILE", "work")
+
+        captured_env: dict = {}
+
+        def fake_run(cmd, **kwargs):
+            captured_env.update(kwargs.get("env", {}))
+            return type("R", (), {"returncode": 0})()
+
+        with (
+            patch("shutil.which", return_value="/usr/bin/claude"),
+            patch("hive_cli.commands.exec_runner.get_git_root", return_value=tmp_path),
+            patch("hive_cli.config.loader.find_config_files", return_value=[]),
+            patch("hive_cli.commands.run.subprocess.run", side_effect=fake_run),
+        ):
+            reload_config()
+            cli_runner.invoke(app, ["run", "-a", "claude", "--resume"])
+
+        expected_path = tmp_path / "hive" / "profiles" / "claude" / "work"
+        assert captured_env.get("CLAUDE_CONFIG_DIR") == str(expected_path)
+
+
 class TestRunHelp:
     """Tests for run command help."""
 

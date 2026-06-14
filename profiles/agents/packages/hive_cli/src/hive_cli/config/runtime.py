@@ -23,7 +23,7 @@ from pydantic import Field, computed_field, field_validator
 from .base import HiveBaseSettings
 
 # Fields exported to child processes via build_child_env().
-_MUTABLE_FIELDS = frozenset({"agent", "pane_id", "skip_permissions"})
+_MUTABLE_FIELDS = frozenset({"agent", "agent_profile", "pane_id", "skip_permissions"})
 
 
 class RuntimeSettings(HiveBaseSettings):
@@ -42,6 +42,14 @@ class RuntimeSettings(HiveBaseSettings):
     agent: Annotated[
         str | None,
         Field(None, validation_alias="HIVE_AGENT", serialization_alias="HIVE_AGENT"),
+    ]
+    agent_profile: Annotated[
+        str | None,
+        Field(
+            None,
+            validation_alias="HIVE_AGENT_PROFILE",
+            serialization_alias="HIVE_AGENT_PROFILE",
+        ),
     ]
     pane_id: Annotated[
         str | None,

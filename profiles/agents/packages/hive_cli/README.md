@@ -43,6 +43,11 @@ hive run --restart -w main    # Auto-restart in main repo (no re-selection)
 hive run --restart -w feat    # Auto-restart in specific worktree
 hive run --restart --restart-delay 2  # Add 2s delay between restarts
 hive run -r --restart         # Resume with auto-restart
+
+# Config profiles (multiple accounts side-by-side)
+hive run -p work              # Use 'work' config profile for the agent
+hive run --profile personal   # Use 'personal' config profile
+HIVE_AGENT_PROFILE=work hive run  # Via env var
 ```
 
 **Options:**
@@ -52,6 +57,7 @@ hive run -r --restart         # Resume with auto-restart
 - `-r, --resume`: Resume most recent conversation (falls back to new session if none)
 - `--restart`: Auto-restart the agent after it exits. Implies `-w=-` for interactive worktree selection
 - `--restart-delay FLOAT`: Delay in seconds between restarts (default: 0)
+- `-p, --profile TEXT`: Agent config profile to use (see [Config Profiles](#config-profiles))
 
 ### `hive zellij`
 
@@ -408,6 +414,8 @@ Environment variables use the `HIVE_` prefix and take precedence over config fil
 | Variable                          | Type    | Description                                    |
 | --------------------------------- | ------- | ---------------------------------------------- |
 | `HIVE_AGENTS_ORDER`               | CSV     | Agent priority order, e.g., `claude,gemini`    |
+| `HIVE_AGENT`                      | string  | Override agent for this session (set by picker) |
+| `HIVE_AGENT_PROFILE`              | string  | Active config profile name (set by picker or `--profile`) |
 | `HIVE_RESUME_ENABLED`             | boolean | Enable resume by default                       |
 | `HIVE_WORKTREES_ENABLED`          | boolean | Enable worktrees feature                       |
 | `HIVE_WORKTREES_PARENT_DIR`       | string  | Directory template for worktrees               |
@@ -465,6 +473,82 @@ resume:
 
 github:
   fetch_issues: false # Don't fetch issues (faster)
+```
+
+## Config Profiles
+
+Config profiles let you run the same agent with an isolated config directory —
+separate credentials, history, settings, and session state. This is the same
+idea as `alias claude-work='CLAUDE_CONFIG_DIR=~/.claude-work claude'`, but
+managed interactively through the worktree picker.
+
+### Storage layout
+
+Profiles are stored at `$XDG_CONFIG_HOME/hive/profiles/<agent>/<profile>/`
+(default: `~/.config/hive/profiles/claude/work/`). Each profile directory
+**is** the agent's config home — it is passed directly to the agent via its
+config-dir env var.
+
+### Using profiles
+
+**In the worktree picker** (`hive run -w=-` or `hive run --restart`):
+
+| Key | Action |
+|-----|--------|
+| `^P` | Open profile picker |
+
+The profile picker shows:
+- `<default>` — use the agent's default config dir (no override)
+- Existing profiles in `$XDG_CONFIG_HOME/hive/profiles/<agent>/`
+- `＋ new profile…` — type a name to create a new profile directory
+
+The active profile is shown in the header: `Agent 1 [claude] [profile: work]`.
+
+**Via CLI flag:**
+
+```bash
+hive run -p work              # Use 'work' profile
+hive run --profile personal   # Use 'personal' profile
+HIVE_AGENT_PROFILE=work hive run  # Via env var (persists to child processes)
+```
+
+`HIVE_AGENT_PROFILE` round-trips through restart loops and nested hive calls.
+Switching agent via `^A` resets the profile (profiles are agent-scoped).
+
+### Login isolation per agent
+
+All five supported agents redirect **config + session history** cleanly.
+**Login credentials** vary:
+
+| Agent | Config-dir var | Login isolation |
+|-------|---------------|-----------------|
+| `claude` | `CLAUDE_CONFIG_DIR` | ✅ Fully isolated |
+| `gemini` | `GEMINI_CLI_HOME`¹ | ✅ hive sets `GEMINI_FORCE_FILE_STORAGE=true` automatically |
+| `codex` | `CODEX_HOME` | ✅ hive seeds `config.toml` with `cli_auth_credentials_store = "file"` |
+| `copilot` | `COPILOT_HOME` | ⚠️ Config+history isolated; auth token lives in OS Keychain (shared) |
+| `agent` / `cursor-agent` | `CURSOR_CONFIG_DIR` | ⚠️ Config+chats isolated; tokens in OS Keychain (no clean env knob) |
+
+¹ `GEMINI_CLI_HOME` is source-verified but undocumented in official Gemini CLI
+docs as of nightly v0.47 — verify against your installed version.
+
+### Per-agent config in hive.yml
+
+You can override or extend profile config per agent:
+
+```yaml
+agents:
+  configs:
+    claude:
+      profile:
+        config_dir_env: CLAUDE_CONFIG_DIR  # override env var name if needed
+    myagent:
+      profile:
+        config_dir_env: MYAGENT_HOME
+        extra_env:
+          MYAGENT_FILE_CREDS: "true"      # set when profile is active
+        seed_files:
+          config.toml: |                   # written on profile creation
+            credentials_store = "file"
 ```
 
 ## Architecture
