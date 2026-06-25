@@ -33,6 +33,13 @@ argument_specs:
               relative to the profile directory.
             type: path
             required: false
+          git:
+            description: >
+              Git URL to install from (e.g. git+https://github.com/user/repo.git).
+              Uses `uv tool install --from <git> <name>` when uv is available,
+              falls back to `pipx install <git>`. Mutually exclusive with `path`.
+            type: str
+            required: false
           editable:
             description: Install in editable mode (default true for local packages)
             type: bool

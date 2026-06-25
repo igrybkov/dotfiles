@@ -45,8 +45,7 @@ pipx_packages:
     path: packages/apple-mail
     editable: true
   - name: mcp-hub
-    path: packages/mcp-hub
-    state: absent
+    git: git+https://github.com/igrybkov/mcp-hub.git
 
 # Enable Cursor CLI installation (via cursor_cli role)
 install_cursor_cli: true
