@@ -135,7 +135,7 @@ def get_vault_password(location: str = "common") -> str:
 
     try:
         password = getpass.getpass(f"Vault password for {location}: ")
-    except (KeyboardInterrupt, EOFError):
+    except KeyboardInterrupt, EOFError:
         raise click.ClickException("Vault password prompt cancelled.")
     if not password:
         raise click.ClickException("Vault password cannot be empty.")

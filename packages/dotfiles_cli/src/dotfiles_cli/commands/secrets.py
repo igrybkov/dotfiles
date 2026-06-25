@@ -3,30 +3,34 @@
 from __future__ import annotations
 
 import getpass
-import json
 import os
 import shutil
 import subprocess
 import sys
-from pathlib import Path
-from tempfile import TemporaryDirectory
 
 import click
-import yaml
 
 from ..profiles import get_profile_names
-from ..utils import fzf_select, numbered_select
-from ..vault import (
-    get_all_secret_locations,
-    get_backend,
-    get_profiles_with_secrets,
-    get_secrets_file,
-    get_vault_id,
-    get_vault_password,
-    run_ansible_vault,
+from ..vault import sops
+from ..vault.age import (
+    OP_ITEM_TITLE,
+    delete_age_key,
+    generate_keypair,
+    get_public_key_from_private,
+    is_age_keygen_available,
+    is_op_available,
+    is_sops_available,
+    read_age_key,
+    read_age_key_from_op,
+    write_age_key,
+    write_age_key_to_op,
 )
-from ..vault.backends import onepassword
-from ..vault.password import clear_vault_password_cache
+from ..vault.backend import get_backend
+from ..vault.sops import (
+    SopsError,
+    get_all_secret_locations,
+    get_secrets_file,
+)
 
 
 class SecretLocationChoice(click.Choice):
@@ -67,6 +71,8 @@ def secret_set(profile: str, key: str):
     Value can be provided interactively or via stdin:
         echo "myvalue" | dotfiles secret set -p common key.path
     """
+    _require_sops()
+
     secrets_file = get_secrets_file(profile)
 
     # Read from stdin if piped, otherwise prompt interactively
@@ -79,37 +85,40 @@ def secret_set(profile: str, key: str):
         click.echo("Error: Empty value provided", err=True)
         sys.exit(1)
 
-    secrets = {}
-    if secrets_file.exists():
-        file_content = secrets_file.read_text()
-        if file_content.startswith("$ANSIBLE_VAULT"):
-            rc, stdout, stderr = run_ansible_vault(
-                ["decrypt", "--output", "-", str(secrets_file)], location=profile
-            )
-            if rc == 0:
-                secrets = yaml.safe_load(stdout) or {}
-            else:
-                click.echo(f"Error decrypting secrets file: {stderr}", err=True)
-                sys.exit(1)
-        else:
-            secrets = yaml.safe_load(file_content) or {}
+    # Start from the existing decrypted secrets when the file is sops-encrypted;
+    # a fresh (non-existent) file starts empty.
+    secrets: dict = {}
+    if sops.is_sops_encrypted(secrets_file):
+        try:
+            secrets = sops.decrypt_to_dict(secrets_file)
+        except SopsError as exc:
+            click.echo(f"Error decrypting secrets file: {exc}", err=True)
+            sys.exit(1)
+    elif secrets_file.exists():
+        click.echo(
+            f"Error: {secrets_file} exists but is not sops-encrypted. "
+            f"Migrate it first with bin/migrate-to-sops.sh, or remove it.",
+            err=True,
+        )
+        sys.exit(1)
 
     keys = key.split(".")
     current = secrets
     for k in keys[:-1]:
-        if k not in current:
-            current[k] = {}
-        current = current[k]
+        node = current.get(k)
+        if not isinstance(node, dict):
+            node = {}
+            current[k] = node
+        current = node
     current[keys[-1]] = value
 
-    yaml_content = yaml.dump(secrets, default_flow_style=False)
-
-    secrets_file.write_text(yaml_content)
-    rc, stdout, stderr = run_ansible_vault(
-        ["encrypt", str(secrets_file)], location=profile
-    )
-    if rc != 0:
-        click.echo(f"Error encrypting secrets file: {stderr}", err=True)
+    secrets_file.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        sops.write_and_encrypt(secrets_file, secrets)
+    except SopsError as exc:
+        # write_and_encrypt restores the prior encrypted copy on failure, so
+        # no plaintext is left behind; just surface the error clearly.
+        click.echo(f"Error: {exc}", err=True)
         sys.exit(1)
 
     click.echo(f"Secret '{key}' set in {secrets_file.name}")
@@ -151,20 +160,19 @@ def secret_get(profile: str, zero: bool, clipboard: bool | None, keys: tuple[str
     may contain newlines). Use --clipboard to copy to the system clipboard
     with a 30s auto-clear instead of printing.
     """
+    _require_sops()
+
     secrets_file = get_secrets_file(profile)
 
     if not secrets_file.exists():
         click.echo(f"Error: Secrets file not found: {secrets_file}", err=True)
         sys.exit(1)
 
-    rc, stdout, stderr = run_ansible_vault(
-        ["decrypt", "--output", "-", str(secrets_file)], location=profile
-    )
-    if rc != 0:
-        click.echo(f"Error decrypting secrets file: {stderr}", err=True)
+    try:
+        secrets = sops.decrypt_to_dict(secrets_file)
+    except SopsError as exc:
+        click.echo(f"Error decrypting secrets file: {exc}", err=True)
         sys.exit(1)
-
-    secrets = yaml.safe_load(stdout) or {}
 
     def _lookup(key: str):
         current = secrets
@@ -251,6 +259,7 @@ def _copy_to_clipboard_with_clear(value: str, delay_seconds: int = 30) -> None:
 )
 def secret_list(profile: str | None):
     """List all secret keys (without values)."""
+    _require_sops()
 
     def list_keys(obj: dict, prefix: str = "") -> list[str]:
         keys = []
@@ -268,19 +277,16 @@ def secret_list(profile: str | None):
         if not secrets_file.exists():
             return False
 
-        file_content = secrets_file.read_text()
-        if not file_content.startswith("$ANSIBLE_VAULT"):
-            click.echo(f"Warning: {secrets_file.name} is not encrypted", err=True)
+        if not sops.is_sops_encrypted(secrets_file):
+            click.echo(f"Warning: {secrets_file.name} is not sops-encrypted", err=True)
             return False
 
-        rc, stdout, stderr = run_ansible_vault(
-            ["decrypt", "--output", "-", str(secrets_file)], location=loc
-        )
-        if rc != 0:
-            click.echo(f"Error decrypting {secrets_file.name}: {stderr}", err=True)
+        try:
+            secrets = sops.decrypt_to_dict(secrets_file)
+        except SopsError as exc:
+            click.echo(f"Error decrypting {secrets_file.name}: {exc}", err=True)
             return False
 
-        secrets = yaml.safe_load(stdout) or {}
         all_keys = list_keys(secrets)
 
         if all_keys:
@@ -314,37 +320,27 @@ def secret_list(profile: str | None):
     help="Profile name (e.g., 'common', 'work', 'personal')",
 )
 def secret_edit(profile: str):
-    """Edit secrets file in your editor."""
+    """Edit secrets file in your editor (sops-encrypted in place)."""
+    _require_sops()
+
     secrets_file = get_secrets_file(profile)
 
+    # Create a fresh, sops-encrypted file when none exists yet, so `sops edit`
+    # has something to decrypt.
     if not secrets_file.exists():
-        secrets_file.write_text("# Secrets for " + profile + "\n")
-        rc, _, stderr = run_ansible_vault(
-            ["encrypt", str(secrets_file)], location=profile
-        )
-        if rc != 0:
-            click.echo(f"Error creating secrets file: {stderr}", err=True)
+        secrets_file.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            sops.write_and_encrypt(secrets_file, {})
+        except SopsError as exc:
+            click.echo(f"Error creating secrets file: {exc}", err=True)
             sys.exit(1)
 
     editor = os.getenv("EDITOR", "vim")
-    password = get_vault_password(profile)
-    vault_id = get_vault_id(profile)
-
-    with TemporaryDirectory() as tmpdir:
-        pass_file = Path(tmpdir) / "vault_pass"
-        pass_file.write_text(password)
-        pass_file.chmod(0o600)
-
-        rc = subprocess.call(
-            [
-                "ansible-vault",
-                "edit",
-                "--vault-id",
-                f"{vault_id}@{pass_file}",
-                str(secrets_file),
-            ],
-            env={**os.environ, "EDITOR": editor},
-        )
+    try:
+        rc = sops.run_sops_edit(secrets_file, editor=editor)
+    except SopsError as exc:
+        click.echo(f"Error: {exc}", err=True)
+        sys.exit(1)
 
     if rc != 0:
         click.echo("Error editing secrets file", err=True)
@@ -367,26 +363,24 @@ def secret_edit(profile: str):
     "-a",
     "rekey_all",
     is_flag=True,
-    help="Rekey all profiles with secrets files",
+    help="Rekey all sops-encrypted profiles",
 )
-@click.option(
-    "--sync/--no-sync",
-    "sync_to_op",
-    default=True,
-    help=(
-        "Push the new password to 1Password after rekey "
-        "(only when DOTFILES_VAULT_OP_ITEM is configured). Default: --sync."
-    ),
-)
-def secret_rekey(profile: str | None, rekey_all: bool, sync_to_op: bool):
-    """Change the vault password for secrets files.
+def secret_rekey(profile: str | None, rekey_all: bool):
+    """Re-encrypt secrets to match the recipients in .sops.yaml.
 
-    Use -p to rekey a specific profile, or --all to rekey all profiles.
+    Unlike the old Ansible-Vault flow, there is no password to rotate. The age
+    recipients live in .sops.yaml. To add or remove a machine/teammate:
 
-    If `DOTFILES_VAULT_OP_ITEM` is set, the new password is also pushed to
-    the corresponding field on the 1Password item. Use `--no-sync` to skip
-    the 1P write (e.g. when rotating temporarily on a single machine).
+      1. Edit .sops.yaml and update the 'age:' recipient list.
+      2. Run `dotfiles secret rekey --all` (or `-p <profile>`).
+
+    This runs `sops updatekeys` on each sops-encrypted secrets.yml, which
+    re-wraps the data key for the new recipient set. Your current age private
+    key (from the keychain) must still be a recipient so sops can decrypt the
+    data key to re-wrap it.
     """
+    _require_sops()
+
     if not profile and not rekey_all:
         click.echo("Error: Either -p/--profile or --all is required", err=True)
         sys.exit(1)
@@ -395,12 +389,17 @@ def secret_rekey(profile: str | None, rekey_all: bool, sync_to_op: bool):
         click.echo("Error: Cannot specify both -p/--profile and --all", err=True)
         sys.exit(1)
 
-    if rekey_all:
-        locations_to_rekey = get_profile_names()
-    else:
-        locations_to_rekey = [profile]
+    if read_age_key() is None:
+        click.echo(
+            "Error: no age private key in the keychain. Run "
+            "`dotfiles secret init` first.",
+            err=True,
+        )
+        sys.exit(1)
 
-    total_rekeyed = []
+    locations_to_rekey = get_profile_names() if rekey_all else [profile]
+
+    total_rekeyed: list[str] = []
 
     for prof in locations_to_rekey:
         secrets_file = get_secrets_file(prof)
@@ -409,89 +408,25 @@ def secret_rekey(profile: str | None, rekey_all: bool, sync_to_op: bool):
                 click.echo(f"Skipping profile '{prof}': no secrets file found")
             continue
 
-        if not secrets_file.read_text().startswith("$ANSIBLE_VAULT"):
-            click.echo(f"Skipping profile '{prof}': secrets file not encrypted")
+        if not sops.is_sops_encrypted(secrets_file):
+            click.echo(f"Skipping profile '{prof}': secrets file not sops-encrypted")
             continue
 
         click.echo(f"\n=== Rekeying profile: {prof} ===")
-        old_password = get_vault_password(prof)
-
-        new_password = getpass.getpass(f"Enter new vault password for {prof}: ")
-        new_password_confirm = getpass.getpass(
-            f"Confirm new vault password for {prof}: "
-        )
-
-        if new_password != new_password_confirm:
-            click.echo("Error: Passwords do not match", err=True)
-            sys.exit(1)
-
-        if not new_password:
-            click.echo("Error: Password cannot be empty", err=True)
-            sys.exit(1)
-
-        vault_id = get_vault_id(prof)
-        with TemporaryDirectory() as tmpdir:
-            old_pass_file = Path(tmpdir) / "old_pass"
-            new_pass_file = Path(tmpdir) / "new_pass"
-            old_pass_file.write_text(old_password)
-            new_pass_file.write_text(new_password)
-            old_pass_file.chmod(0o600)
-            new_pass_file.chmod(0o600)
-
-            result = subprocess.run(
-                [
-                    "ansible-vault",
-                    "rekey",
-                    "--vault-id",
-                    f"{vault_id}@{old_pass_file}",
-                    "--new-vault-id",
-                    f"{vault_id}@{new_pass_file}",
-                    str(secrets_file),
-                ],
-                capture_output=True,
-                text=True,
+        rc, _, stderr = sops.reencrypt_with_updated_keys(secrets_file)
+        if rc != 0:
+            click.echo(
+                f"Error rekeying {prof}: {stderr.strip() or 'sops updatekeys failed'}",
+                err=True,
             )
-
-        if result.returncode != 0:
-            click.echo(f"Error rekeying {prof}: {result.stderr}", err=True)
             sys.exit(1)
 
         total_rekeyed.append(prof)
 
-        # Push the new password into the backend so the next ansible run
-        # doesn't fall back to the old cached value.
-        backend = get_backend()
-        try:
-            backend.ensure_ready()
-            backend.write(prof, new_password)
-            click.echo(f"Updated backend password for {prof!r}.")
-        except Exception as exc:
-            click.echo(
-                f"Warning: could not update backend for {prof!r}: {exc}",
-                err=True,
-            )
-
-        # Mirror to 1Password when configured so other machines can pull
-        # the new password via the fallback path without extra steps.
-        if sync_to_op and onepassword.is_configured():
-            try:
-                onepassword.write_field(prof, new_password)
-                click.echo(f"Pushed new password for {prof!r} to 1Password.")
-            except onepassword.OnePasswordError as exc:
-                click.echo(
-                    f"Warning: could not push {prof!r} to 1Password: {exc}\n"
-                    f"The local backend is up to date; rerun "
-                    f"`dotfiles secret rekey -p {prof}` after fixing 1Password, "
-                    f"or push manually with `op item edit`.",
-                    err=True,
-                )
-
-    clear_vault_password_cache()
-
     if total_rekeyed:
         click.echo(f"\nRekeyed: {', '.join(total_rekeyed)}")
     else:
-        click.echo("No secrets files found to rekey")
+        click.echo("No sops-encrypted secrets files found to rekey")
 
     return 0
 
@@ -501,12 +436,12 @@ def secret_rekey(profile: str | None, rekey_all: bool, sync_to_op: bool):
 
 @secret.group("keychain")
 def secret_keychain():
-    """Manage the OS-level vault password storage (keychain/gpg file)."""
+    """Manage the OS-level age private key storage (keychain/gpg file)."""
 
 
 @secret_keychain.command("status")
 def keychain_status():
-    """Print the backend state and the labels it holds (no values)."""
+    """Print the backend state, age key presence, and stored labels."""
     backend = get_backend()
     try:
         state = backend.status()
@@ -528,6 +463,19 @@ def keychain_status():
         if key in state and state[key] is not None:
             click.echo(f"  {key}: {state[key]}")
 
+    # Age key presence + public key (the private key is never printed).
+    private_key = read_age_key()
+    if private_key:
+        click.echo("Age private key: present")
+        if is_age_keygen_available():
+            try:
+                pub = get_public_key_from_private(private_key)
+                click.echo(f"  public key: {pub}")
+            except RuntimeError as exc:
+                click.echo(f"  (could not derive public key: {exc})", err=True)
+    else:
+        click.echo("Age private key: (not stored — run `dotfiles secret init`)")
+
     labels = state.get("labels", [])
     if labels:
         click.echo(f"Labels ({len(labels)}):")
@@ -538,136 +486,120 @@ def keychain_status():
 
 
 @secret_keychain.command("push")
-@click.argument("label")
-def keychain_push(label: str):
-    """Store a vault password for LABEL, replacing any existing value.
+def keychain_push():
+    """Store an existing age private key in the OS keychain.
 
-    Prompts twice (confirm). Use for manually adding a label without going
-    through `secret init`'s full setup flow.
+    Use to import a key created elsewhere (or to restore from backup) without
+    generating a new one. Paste the full `age-keygen` output (the comment
+    lines plus the AGE-SECRET-KEY-... line) and finish with EOF (Ctrl-D).
     """
-    backend = get_backend()
-    try:
-        backend.ensure_ready()
-    except Exception as exc:
-        click.echo(f"Backend not ready: {exc}", err=True)
-        sys.exit(1)
+    if read_age_key() is not None and not click.confirm(
+        "An age private key is already stored. Overwrite?", default=False
+    ):
+        click.echo("Aborted.")
+        return 0
 
-    password = getpass.getpass(f"Vault password for {label!r}: ")
-    if not password:
-        click.echo("Error: Password cannot be empty.", err=True)
+    if sys.stdin.isatty():
+        click.echo("Paste the age private key, then press Ctrl-D:")
+    private_key = sys.stdin.read().strip()
+    if not private_key:
+        click.echo("Error: No key provided.", err=True)
         sys.exit(1)
-    confirm = getpass.getpass(f"Confirm vault password for {label!r}: ")
-    if password != confirm:
-        click.echo("Error: Passwords do not match.", err=True)
-        sys.exit(1)
-
-    try:
-        backend.write(label, password)
-    except Exception as exc:
-        click.echo(f"Error: {exc}", err=True)
-        sys.exit(1)
-    click.echo(f"Stored password for {label!r}.")
-
-
-@secret_keychain.command("pull")
-@click.argument("label", required=False)
-@click.option(
-    "--all",
-    "-a",
-    "pull_all",
-    is_flag=True,
-    help="Pull every profile with an encrypted secrets.yml.",
-)
-def keychain_pull(label: str | None, pull_all: bool):
-    """Refresh vault password(s) from 1Password into the local backend.
-
-    Use after a rekey on another machine left the local keychain stale.
-    Requires DOTFILES_VAULT_OP_ITEM to be set and `op` signed in.
-
-    For each label, the 1Password value is validated by decrypting the
-    profile's secrets.yml before being written — a bad field value never
-    overwrites a good stored password.
-    """
-    if not label and not pull_all:
-        click.echo("Error: provide LABEL or use --all.", err=True)
-        sys.exit(1)
-    if label and pull_all:
-        click.echo("Error: LABEL and --all are mutually exclusive.", err=True)
-        sys.exit(1)
-    if not onepassword.is_configured():
+    if "AGE-SECRET-KEY-" not in private_key:
         click.echo(
-            "1Password fallback is not configured. Set DOTFILES_VAULT_OP_ITEM "
-            "(e.g. op://Private/dotfiles-vault-passwords) and ensure `op` is "
-            "on PATH and signed in.",
+            "Error: input does not look like an age private key "
+            "(missing 'AGE-SECRET-KEY-').",
             err=True,
         )
         sys.exit(1)
 
-    backend = get_backend()
     try:
-        backend.ensure_ready()
+        write_age_key(private_key)
     except Exception as exc:
-        click.echo(f"Backend not ready: {exc}", err=True)
+        click.echo(f"Error: {exc}", err=True)
         sys.exit(1)
 
-    labels = [label] if label else get_profiles_with_secrets()
-    if not labels:
-        click.echo("No profiles with encrypted secrets found.")
-        return 0
-
-    pulled: list[str] = []
-    failed: list[str] = []
-
-    for lbl in labels:
-        fresh = onepassword.read_field(lbl)
-        if not fresh:
-            click.echo(f"Skipping {lbl!r}: no value in 1Password.", err=True)
-            failed.append(lbl)
-            continue
-
+    click.echo("Stored age private key in the keychain.")
+    if is_age_keygen_available():
         try:
-            secrets_file = get_secrets_file(lbl)
-        except ValueError:
-            secrets_file = None
-
-        if (
-            secrets_file is not None
-            and secrets_file.exists()
-            and secrets_file.read_text().startswith("$ANSIBLE_VAULT")
-        ):
-            rc, _, _ = run_ansible_vault(
-                ["view", str(secrets_file)], password=fresh, location=lbl
-            )
-            if rc != 0:
-                click.echo(
-                    f"Skipping {lbl!r}: 1Password value does not decrypt "
-                    f"{secrets_file.name}.",
-                    err=True,
-                )
-                failed.append(lbl)
-                continue
-
-        try:
-            backend.write(lbl, fresh)
-        except Exception as exc:
-            click.echo(f"Failed to store {lbl!r}: {exc}", err=True)
-            failed.append(lbl)
-            continue
-
-        click.echo(f"Pulled password for {lbl!r} from 1Password.")
-        pulled.append(lbl)
-
-    click.echo()
-    if pulled:
-        click.echo(f"Pulled: {', '.join(pulled)}")
-    if failed:
-        click.echo(f"Failed: {', '.join(failed)}", err=True)
-        sys.exit(1)
+            pub = get_public_key_from_private(private_key)
+            click.echo(f"Public key: {pub}")
+            click.echo("Ensure this recipient is present in .sops.yaml.")
+        except RuntimeError:
+            pass
     return 0
 
 
+@secret_keychain.command("export-key")
+def keychain_export_key():
+    """Print the age private key so it can be backed up (e.g. to 1Password).
+
+    The key is printed to stdout only when stdout is NOT a tty, or after an
+    explicit warning prompt when it is. Pipe to a password manager or a
+    secure file — do not share or commit.
+    """
+    private_key = read_age_key()
+    if private_key is None:
+        click.echo(
+            "Error: no age private key in keychain. Run `dotfiles secret init` first.",
+            err=True,
+        )
+        sys.exit(1)
+
+    if sys.stdout.isatty():
+        click.echo(
+            "WARNING: this will print your age private key to the terminal.",
+            err=True,
+        )
+        if not click.confirm("Continue?", default=False):
+            click.echo("Aborted.", err=True)
+            return
+    click.echo(private_key)
+
+
+@secret_keychain.command("backup")
+def keychain_backup():
+    """Save the age private key to 1Password for cross-machine portability.
+
+    Stores the key as a Secure Note titled "dotfiles-age-key" in 1Password.
+    On a new machine:
+
+      1. Install 1Password and sign in (public profile, no secrets needed)
+      2. Run `dotfiles secret init` — it pulls the key from 1Password
+      3. Run `dotfiles install --all`
+    """
+    if not is_op_available():
+        click.echo(
+            "Error: op CLI not found. Install 1Password CLI: brew install 1password-cli",
+            err=True,
+        )
+        sys.exit(1)
+
+    private_key = read_age_key()
+    if private_key is None:
+        click.echo(
+            "Error: no age private key in keychain. Run `dotfiles secret init` first.",
+            err=True,
+        )
+        sys.exit(1)
+
+    try:
+        write_age_key_to_op(private_key)
+    except RuntimeError as exc:
+        click.echo(f"Error: {exc}", err=True)
+        sys.exit(1)
+
+    click.echo(f"Age private key saved to 1Password item '{OP_ITEM_TITLE}'.")
+
+
 @secret_keychain.command("rm")
-@click.argument("label")
+@click.argument("label", required=False)
+@click.option(
+    "--age",
+    "rm_age",
+    is_flag=True,
+    help="Remove the stored age private key.",
+)
 @click.option(
     "--yes",
     "-y",
@@ -675,23 +607,42 @@ def keychain_pull(label: str | None, pull_all: bool):
     is_flag=True,
     help="Skip the confirmation prompt.",
 )
-def keychain_rm(label: str, assume_yes: bool):
-    """Delete the stored vault password for LABEL."""
+def keychain_rm(label: str | None, rm_age: bool, assume_yes: bool):
+    """Delete a stored keychain item.
+
+    Pass --age to remove the age private key, or LABEL to remove a leftover
+    per-profile Ansible Vault password (these become unused after migration).
+    """
+    from ..vault.age import AGE_KEY_LABEL
+
+    if rm_age and label:
+        click.echo("Error: pass either --age or LABEL, not both.", err=True)
+        sys.exit(1)
+    if not rm_age and not label:
+        click.echo("Error: provide LABEL or use --age.", err=True)
+        sys.exit(1)
+
+    target = AGE_KEY_LABEL if rm_age else label
+    descriptor = "age private key" if rm_age else f"password for {target!r}"
+
     backend = get_backend()
-    if label not in backend.list_labels():
-        click.echo(f"No stored password for {label!r}; nothing to do.")
+    if target not in backend.list_labels():
+        click.echo(f"No stored {descriptor}; nothing to do.")
         return 0
     if not assume_yes and not click.confirm(
-        f"Delete stored vault password for {label!r}?", default=False
+        f"Delete stored {descriptor}?", default=False
     ):
         click.echo("Aborted.")
         return 0
     try:
-        backend.delete(label)
+        if rm_age:
+            delete_age_key()
+        else:
+            backend.delete(target)
     except Exception as exc:
         click.echo(f"Error: {exc}", err=True)
         sys.exit(1)
-    click.echo(f"Deleted password for {label!r}.")
+    click.echo(f"Deleted {descriptor}.")
 
 
 # ------------------------------------------------------------------------- init
@@ -701,244 +652,118 @@ def keychain_rm(label: str, assume_yes: bool):
 @click.option(
     "--profile",
     "-p",
-    type=SecretLocationChoice(),
+    "profile",
     default=None,
-    help="Provision a single label (default: every profile with an encrypted secrets.yml).",
+    help="[unused, kept for compatibility]",
 )
 def secret_init(profile: str | None):
-    """Initialize the OS-level vault password storage.
+    """Generate an age keypair and store the private key in the OS keychain.
 
-    On macOS: creates the dedicated keychain + unlock chain, then stores
-    one item per label with ACL scoped to `bin/dotfiles-vault-client`.
-
-    On Linux: verifies `gpg` is available and stores labels in a single
-    gpg-symmetric-encrypted file unlocked by one master password.
-
-    Only labels that have an associated encrypted `secrets.yml` are
-    auto-provisioned. Use `dotfiles secret keychain push <label>` to
-    register other labels explicitly.
+    A single age keypair protects every profile's sops-encrypted secrets.yml.
+    This generates one (if absent), stores the private key in the OS keychain,
+    and writes the public key into .sops.yaml's creation rules so sops can
+    encrypt. The private key is never printed; the public key is safe to
+    commit.
     """
-    backend = get_backend()
-    try:
-        backend.ensure_ready()
-    except Exception as exc:
-        click.echo(f"Backend setup failed: {exc}", err=True)
+    if not is_age_keygen_available():
+        click.echo(
+            "Error: age-keygen not found. Install age: brew install age", err=True
+        )
         sys.exit(1)
 
-    if profile:
-        labels = [profile]
-    else:
-        labels = get_profiles_with_secrets()
-
-    if not labels:
-        click.echo("No profiles with encrypted secrets found; nothing to provision.")
+    existing = read_age_key()
+    if existing:
+        click.echo("Age private key already stored in keychain.")
+        try:
+            public_key = get_public_key_from_private(existing)
+        except RuntimeError as exc:
+            click.echo(f"Error deriving public key: {exc}", err=True)
+            sys.exit(1)
+        click.echo(f"Public key: {public_key}")
+        _ensure_recipient_in_sops_config(public_key)
         return 0
 
-    existing = set(backend.list_labels())
-    stored: list[str] = []
-    skipped: list[str] = []
+    # No key in keychain — try 1Password before generating a fresh keypair.
+    if is_op_available():
+        click.echo("Checking 1Password for an existing age key …")
+        op_key = read_age_key_from_op()
+        if op_key is not None:
+            try:
+                write_age_key(op_key)
+            except Exception as exc:
+                click.echo(f"Error storing age private key: {exc}", err=True)
+                sys.exit(1)
+            click.echo(
+                "Age private key imported from 1Password and stored in keychain."
+            )
+            try:
+                public_key = get_public_key_from_private(op_key)
+                click.echo(f"Public key: {public_key}")
+                _ensure_recipient_in_sops_config(public_key)
+            except RuntimeError as exc:
+                click.echo(f"Warning: could not derive public key: {exc}", err=True)
+            return 0
+        click.echo("No age key found in 1Password — generating a new keypair.")
 
-    for label in labels:
-        if label in existing:
-            if not click.confirm(
-                f"Password for {label!r} already stored. Overwrite?",
-                default=False,
-            ):
-                click.echo(f"Skipping {label!r}.")
-                skipped.append(label)
-                continue
+    try:
+        private_key, public_key = generate_keypair()
+    except RuntimeError as exc:
+        click.echo(f"Error generating keypair: {exc}", err=True)
+        sys.exit(1)
 
-        click.echo(f"\n=== Vault password for {label!r} ===")
-        password = _prompt_for_password(label)
-        if not password:
-            click.echo(f"No password entered for {label!r}; skipping.")
-            skipped.append(label)
-            continue
+    try:
+        write_age_key(private_key)
+    except Exception as exc:
+        click.echo(f"Error storing age private key: {exc}", err=True)
+        sys.exit(1)
 
-        try:
-            backend.write(label, password)
-        except Exception as exc:
-            click.echo(f"Failed to store {label!r}: {exc}", err=True)
-            sys.exit(1)
-        click.echo(f"Stored password for {label!r}.")
-        stored.append(label)
+    click.echo("Generated and stored age private key in the OS keychain.")
+    click.echo(f"\nPublic key: {public_key}")
+    _ensure_recipient_in_sops_config(public_key)
 
-    click.echo()
-    if stored:
-        click.echo(f"Stored: {', '.join(stored)}")
-    if skipped:
-        click.echo(f"Skipped: {', '.join(skipped)}")
-    click.echo("Run `dotfiles secret keychain status` to verify.")
+    click.echo(
+        "\nNext steps:"
+        "\n  1. Commit .sops.yaml."
+        "\n  2. Back up your key to 1Password: dotfiles secret keychain backup"
+        "\n  3. Migrate existing profiles: bin/migrate-to-sops.sh <profile>"
+        "\n  4. Or create new secrets: dotfiles secret set -p <profile> <key>"
+    )
     return 0
 
 
-MAX_VAULT_PASSWORD_ATTEMPTS = 3
-
-
-def _prompt_for_password(label: str) -> str:
-    """Ask the user for a password for `label` — direct entry or 1P import."""
-    if shutil.which("op"):
-        click.echo("  1. Enter directly")
-        click.echo("  2. Import from 1Password")
-        choice = click.prompt(
-            "Source", type=click.Choice(["1", "2"]), default="1", show_default=True
+def _ensure_recipient_in_sops_config(public_key: str) -> None:
+    """Write ``public_key`` into .sops.yaml unless it's already the recipient."""
+    config_path = sops.get_sops_config_path()
+    if not config_path.exists():
+        click.echo(
+            f"Warning: {config_path} not found. Add this recipient manually:\n"
+            f"  age: {public_key}",
+            err=True,
         )
-    else:
-        choice = "1"
+        return
 
-    if choice == "2":
-        return _fetch_value_from_1password() or ""
-    return _prompt_and_validate(label)
-
-
-def _prompt_and_validate(label: str) -> str:
-    """Prompt for a password and validate it against the label's secrets file.
-
-    If the label has an encrypted secrets.yml, the entered password is
-    verified by attempting a decrypt; wrong passwords re-prompt up to
-    MAX_VAULT_PASSWORD_ATTEMPTS times. Labels without an encrypted file
-    (e.g. fresh profile) are accepted as-entered since there's nothing to
-    verify against — first `secret set` will establish the encryption.
-    """
-    try:
-        secrets_file = get_secrets_file(label)
-    except ValueError:
-        secrets_file = None
-
-    can_validate = (
-        secrets_file is not None
-        and secrets_file.exists()
-        and secrets_file.read_text().startswith("$ANSIBLE_VAULT")
-    )
-
-    for attempt in range(1, MAX_VAULT_PASSWORD_ATTEMPTS + 1):
-        pw = getpass.getpass(f"Vault password for {label!r}: ")
-        if not pw:
-            click.echo("Error: Password cannot be empty.", err=True)
-            return ""
-
-        if not can_validate:
-            # No encrypted file to check against — trust the user.
-            return pw
-
-        rc, _, _ = run_ansible_vault(
-            ["view", str(secrets_file)], password=pw, location=label
-        )
-        if rc == 0:
-            return pw
-
-        remaining = MAX_VAULT_PASSWORD_ATTEMPTS - attempt
-        if remaining > 0:
-            click.echo(
-                f"Password did not decrypt {secrets_file.name}. "
-                f"{remaining} attempt{'s' if remaining != 1 else ''} remaining.",
-                err=True,
-            )
-
-    click.echo("Error: Too many failed attempts.", err=True)
-    return ""
-
-
-def _fetch_value_from_1password() -> str | None:
-    """Interactive walk through op vaults/items/fields; return the value or None."""
-    if not shutil.which("op"):
-        click.echo("1Password CLI (op) is not installed.", err=True)
-        return None
-
-    use_fzf = shutil.which("fzf") is not None
+    current = sops.get_configured_recipients()
+    if current == [public_key]:
+        click.echo(".sops.yaml already lists this recipient.")
+        return
 
     try:
-        click.echo("Fetching vaults from 1Password...")
-        result = subprocess.run(
-            ["op", "vault", "list", "--format=json"],
-            capture_output=True,
-            text=True,
-            check=True,
+        sops.set_sops_recipient(public_key)
+    except SopsError as exc:
+        click.echo(
+            f"Warning: could not update .sops.yaml automatically ({exc}). "
+            f"Add this recipient manually:\n  age: {public_key}",
+            err=True,
         )
-        vaults = json.loads(result.stdout)
-        if not vaults:
-            click.echo("No vaults found in 1Password.", err=True)
-            return None
-        vault_names = sorted([v["name"] for v in vaults])
-        selected_vault = (
-            fzf_select(vault_names, "Select Vault")
-            if use_fzf
-            else numbered_select(vault_names, "Select Vault")
-        )
-        if not selected_vault:
-            return None
-        vault_id = next(v["id"] for v in vaults if v["name"] == selected_vault)
+        return
+    click.echo(f"Updated {config_path.name} with the age recipient.")
 
-        click.echo("Fetching items...")
-        result = subprocess.run(
-            ["op", "item", "list", "--format=json", f"--vault={vault_id}"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        items = json.loads(result.stdout)
-        if not items:
-            click.echo("No items found in vault.", err=True)
-            return None
-        item_names = sorted([i["title"] for i in items])
-        selected_item = (
-            fzf_select(item_names, "Select Item")
-            if use_fzf
-            else numbered_select(item_names, "Select Item")
-        )
-        if not selected_item:
-            return None
 
-        click.echo("Fetching fields...")
-        result = subprocess.run(
-            [
-                "op",
-                "item",
-                "get",
-                "--format=json",
-                f"--vault={vault_id}",
-                selected_item,
-            ],
-            capture_output=True,
-            text=True,
-            check=True,
+def _require_sops() -> None:
+    """Exit with a helpful message if sops is not installed."""
+    if not is_sops_available():
+        click.echo(
+            "Error: sops not found on PATH. Install sops: brew install sops",
+            err=True,
         )
-        item_data = json.loads(result.stdout)
-        fields = item_data.get("fields", [])
-        field_labels = [f["label"] for f in fields if f.get("label")]
-        if not field_labels:
-            click.echo("No fields found in item.", err=True)
-            return None
-        selected_field = (
-            fzf_select(field_labels, "Select Field")
-            if use_fzf
-            else numbered_select(field_labels, "Select Field")
-        )
-        if not selected_field:
-            return None
-
-        # Read the value (not the reference) — we want to store the raw
-        # password in the backend, not an op:// URL.
-        result = subprocess.run(
-            [
-                "op",
-                "read",
-                "--no-newline",
-                f"op://{vault_id}/{selected_item}/{selected_field}",
-            ],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        value = result.stdout
-        if not value:
-            click.echo("1Password returned an empty value.", err=True)
-            return None
-        return value
-
-    except subprocess.CalledProcessError as exc:
-        click.echo(f"Error running 1Password CLI: {exc.stderr}", err=True)
-        return None
-    except json.JSONDecodeError as exc:
-        click.echo(f"Error parsing 1Password output: {exc}", err=True)
-        return None
+        sys.exit(1)

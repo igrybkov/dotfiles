@@ -5,13 +5,10 @@ from __future__ import annotations
 import shutil
 import subprocess
 from pathlib import Path
-from tempfile import TemporaryDirectory
 
-import ansible_runner
 import click
 
 from ..constants import DOTFILES_DIR
-from ..profiles import get_profile_requirements_paths
 
 # Prep stamp used by the bash wrapper to skip redundant preparation
 PREP_STAMP = Path(DOTFILES_DIR) / ".cache" / ".prep_stamp"
@@ -38,66 +35,10 @@ def invalidate_prep_stamp() -> None:
     default=False,
     help="Skip upgrading mise",
 )
-@click.option(
-    "--no-ansible-galaxy",
-    is_flag=True,
-    default=False,
-    help="Skip upgrading Ansible roles and collections",
-)
-def upgrade(no_uv: bool, no_mise: bool, no_ansible_galaxy: bool):
-    """Upgrade all dependencies including Ansible roles/collections, mise, and uv."""
+def upgrade(no_uv: bool, no_mise: bool):
+    """Upgrade all dependencies including mise and uv."""
     failed = False
     upgraded_items = []
-
-    # Upgrade Ansible Galaxy roles and collections
-    if not no_ansible_galaxy:
-        click.echo("Upgrading Ansible roles and collections...")
-        with TemporaryDirectory() as tmpdir:
-            # Upgrade main requirements
-            out, err, rc = ansible_runner.run_command(
-                private_data_dir=tmpdir,
-                project_dir=DOTFILES_DIR,
-                envvars={"ANSIBLE_CONFIG": f"{DOTFILES_DIR}/ansible.cfg"},
-                executable_cmd="ansible-galaxy",
-                cmdline_args=[
-                    "install",
-                    "-r",
-                    f"{DOTFILES_DIR}/requirements.yml",
-                    "--force",
-                ],
-                quiet=False,
-            )
-            if rc != 0:
-                click.echo(f"Error upgrading Ansible Galaxy: {err}", err=True)
-                failed = True
-            else:
-                click.echo("✓ Ansible roles and collections upgraded")
-                upgraded_items.append("Ansible roles/collections")
-
-            # Upgrade profile-specific requirements
-            profile_requirements = get_profile_requirements_paths()
-            for req_file in profile_requirements:
-                out, err, rc = ansible_runner.run_command(
-                    private_data_dir=tmpdir,
-                    project_dir=DOTFILES_DIR,
-                    envvars={"ANSIBLE_CONFIG": f"{DOTFILES_DIR}/ansible.cfg"},
-                    executable_cmd="ansible-galaxy",
-                    cmdline_args=[
-                        "install",
-                        "-r",
-                        req_file,
-                        "--force",
-                    ],
-                    quiet=False,
-                )
-                if rc != 0:
-                    click.echo(
-                        f"Error upgrading profile Galaxy deps ({req_file}): {err}",
-                        err=True,
-                    )
-                    failed = True
-    else:
-        click.echo("Skipping Ansible Galaxy upgrade (--no-ansible-galaxy)")
 
     # Upgrade mise
     if not no_mise:

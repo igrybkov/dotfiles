@@ -71,7 +71,7 @@ def read_field(label: str) -> str | None:
             text=True,
             timeout=15,
         )
-    except (FileNotFoundError, subprocess.TimeoutExpired):
+    except FileNotFoundError, subprocess.TimeoutExpired:
         return None
 
     if result.returncode != 0:
@@ -107,7 +107,7 @@ def _item_exists(vault: str, title: str) -> bool:
     ]
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
-    except (FileNotFoundError, subprocess.TimeoutExpired):
+    except FileNotFoundError, subprocess.TimeoutExpired:
         return False
     return result.returncode == 0
 

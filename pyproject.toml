@@ -25,8 +25,11 @@ dependencies = [
   # Workspace packages
   "dotfiles-cli",
   "dotfiles-profile-discovery",
+  "dotfiles-pyinfra",
   "mitogen~=0.3.36",
-  "paramiko~=5.0.0",
+  # pyinfra deploy engine (coexists with Ansible during migration)
+  # paramiko is a transitive dep; no explicit pin so pyinfra's <5 upper bound resolves cleanly
+  "pyinfra>=3.2,<4",
   "symlink-dotfiles",
 ]
 
@@ -52,12 +55,14 @@ members = [ "packages/*" ]
 [tool.uv.sources]
 dotfiles-cli = { workspace = true }
 dotfiles-profile-discovery = { workspace = true }
+dotfiles-pyinfra = { workspace = true }
 symlink-dotfiles = { workspace = true }
 
 [tool.pytest.ini_options]
 testpaths = [
   "packages/dotfiles_cli/tests",
   "packages/dotfiles_profile_discovery/tests",
+  "packages/dotfiles_pyinfra/tests",
   "packages/symlink_dotfiles/tests",
   "profiles/agents/packages/hive_cli/tests",
   "tests",

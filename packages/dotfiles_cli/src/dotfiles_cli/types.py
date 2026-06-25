@@ -1,15 +1,10 @@
-"""Custom Click types for Ansible integration."""
+"""Custom Click types for pyinfra integration."""
 
 from __future__ import annotations
 
 import importlib
-import itertools
-import json
-import os
-import re
 from functools import lru_cache
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from typing import Any, Optional
 
 import click
@@ -18,23 +13,19 @@ from click.shell_completion import CompletionItem
 
 from .constants import DOTFILES_DIR
 
-# Cache directory for storing computed values
-CACHE_DIR = Path(DOTFILES_DIR) / ".cache"
-TAGS_CACHE_FILE = CACHE_DIR / "ansible_tags.json"
 
+class PyinfraTagListType(click.Choice[str]):
+    """Click type for pyinfra deploy tags — reads from static registry."""
 
-class AnsibleTagListType(click.Choice):
-    """Click type for Ansible playbook tags with dynamic completion."""
-
-    name = "Ansible Tag"
-    envvar_list_splitter: str = ","
+    name = "Tag"
+    envvar_list_splitter: str | None = ","
 
     def __init__(self):
         super().__init__([], case_sensitive=True)
 
     @property
     def choices(self) -> list[str]:
-        """Get all supported tags from the playbook."""
+        """Get all supported tags from the pyinfra tag registry."""
         return self._get_all_supported_tags()
 
     @choices.setter
@@ -43,8 +34,10 @@ class AnsibleTagListType(click.Choice):
 
     @staticmethod
     def _get_all_supported_tags() -> list[str]:
-        """Get all supported tags from the playbook with file-based caching."""
-        return _get_cached_tags()
+        """Get all supported tags from the static pyinfra registry."""
+        from dotfiles_pyinfra.tags import ALL_SELECTOR, ALL_TAGS
+
+        return sorted([ALL_SELECTOR] + list(ALL_TAGS))
 
     def convert(
         self, value: Any, param: Optional["Parameter"], ctx: Optional["Context"]
@@ -63,91 +56,11 @@ class AnsibleTagListType(click.Choice):
         return [CompletionItem(tag) for tag in self._get_all_supported_tags()]
 
 
-def _get_playbook_mtime() -> float:
-    """Get the max modification time of playbook.yml and roles directory."""
-    playbook_path = Path(DOTFILES_DIR) / "playbook.yml"
-    roles_path = Path(DOTFILES_DIR) / "roles"
+class ProfileListType(click.Choice[str]):
+    """Click type for profile names — reads from profile discovery."""
 
-    mtime = playbook_path.stat().st_mtime if playbook_path.exists() else 0
-
-    # Also check roles directory for any changes
-    if roles_path.exists():
-        for root, _, files in os.walk(roles_path):
-            for f in files:
-                if f.endswith((".yml", ".yaml")):
-                    file_path = Path(root) / f
-                    mtime = max(mtime, file_path.stat().st_mtime)
-
-    return mtime
-
-
-def _load_tags_cache() -> tuple[list[str], float] | None:
-    """Load tags from cache file. Returns (tags, cached_mtime) or None if cache invalid."""
-    if not TAGS_CACHE_FILE.exists():
-        return None
-
-    try:
-        with open(TAGS_CACHE_FILE) as f:
-            data = json.load(f)
-            return data.get("tags", []), data.get("mtime", 0)
-    except (json.JSONDecodeError, OSError):
-        return None
-
-
-def _save_tags_cache(tags: list[str], mtime: float) -> None:
-    """Save tags to cache file."""
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    with open(TAGS_CACHE_FILE, "w") as f:
-        json.dump({"tags": tags, "mtime": mtime}, f)
-
-
-def _fetch_tags_from_ansible() -> list[str]:
-    """Fetch tags by running ansible-playbook --list-tags."""
-    import ansible_runner
-
-    all_tags = {"all"}
-    excluded_tags = {"never", "always"}
-    with TemporaryDirectory() as tmpdir:
-        rc = ansible_runner.RunnerConfig(
-            private_data_dir=tmpdir,
-            project_dir=DOTFILES_DIR,
-            envvars={"ANSIBLE_CONFIG": f"{DOTFILES_DIR}/ansible.cfg"},
-            playbook="playbook.yml",
-            cmdline="--list-tags",
-            quiet=True,
-        )
-        rc.prepare()
-        r = ansible_runner.Runner(config=rc)
-        r.run()
-        stdout = r.stdout.read()
-        # Match all occurrence of TAGS: [tag1, complex-tag, another_tag]
-        for match in re.findall(r"TAGS: \[([^\]]+)\]", stdout):
-            all_tags.update(match.split(", "))
-    return sorted(list(all_tags - excluded_tags))
-
-
-def _get_cached_tags() -> list[str]:
-    """Get tags from cache if valid, otherwise fetch and cache."""
-    current_mtime = _get_playbook_mtime()
-
-    # Try to use cached tags
-    cache_result = _load_tags_cache()
-    if cache_result is not None:
-        cached_tags, cached_mtime = cache_result
-        if cached_mtime >= current_mtime and cached_tags:
-            return cached_tags
-
-    # Cache miss or stale - fetch fresh tags
-    tags = _fetch_tags_from_ansible()
-    _save_tags_cache(tags, current_mtime)
-    return tags
-
-
-class AnsibleHostListType(click.Choice):
-    """Click type for Ansible hosts with dynamic completion."""
-
-    name = "Ansible Host"
-    envvar_list_splitter: str = ","
+    name = "Profile"
+    envvar_list_splitter: str | None = ","
 
     def __init__(self):
         super().__init__([], case_sensitive=True)
@@ -155,48 +68,24 @@ class AnsibleHostListType(click.Choice):
     @property
     @lru_cache()
     def choices(self) -> list[str]:
-        """Get all supported hosts from inventory."""
-        return self.get_all_hosts()
+        """Get all profile names from on-disk discovery."""
+        return self.get_all_profiles()
 
     @choices.setter
     def choices(self, choices: list[str]) -> None:
         pass
 
     @staticmethod
-    def get_all_hosts() -> list[str]:
-        """Get all supported hosts from inventory (uses ansible.cfg settings)."""
-        import ansible_runner
+    def get_all_profiles() -> list[str]:
+        """Discover all profile names on disk."""
+        from dotfiles_profile_discovery import discover_profiles
 
-        excluded_hosts = {"all", "ungrouped"}
-
-        try:
-            with TemporaryDirectory() as tmpdir:
-                result, _ = ansible_runner.interface.get_inventory(
-                    action="list",
-                    private_data_dir=tmpdir,
-                    project_dir=DOTFILES_DIR,
-                    envvars={"ANSIBLE_CONFIG": f"{DOTFILES_DIR}/ansible.cfg"},
-                    response_format="json",
-                    quiet=True,
-                )
-            if not isinstance(result, dict):
-                # Fallback if inventory parsing fails (e.g., vault issues)
-                return ["work", "personal"]
-            all_groups = result.get("all", {}).get("children", [])
-            all_hosts = set(
-                itertools.chain.from_iterable(
-                    [result.get(group, {}).get("hosts", []) for group in all_groups]
-                    + [all_groups]
-                )
-            )
-            return sorted(list(all_hosts - excluded_hosts))
-        except Exception:
-            # Fallback to known hosts if parsing fails
-            return ["work", "personal"]
+        profiles = discover_profiles(Path(DOTFILES_DIR) / "profiles")
+        return sorted(p.name for p in profiles)
 
     def shell_complete(self, ctx, param, incomplete):
-        """Provide shell completion for hosts."""
-        return [CompletionItem(host) for host in self.get_all_hosts()]
+        """Provide shell completion for profile names."""
+        return [CompletionItem(p) for p in self.get_all_profiles()]
 
 
 class AliasedGroup(click.Group):
@@ -238,6 +127,7 @@ class AliasedGroup(click.Group):
     def resolve_command(self, ctx, args):
         """Resolve command, always returning the full command name."""
         _, cmd, args = super().resolve_command(ctx, args)
+        assert cmd is not None
         return cmd.name, cmd, args
 
     def format_commands(self, ctx, formatter):
@@ -266,9 +156,11 @@ class LazyAliasedGroup(click.Group):
     For --help, only command names and pre-defined help strings are used.
     """
 
-    def __init__(self, *args: Any, lazy_commands: dict | None = None, **kwargs: Any):
+    def __init__(
+        self, *args: Any, lazy_commands: dict[str, Any] | None = None, **kwargs: Any
+    ):
         super().__init__(*args, **kwargs)
-        self._lazy_commands: dict[str, dict] = lazy_commands or {}
+        self._lazy_commands: dict[str, Any] = lazy_commands or {}
         # Build alias -> canonical name mapping
         self._alias_map: dict[str, str] = {}
         for name, info in self._lazy_commands.items():
@@ -305,6 +197,7 @@ class LazyAliasedGroup(click.Group):
     def resolve_command(self, ctx, args):
         """Resolve command, always returning the full command name."""
         _, cmd, args = super().resolve_command(ctx, args)
+        assert cmd is not None
         return cmd.name, cmd, args
 
     def format_commands(self, ctx, formatter):
@@ -325,5 +218,5 @@ class LazyAliasedGroup(click.Group):
 
 
 # Singleton instances for use in commands
-ansible_tags_type = AnsibleTagListType()
-ansible_hosts_type = AnsibleHostListType()
+ansible_tags_type = PyinfraTagListType()
+ansible_hosts_type = ProfileListType()

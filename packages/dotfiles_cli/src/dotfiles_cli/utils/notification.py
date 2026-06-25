@@ -38,7 +38,7 @@ def send_notification(title: str, message: str, group: str = "dotfiles-cli") -> 
             if proc.stdin:
                 proc.stdin.write(message.encode())
                 proc.stdin.close()
-        except (subprocess.SubprocessError, OSError):
+        except subprocess.SubprocessError, OSError:
             pass
         return
 
@@ -57,5 +57,5 @@ def send_notification(title: str, message: str, group: str = "dotfiles-cli") -> 
                 stderr=subprocess.DEVNULL,
                 start_new_session=True,
             )
-        except (subprocess.SubprocessError, OSError):
+        except subprocess.SubprocessError, OSError:
             pass

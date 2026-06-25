@@ -1,0 +1,13 @@
+---
+# sops + age recipient configuration for this repo's encrypted secrets.
+#
+# Run 'dotfiles secret init' to generate your age keypair and fill in the
+# 'age:' recipient below automatically. Then commit .sops.yaml to the repo.
+#
+# To add another recipient (e.g. a second machine or a teammate), append its
+# age public key to the 'age:' list and run 'dotfiles secret rekey --all'.
+creation_rules:
+  - path_regex: profiles/.*/secrets\.yml$
+    age: "age1qyzjpar2ezj359xt0ts2p04tmwr955vg80tn5twv2v5pcwg4zcpqadtws2"
+  - path_regex: profiles/.*/secrets/.*\.yml$
+    age: "age1qyzjpar2ezj359xt0ts2p04tmwr955vg80tn5twv2v5pcwg4zcpqadtws2"

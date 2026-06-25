@@ -1,15 +1,16 @@
-"""Install command for running Ansible playbook."""
+"""Install command for running the pyinfra deploy."""
 
 from __future__ import annotations
 
 import getpass
+import os
+import shlex
 import shutil
 import subprocess
 import threading
 from contextlib import contextmanager
-from tempfile import TemporaryDirectory
+from pathlib import Path
 
-import ansible_runner
 import click
 from click import Context
 from click.shell_completion import CompletionItem
@@ -20,13 +21,10 @@ from ..constants import (
     SUDO_TAGS,
     VAULT_TAGS,
     get_env_file,
-    get_vault_client_script,
 )
 from ..profiles import (
     get_active_profiles,
     get_all_profile_names,
-    get_profile_requirements_paths,
-    get_profile_roles_paths,
     get_repos_with_unpushed_changes,
     parse_profile_selection,
 )
@@ -37,9 +35,13 @@ from ..utils import (
     send_notification,
     validate_sudo_password,
 )
-from ..vault import (
-    get_profiles_with_secrets,
-)
+
+try:
+    from ..vault.age import read_age_key
+except ImportError:
+
+    def read_age_key() -> str | None:
+        return None
 
 
 _SUDO_PROMPT_NOTIFICATION_DELAY = 60
@@ -119,13 +121,7 @@ def complete_profiles(
     "--logfile",
     "-l",
     default=None,
-    help="Write output to log file (default: ansible-run-YYYYMMDD-HHMMSS.log)",
-)
-@click.option(
-    "--timing",
-    default=False,
-    is_flag=True,
-    help="Enable Ansible timing/profiling callbacks (timer, profile_tasks, profile_roles)",
+    help="Write output to log file (default: dotfiles-run-YYYYMMDD-HHMMSS.log)",
 )
 @click.option(
     "--sync",
@@ -146,15 +142,14 @@ def complete_profiles(
 def install(
     ctx: Context,
     logfile: str | None = None,
-    tag: list[str] = None,
+    tag: list[str] | None = None,
     profile: tuple[str, ...] = (),
     verbose: int = 0,
     all: bool = False,
-    timing: bool = False,
     run_sync: bool = False,
     dry_run: bool = False,
 ) -> int | None:
-    """Run ansible playbook to install dotfiles."""
+    """Run the pyinfra deploy to install dotfiles."""
     from .git import sync
 
     # Run sync before playbook if --sync flag is set
@@ -205,8 +200,7 @@ def install(
 
     if not active_profiles:
         click.echo(
-            "No profiles configured. Run 'dotfiles config' to select profiles, "
-            f"or use --profile flag. Available: {', '.join(available_profiles)}"
+            f"No profiles configured. Run 'dotfiles config' to select profiles, or use --profile flag. Available: {', '.join(available_profiles)}"
         )
         return 1
 
@@ -228,182 +222,147 @@ def install(
     else:
         click.echo("Warning: mise not found in PATH", err=True)
 
-    with TemporaryDirectory() as tmpdir:
-        # Install Ansible dependencies from main requirements
-        ansible_runner.run_command(
-            private_data_dir=tmpdir,
-            project_dir=DOTFILES_DIR,
-            envvars={"ANSIBLE_CONFIG": f"{DOTFILES_DIR}/ansible.cfg"},
-            executable_cmd="ansible-galaxy",
-            cmdline_args=["install", "-r", f"{DOTFILES_DIR}/requirements.yml"],
-            quiet=False,
+    # Homebrew bootstrap (must happen before pyinfra reads brew facts).
+    # Skipped when a marker file exists (e.g. CI / non-macOS environments).
+    if (
+        not shutil.which("brew")
+        and not (Path(DOTFILES_DIR) / ".cache" / "skip-homebrew").exists()
+    ):
+        click.echo("Installing Homebrew...")
+        result = subprocess.run(
+            [
+                "/bin/bash",
+                "-c",
+                "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)",
+            ],
+            check=False,
         )
+        if result.returncode != 0:
+            click.echo("Warning: Homebrew install failed", err=True)
 
-        # Install profile-specific Galaxy requirements
-        profile_requirements = get_profile_requirements_paths()
-        for req_file in profile_requirements:
-            ansible_runner.run_command(
-                private_data_dir=tmpdir,
-                project_dir=DOTFILES_DIR,
-                envvars={"ANSIBLE_CONFIG": f"{DOTFILES_DIR}/ansible.cfg"},
-                executable_cmd="ansible-galaxy",
-                cmdline_args=["install", "-r", req_file],
-                quiet=False,
-            )
+    # Prompt for the sudo password when any selected tag needs root.
+    become_password = None
+    if set(tags) & SUDO_TAGS or "all" in tags:
+        max_attempts = 3
 
-        envvars = {"ANSIBLE_CONFIG": f"{DOTFILES_DIR}/ansible.cfg"}
+        for attempt in range(1, max_attempts + 1):
+            try:
+                with _notify_on_idle_prompt(
+                    "Dotfiles: Sudo Required",
+                    "Waiting for sudo password...",
+                ):
+                    become_password = getpass.getpass("SUDO password: ")
+            except KeyboardInterrupt, EOFError:
+                click.echo("\nError: Password prompt cancelled.", err=True)
+                return 1
 
-        profile_roles = get_profile_roles_paths()
-        if profile_roles:
-            default_roles_path = f"{DOTFILES_DIR}/roles"
-            envvars["ANSIBLE_ROLES_PATH"] = ":".join(
-                profile_roles + [default_roles_path]
-            )
+            if not become_password:
+                click.echo("Error: Password cannot be empty.", err=True)
+                if attempt < max_attempts:
+                    continue
+                return 1
 
-        if timing:
-            envvars["ANSIBLE_CALLBACKS_ENABLED"] = "timer,profile_tasks,profile_roles"
-
-        become_extravars: dict[str, str] = {}
-
-        if set(tags) & SUDO_TAGS or "all" in tags:
-            max_attempts = 3
-            become_password = None
-
-            for attempt in range(1, max_attempts + 1):
-                try:
-                    with _notify_on_idle_prompt(
-                        "Dotfiles: Sudo Required",
-                        "Waiting for sudo password...",
-                    ):
-                        become_password = getpass.getpass("SUDO password: ")
-                except (KeyboardInterrupt, EOFError):
-                    click.echo("\nError: Password prompt cancelled.", err=True)
-                    return 1
-
-                if not become_password:
-                    click.echo("Error: Password cannot be empty.", err=True)
-                    if attempt < max_attempts:
-                        continue
-                    return 1
-
-                click.echo("Validating sudo password...")
-                if validate_sudo_password(become_password):
-                    click.echo("✓ Sudo password validated")
-                    break
-                else:
-                    remaining = max_attempts - attempt
-                    if remaining > 0:
-                        click.echo(
-                            f"Error: Invalid sudo password. {remaining} "
-                            f"attempt{'s' if remaining > 1 else ''} remaining.",
-                            err=True,
-                        )
-                    else:
-                        click.echo(
-                            "Error: Invalid sudo password. No attempts remaining.",
-                            err=True,
-                        )
-                        return 1
-
-            # Pass become password via ansible-runner's extravars mechanism.
-            # ansible-runner writes extravars to a temp file and passes via
-            # `-e @file`, so the password is not visible in process listings.
-            become_extravars = {"ansible_become_password": become_password}
-
-        if logfile == LOGFILE_AUTO:
-            logfile = generate_logfile_name()
-        log_file_handle = None
-        event_handler = None
-        if logfile is not None:
-            log_file_handle = open(logfile, "w")
-
-            def event_handler(event: dict) -> None:
-                if "stdout" in event:
-                    log_file_handle.write(event["stdout"] + "\n")
-                    log_file_handle.flush()
-                if "stderr" in event:
-                    log_file_handle.write(event["stderr"] + "\n")
-                    log_file_handle.flush()
-
-        try:
-            cmdline_args = []
-
-            if dry_run:
-                cmdline_args.append("--check")
-                click.echo("Running in dry-run mode (no changes will be made)")
-
-            needs_vault_password = len(set(tags) & VAULT_TAGS) > 0 or "all" in tags
-
-            if needs_vault_password:
-                # Build ANSIBLE_VAULT_IDENTITY_LIST from profiles that have
-                # an encrypted secrets.yml. Ansible spawns our client script
-                # for each listed vault-id when it needs a password; the
-                # script reads from the OS backend.
-                vault_ids = get_profiles_with_secrets()
-                if vault_ids:
-                    client_script = str(get_vault_client_script())
-                    envvars["ANSIBLE_VAULT_IDENTITY_LIST"] = ",".join(
-                        f"{vid}@{client_script}" for vid in vault_ids
+            click.echo("Validating sudo password...")
+            if validate_sudo_password(become_password):
+                click.echo("✓ Sudo password validated")
+                break
+            else:
+                remaining = max_attempts - attempt
+                if remaining > 0:
+                    click.echo(
+                        f"Error: Invalid sudo password. {remaining} attempt{'s' if remaining > 1 else ''} remaining.",
+                        err=True,
                     )
+                else:
+                    click.echo(
+                        "Error: Invalid sudo password. No attempts remaining.",
+                        err=True,
+                    )
+                    return 1
 
-            # Include localhost for Bootstrap and Finalize plays
-            # Convert hyphens to underscores for Ansible group names (Ansible doesn't allow hyphens in group names)
-            limit_profiles = [p.replace("-", "_") for p in active_profiles]
-            limit_str = ",".join(limit_profiles + ["localhost"])
-            click.echo(f"Running with profiles: {', '.join(active_profiles)}")
-
-            # Always pass the full enabled profile set so all_profiles=True lookups
-            # in Ansible can aggregate from all enabled profiles (not just the -p subset).
-            all_enabled_str = ",".join(
-                p.replace("-", "_") for p in all_enabled_profiles
-            )
-            become_extravars["dotfiles_enabled_profiles"] = all_enabled_str
-
-            r = ansible_runner.run(
-                private_data_dir=tmpdir,
-                project_dir=DOTFILES_DIR,
-                envvars=envvars,
-                extravars=become_extravars,
-                playbook="playbook.yml",
-                limit=limit_str,
-                tags=",".join(tags) if tags else None,
-                verbosity=verbose,
-                quiet=False,
-                event_handler=event_handler,
-                cmdline=" ".join(cmdline_args) if cmdline_args else None,
-            )
-        finally:
-            if log_file_handle:
-                log_file_handle.close()
-
-        if logfile is not None:
-            click.echo(f"\nLog file: {logfile}")
-
-        exit_code = r.rc if r.rc else 0
-
-        # Send notification after playbook completes
-        if exit_code == 0:
-            send_notification("Dotfiles: Complete", "Successfully set up environment.")
-        else:
-            send_notification("Dotfiles: Failed", f"Failed with exit code {exit_code}")
-
-        # Warn about uncommitted/unpushed changes at the end for visibility
-        uncommitted, unpushed = get_repos_with_unpushed_changes()
-        if uncommitted or unpushed:
-            # Collect all unique repos with their issues
-            all_repos = sorted(set(uncommitted) | set(unpushed))
+    # Read the age private key when secret-sensitive tags are selected.
+    sops_age_key = None
+    if set(tags) & VAULT_TAGS or "all" in tags:
+        sops_age_key = read_age_key()
+        if sops_age_key is None:
             click.echo(
-                click.style("\nWarning: ", fg="yellow", bold=True)
-                + "Unsaved changes detected:"
+                "Warning: No age key found. Run 'dotfiles secret init' first. Continuing without secret decryption.",
+                err=True,
             )
-            for repo in all_repos:
-                issues = []
-                if repo in uncommitted:
-                    issues.append("uncommitted")
-                if repo in unpushed:
-                    issues.append("unpushed")
-                click.echo(
-                    click.style(f"  - {repo} ({', '.join(issues)})", fg="yellow")
-                )
 
-        return exit_code
+    # Build the environment for the pyinfra subprocess. The deploy's
+    # inventory.py reads these env vars (never argv) to select profiles,
+    # tags, the sudo password, and the age key.
+    env = dict(os.environ)
+    env["DOTFILES_SELECTED_PROFILES"] = ",".join(active_profiles)
+    env["DOTFILES_ENABLED_PROFILES"] = ",".join(all_enabled_profiles)
+    env["DOTFILES_TAGS"] = ",".join(tags)
+    if become_password:
+        env["DOTFILES_SUDO_PASSWORD"] = become_password
+    if sops_age_key:
+        env["SOPS_AGE_KEY"] = sops_age_key
+
+    # Find pyinfra — prefer `mise x -- pyinfra`, fall back to PATH.
+    if mise_cmd:
+        cmd = [mise_cmd, "x", "--", "pyinfra", "deploy/inventory.py", "deploy/site.py"]
+    else:
+        pyinfra_cmd = shutil.which("pyinfra")
+        if not pyinfra_cmd:
+            click.echo("Error: pyinfra not found. Run 'mise install'.", err=True)
+            return 1
+        cmd = [pyinfra_cmd, "deploy/inventory.py", "deploy/site.py"]
+
+    if dry_run:
+        cmd.append("--dry")
+        click.echo("Running in dry-run mode (no changes will be made)")
+
+    # Verbosity: pyinfra uses -v/-vv/-vvv.
+    if verbose > 0:
+        cmd.append("-" + "v" * verbose)
+
+    click.echo(f"Running with profiles: {', '.join(active_profiles)}")
+
+    if logfile == LOGFILE_AUTO:
+        logfile = generate_logfile_name()
+
+    if logfile:
+        # Tee pyinfra output to both the terminal and the log file.
+        # `set -o pipefail` makes the pipeline exit status reflect pyinfra's
+        # rc rather than tee's, so a failed deploy is reported correctly.
+        tee_cmd = (
+            "set -o pipefail; "
+            + " ".join(shlex.quote(c) for c in cmd)
+            + " 2>&1 | tee "
+            + shlex.quote(logfile)
+        )
+        result = subprocess.run(["bash", "-c", tee_cmd], cwd=DOTFILES_DIR, env=env)
+        click.echo(f"\nLog file: {logfile}")
+    else:
+        result = subprocess.run(cmd, cwd=DOTFILES_DIR, env=env)
+
+    exit_code = result.returncode
+
+    # Send notification after the deploy completes.
+    if exit_code == 0:
+        send_notification("Dotfiles: Complete", "Successfully set up environment.")
+    else:
+        send_notification("Dotfiles: Failed", f"Failed with exit code {exit_code}")
+
+    # Warn about uncommitted/unpushed changes at the end for visibility.
+    uncommitted, unpushed = get_repos_with_unpushed_changes()
+    if uncommitted or unpushed:
+        # Collect all unique repos with their issues
+        all_repos = sorted(set(uncommitted) | set(unpushed))
+        click.echo(
+            click.style("\nWarning: ", fg="yellow", bold=True)
+            + "Unsaved changes detected:"
+        )
+        for repo in all_repos:
+            issues = []
+            if repo in uncommitted:
+                issues.append("uncommitted")
+            if repo in unpushed:
+                issues.append("unpushed")
+            click.echo(click.style(f"  - {repo} ({', '.join(issues)})", fg="yellow"))
+
+    return exit_code

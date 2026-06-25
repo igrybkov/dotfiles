@@ -70,7 +70,7 @@ class MacOSKeyringBackend:
             return []
         try:
             data = json.loads(self.labels_path.read_text())
-        except (json.JSONDecodeError, OSError):
+        except json.JSONDecodeError, OSError:
             return []
         if not isinstance(data, list):
             return []
