@@ -368,7 +368,11 @@ def _configure_file(
     if path.exists():
         text = path.read_text()
         if text.strip():
-            existing = json.loads(text)
+            try:
+                existing = json.loads(text)
+            except json.JSONDecodeError as exc:
+                logger.warning(f"Ignoring invalid JSON in {path}: {exc}")
+                existing = {}
 
     existing_servers: dict[str, Any] = dict(existing.get("mcpServers", {}))
 

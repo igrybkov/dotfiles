@@ -23,6 +23,7 @@ import shlex
 import shutil
 from typing import Any
 
+from pyinfra import logger
 from pyinfra.operations import server
 
 
@@ -34,6 +35,13 @@ def deploy(merged: dict[str, Any]) -> None:
 
     use_uv = shutil.which("uv") is not None
     use_pipx = shutil.which("pipx") is not None
+
+    if not use_uv and not use_pipx:
+        logger.warning(
+            "Neither uv nor pipx found on PATH — skipping pipx packages. "
+            "Run `mise install` to make uv available."
+        )
+        return
 
     # Split packages by category.
     local = [p for p in packages if "path" in p]
@@ -113,7 +121,7 @@ def _pypi_package(pkg: dict[str, Any], *, use_uv: bool, use_pipx: bool) -> None:
         server.shell(
             name=f"Install pipx package {name} (uv)",
             commands=[
-                f'uv tool list 2>/dev/null | grep -q "^{name} "'
+                f"uv tool list 2>/dev/null | awk '{{print $1}}' | grep -qxF {quoted}"
                 f" || {env_prefix}uv tool install {quoted}"
             ],
         )
@@ -121,7 +129,7 @@ def _pypi_package(pkg: dict[str, Any], *, use_uv: bool, use_pipx: bool) -> None:
         server.shell(
             name=f"Install pipx package {name} (pipx)",
             commands=[
-                f"pipx list --short 2>/dev/null | grep -q {quoted}"
+                f"pipx list --short 2>/dev/null | awk '{{print $1}}' | grep -qxF {quoted}"
                 f" || {env_prefix}pipx install {quoted}"
             ],
         )
@@ -171,7 +179,7 @@ def _git_package(pkg: dict[str, Any], *, use_uv: bool, use_pipx: bool) -> None:
         server.shell(
             name=f"Install git package {name} (uv)",
             commands=[
-                f'uv tool list 2>/dev/null | grep -q "^{name} "'
+                f"uv tool list 2>/dev/null | awk '{{print $1}}' | grep -qxF {quoted_name}"
                 f" || uv tool install --from {quoted_git} {quoted_name}"
             ],
         )
@@ -179,7 +187,7 @@ def _git_package(pkg: dict[str, Any], *, use_uv: bool, use_pipx: bool) -> None:
         server.shell(
             name=f"Install git package {name} (pipx)",
             commands=[
-                f"pipx list --short 2>/dev/null | grep -q {quoted_name}"
+                f"pipx list --short 2>/dev/null | awk '{{print $1}}' | grep -qxF {quoted_name}"
                 f" || pipx install {quoted_git}"
             ],
         )

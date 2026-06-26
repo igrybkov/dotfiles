@@ -13,6 +13,8 @@ import importlib.util
 from pathlib import Path
 from typing import Any
 
+from pyinfra import logger
+
 
 def run_profile_deploys(
     profiles: list[Any], tags: set[str], dotfiles_dir: Path
@@ -25,6 +27,9 @@ def run_profile_deploys(
         spec = importlib.util.spec_from_file_location(
             f"profile_deploy_{p.name}", deploy_py
         )
+        if spec is None or spec.loader is None:
+            logger.warning(f"Could not load {deploy_py}: no importlib spec")
+            continue
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)  # type: ignore[union-attr]
         if hasattr(mod, "deploy"):

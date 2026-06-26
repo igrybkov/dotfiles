@@ -329,6 +329,10 @@ def write_and_encrypt(path: Path, data: dict) -> None:
     buf = io.StringIO()
     yaml.dump(data, buf, default_flow_style=False, sort_keys=False)
     path.write_text(buf.getvalue())
+    try:
+        path.chmod(0o600)
+    except OSError:
+        pass
 
     rc, _, stderr = encrypt_file(path)
     if rc != 0:
