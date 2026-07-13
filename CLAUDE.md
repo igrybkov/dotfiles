@@ -218,7 +218,9 @@ Workflow, usage patterns, examples...
 ```
 Skills are symlinked to both `~/.claude/skills/` and `~/.cursor/skills/` (configured via `skill_folders` in `profiles/agents/config.yml`).
 
-**Existing skills (16):** agent-team, changelog, claude-api, claude-for-chrome, explain, fixup, git-commit, github, handoff, jira, omnifocus, pr, pr-triage, review, test, verify, wiki
+**Existing skills (14):** agent-team, changelog, claude-for-chrome, explain, fixup, git-commit, github, handoff, omnifocus, pr, pr-triage, review, test, verify
+
+> Note: the `jira` and `wiki` skills now live in the team-shared `brand-service-team` repo and are intentionally not duplicated here.
 
 #### Sub-agents
 Specialized agents invoked by Claude Code's `Agent` tool. Each agent lives at `profiles/agents/files/agents/{name}.md`.
