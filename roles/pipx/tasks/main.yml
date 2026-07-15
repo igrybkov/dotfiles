@@ -62,7 +62,7 @@
   failed_when: _uv_pre_uninstall.rc != 0 and 'is not installed' not in (_uv_pre_uninstall.stderr | default(''))
   changed_when: _uv_pre_uninstall.rc == 0
 
-# PyPI packages (no path specified) - always use pipx
+# PyPI packages (no path and no git specified) - always use pipx
 - name: "[🐍 pipx] Install pipx packages from PyPI"
   community.general.pipx:
     name: "{{ item.name | default(item) }}"
@@ -82,7 +82,7 @@
     # Create env dict: build flags (if any) + explicit env (explicit takes precedence)
     _build_env: "{{ {'CFLAGS': _cflags, 'LDFLAGS': _ldflags} if _resolved_prefixes else {} }}"
     _pkg_env: "{{ _build_env | combine(item.env | default({})) }}"
-  loop: "{{ pipx_packages | selectattr('path', 'undefined') | list }}"
+  loop: "{{ pipx_packages | selectattr('path', 'undefined') | rejectattr('git', 'defined') | list }}"
   when: pipx_packages is defined and pipx_packages | length > 0
 
 # =============================================================================
@@ -153,6 +153,48 @@
   register: _uv_uninstall_result
   failed_when: _uv_uninstall_result.rc != 0 and 'is not installed' not in (_uv_uninstall_result.stderr | default(''))
   changed_when: _uv_uninstall_result.rc == 0
+
+# =============================================================================
+# Git packages (git URL specified)
+# Uses `uv tool install --from <git> <name>` when uv is available, falls back
+# to `pipx install <git>`.
+# =============================================================================
+
+- name: "[⚡ uv] Install git packages"
+  ansible.builtin.command:
+    cmd: "{{ uv_check.stdout }} tool install --from {{ item.git }} {{ item.name }}"
+  loop: "{{ pipx_packages | selectattr('git', 'defined') | list }}"
+  when:
+    - pipx_packages is defined and pipx_packages | length > 0
+    - uv_check.rc == 0
+    - item.state | default('present') != 'absent'
+  changed_when: >-
+    _uv_git_install_result.stderr is search('(Installed|Uninstalled) \d+ package')
+  register: _uv_git_install_result
+
+- name: "[⚡ uv] Uninstall absent git packages"
+  ansible.builtin.command:
+    cmd: "{{ uv_check.stdout }} tool uninstall {{ item.name }}"
+  loop: "{{ pipx_packages | selectattr('git', 'defined') | list }}"
+  when:
+    - pipx_packages is defined and pipx_packages | length > 0
+    - uv_check.rc == 0
+    - item.state | default('present') == 'absent'
+  register: _uv_git_uninstall_result
+  failed_when: _uv_git_uninstall_result.rc != 0 and 'is not installed' not in (_uv_git_uninstall_result.stderr | default(''))
+  changed_when: _uv_git_uninstall_result.rc == 0
+
+- name: "[🐍 pipx] Install git packages - fallback"
+  community.general.pipx:
+    name: "{{ item.name }}"
+    source: "{{ item.git }}"
+    state: "{{ item.state | default('present') }}"
+    executable: "{{ pipx_check.stdout }}"
+  loop: "{{ pipx_packages | selectattr('git', 'defined') | list }}"
+  when:
+    - pipx_packages is defined and pipx_packages | length > 0
+    - uv_check.rc != 0
+    - item.state | default('present') != 'absent'
 
 # --- pipx fallback (when uv not available) ---
 - name: "[🐍 pipx] Install local packages (editable) - fallback"
