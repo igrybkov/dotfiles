@@ -225,7 +225,7 @@ class TestInstallCommand:
     """Test the install command."""
 
     def test_install_with_default_tag(
-        self, cli_runner, mock_ansible_runner, temp_dotfiles_dir, mock_getpass
+        self, cli_runner, mock_pyinfra_subprocess, temp_dotfiles_dir, mock_getpass
     ):
         """Test install with no tags defaults to all."""
         with (
@@ -239,13 +239,6 @@ class TestInstallCommand:
                 return_value=["alpha", "bravo"],
             ),
             patch(
-                "dotfiles_cli.commands.install.get_profile_roles_paths", return_value=[]
-            ),
-            patch(
-                "dotfiles_cli.commands.install.get_profile_requirements_paths",
-                return_value=[],
-            ),
-            patch(
                 "dotfiles_cli.commands.install.get_repos_with_unpushed_changes",
                 return_value=([], []),
             ),
@@ -255,12 +248,12 @@ class TestInstallCommand:
         # Should succeed
         assert result.exit_code == 0
 
-        # Should run ansible with all tag
-        ansible_call = mock_ansible_runner["run"].call_args
-        assert ansible_call[1]["tags"] == "all"
+        # Should run pyinfra with DOTFILES_TAGS=all
+        env = mock_pyinfra_subprocess.call_args.kwargs["env"]
+        assert env["DOTFILES_TAGS"] == "all"
 
     def test_install_with_specific_tags(
-        self, cli_runner, mock_ansible_runner, temp_dotfiles_dir, mock_getpass
+        self, cli_runner, mock_pyinfra_subprocess, temp_dotfiles_dir, mock_getpass
     ):
         """Test install with specific tags."""
         # Mock the tag validation to accept any tags
@@ -275,18 +268,11 @@ class TestInstallCommand:
                 return_value=["alpha"],
             ),
             patch(
-                "dotfiles_cli.commands.install.get_profile_roles_paths", return_value=[]
-            ),
-            patch(
-                "dotfiles_cli.commands.install.get_profile_requirements_paths",
-                return_value=[],
-            ),
-            patch(
                 "dotfiles_cli.commands.install.get_repos_with_unpushed_changes",
                 return_value=([], []),
             ),
             patch(
-                "dotfiles_cli.types.AnsibleTagListType._get_all_supported_tags",
+                "dotfiles_cli.types.PyinfraTagListType._get_all_supported_tags",
                 return_value=["all", "brew", "cask", "dotfiles"],
             ),
         ):
@@ -296,11 +282,11 @@ class TestInstallCommand:
             f"Exit code: {result.exit_code}, Output: {result.output}"
         )
 
-        ansible_call = mock_ansible_runner["run"].call_args
-        assert ansible_call[1]["tags"] == "brew,cask"
+        env = mock_pyinfra_subprocess.call_args.kwargs["env"]
+        assert env["DOTFILES_TAGS"] == "brew,cask"
 
     def test_install_with_all_flag(
-        self, cli_runner, mock_ansible_runner, temp_dotfiles_dir
+        self, cli_runner, mock_pyinfra_subprocess, temp_dotfiles_dir
     ):
         """Test install with --all flag."""
         with (
@@ -312,13 +298,6 @@ class TestInstallCommand:
             patch(
                 "dotfiles_cli.commands.install.get_all_profile_names",
                 return_value=["alpha"],
-            ),
-            patch(
-                "dotfiles_cli.commands.install.get_profile_roles_paths", return_value=[]
-            ),
-            patch(
-                "dotfiles_cli.commands.install.get_profile_requirements_paths",
-                return_value=[],
             ),
             patch(
                 "dotfiles_cli.commands.install.get_repos_with_unpushed_changes",
@@ -335,17 +314,17 @@ class TestInstallCommand:
         assert result.exit_code == 0, (
             f"Exit code: {result.exit_code}, Output: {result.output}"
         )
-        assert mock_ansible_runner["run"].called, (
-            f"Ansible runner not called. Output: {result.output}"
+        assert mock_pyinfra_subprocess.called, (
+            f"pyinfra subprocess not invoked. Output: {result.output}"
         )
 
-        ansible_call = mock_ansible_runner["run"].call_args
-        assert "all" in ansible_call[1]["tags"]
+        env = mock_pyinfra_subprocess.call_args.kwargs["env"]
+        assert "all" in env["DOTFILES_TAGS"].split(",")
 
-    def test_install_sets_vault_identity_list(
-        self, cli_runner, mock_ansible_runner, temp_dotfiles_dir
+    def test_install_sets_sops_age_key_env_for_vault_tags(
+        self, cli_runner, mock_pyinfra_subprocess, temp_dotfiles_dir
     ):
-        """When tags include mcp-servers, ANSIBLE_VAULT_IDENTITY_LIST is set."""
+        """When tags need secrets, the age key is exported as SOPS_AGE_KEY."""
         with (
             patch("dotfiles_cli.constants.DOTFILES_DIR", str(temp_dotfiles_dir)),
             patch(
@@ -357,46 +336,61 @@ class TestInstallCommand:
                 return_value=["alpha"],
             ),
             patch(
-                "dotfiles_cli.commands.install.get_profile_roles_paths",
-                return_value=[],
+                "dotfiles_cli.commands.install.get_repos_with_unpushed_changes",
+                return_value=([], []),
             ),
             patch(
-                "dotfiles_cli.commands.install.get_profile_requirements_paths",
-                return_value=[],
+                "dotfiles_cli.commands.install.read_age_key",
+                return_value="AGE-SECRET-KEY-1TESTKEY",
+            ),
+            patch(
+                "dotfiles_cli.types.PyinfraTagListType._get_all_supported_tags",
+                return_value=["all", "mcp-servers"],
+            ),
+        ):
+            # mcp-servers is not in SUDO_TAGS, so no sudo prompt is expected.
+            result = cli_runner.invoke(cli, ["install", "mcp-servers"])
+
+        assert result.exit_code == 0, result.output
+        env = mock_pyinfra_subprocess.call_args.kwargs["env"]
+        assert env["SOPS_AGE_KEY"] == "AGE-SECRET-KEY-1TESTKEY"
+        assert "No age key found" not in result.output
+
+    def test_install_warns_when_age_key_missing_for_vault_tags(
+        self, cli_runner, mock_pyinfra_subprocess, temp_dotfiles_dir
+    ):
+        """Without an age key, a vault-sensitive install warns but proceeds."""
+        with (
+            patch("dotfiles_cli.constants.DOTFILES_DIR", str(temp_dotfiles_dir)),
+            patch(
+                "dotfiles_cli.commands.install.get_active_profiles",
+                return_value=Mock(resolve=lambda x: ["alpha"]),
+            ),
+            patch(
+                "dotfiles_cli.commands.install.get_all_profile_names",
+                return_value=["alpha"],
             ),
             patch(
                 "dotfiles_cli.commands.install.get_repos_with_unpushed_changes",
                 return_value=([], []),
             ),
+            # mock_pyinfra_subprocess already defaults read_age_key to None.
             patch(
-                "dotfiles_cli.commands.install.get_profiles_with_secrets",
-                return_value=["alpha"],
-            ),
-            patch(
-                "dotfiles_cli.commands.install.validate_sudo_password",
-                return_value=True,
-            ),
-            patch(
-                "dotfiles_cli.types.AnsibleTagListType._get_all_supported_tags",
+                "dotfiles_cli.types.PyinfraTagListType._get_all_supported_tags",
                 return_value=["all", "mcp-servers"],
             ),
-            patch("getpass.getpass", return_value="test_password"),
         ):
             result = cli_runner.invoke(cli, ["install", "mcp-servers"])
 
         assert result.exit_code == 0, result.output
-        ansible_call = mock_ansible_runner["run"].call_args
-        envvars = ansible_call[1]["envvars"]
-        identity_list = envvars.get("ANSIBLE_VAULT_IDENTITY_LIST")
-        assert identity_list is not None
-        # Points at the bin shim, built from profiles with encrypted secrets.
-        assert "dotfiles-vault-client" in identity_list
-        assert identity_list.startswith("alpha@")
+        assert "No age key found" in result.output
+        env = mock_pyinfra_subprocess.call_args.kwargs["env"]
+        assert "SOPS_AGE_KEY" not in env
 
-    def test_install_skips_vault_identity_list_for_non_vault_tags(
-        self, cli_runner, mock_ansible_runner, temp_dotfiles_dir
+    def test_install_skips_sops_age_key_warning_for_non_vault_tags(
+        self, cli_runner, mock_pyinfra_subprocess, temp_dotfiles_dir
     ):
-        """Non-vault tags do not set ANSIBLE_VAULT_IDENTITY_LIST."""
+        """Non-vault tags neither warn about nor need the age key."""
         with (
             patch("dotfiles_cli.constants.DOTFILES_DIR", str(temp_dotfiles_dir)),
             patch(
@@ -408,30 +402,23 @@ class TestInstallCommand:
                 return_value=["alpha"],
             ),
             patch(
-                "dotfiles_cli.commands.install.get_profile_roles_paths",
-                return_value=[],
-            ),
-            patch(
-                "dotfiles_cli.commands.install.get_profile_requirements_paths",
-                return_value=[],
-            ),
-            patch(
                 "dotfiles_cli.commands.install.get_repos_with_unpushed_changes",
                 return_value=([], []),
             ),
             patch(
-                "dotfiles_cli.types.AnsibleTagListType._get_all_supported_tags",
+                "dotfiles_cli.types.PyinfraTagListType._get_all_supported_tags",
                 return_value=["all", "dotfiles"],
             ),
         ):
             result = cli_runner.invoke(cli, ["install", "dotfiles"])
 
         assert result.exit_code == 0, result.output
-        envvars = mock_ansible_runner["run"].call_args[1]["envvars"]
-        assert "ANSIBLE_VAULT_IDENTITY_LIST" not in envvars
+        assert "No age key found" not in result.output
+        env = mock_pyinfra_subprocess.call_args.kwargs["env"]
+        assert "SOPS_AGE_KEY" not in env
 
     def test_install_prompts_for_sudo_password(
-        self, cli_runner, mock_ansible_runner, temp_dotfiles_dir
+        self, cli_runner, mock_pyinfra_subprocess, temp_dotfiles_dir
     ):
         """Test install prompts for sudo password for sudo-requiring tags."""
         with (
@@ -445,18 +432,11 @@ class TestInstallCommand:
                 return_value=["alpha"],
             ),
             patch(
-                "dotfiles_cli.commands.install.get_profile_roles_paths", return_value=[]
-            ),
-            patch(
-                "dotfiles_cli.commands.install.get_profile_requirements_paths",
-                return_value=[],
-            ),
-            patch(
                 "dotfiles_cli.commands.install.get_repos_with_unpushed_changes",
                 return_value=([], []),
             ),
             patch(
-                "dotfiles_cli.types.AnsibleTagListType._get_all_supported_tags",
+                "dotfiles_cli.types.PyinfraTagListType._get_all_supported_tags",
                 return_value=["all", "brew", "cask", "dotfiles", "mas", "chsh"],
             ),
             patch("getpass.getpass", return_value="sudo_password") as mock_pass,
@@ -471,7 +451,7 @@ class TestInstallCommand:
         mock_pass.assert_called()
 
     def test_install_no_sudo_prompt_for_exempt_tags(
-        self, cli_runner, mock_ansible_runner, temp_dotfiles_dir
+        self, cli_runner, mock_pyinfra_subprocess, temp_dotfiles_dir
     ):
         """Test install doesn't prompt for sudo for exempt tags."""
         with (
@@ -485,13 +465,6 @@ class TestInstallCommand:
                 return_value=["alpha"],
             ),
             patch(
-                "dotfiles_cli.commands.install.get_profile_roles_paths", return_value=[]
-            ),
-            patch(
-                "dotfiles_cli.commands.install.get_profile_requirements_paths",
-                return_value=[],
-            ),
-            patch(
                 "dotfiles_cli.commands.install.get_repos_with_unpushed_changes",
                 return_value=([], []),
             ),
@@ -503,7 +476,7 @@ class TestInstallCommand:
         mock_pass.assert_not_called()
 
     def test_install_with_profiles_flag(
-        self, cli_runner, mock_ansible_runner, temp_dotfiles_dir, mock_getpass
+        self, cli_runner, mock_pyinfra_subprocess, temp_dotfiles_dir, mock_getpass
     ):
         """Test install with --profile flag."""
         with (
@@ -513,18 +486,11 @@ class TestInstallCommand:
                 return_value=["alpha", "bravo", "charlie"],
             ),
             patch(
-                "dotfiles_cli.commands.install.get_profile_roles_paths", return_value=[]
-            ),
-            patch(
-                "dotfiles_cli.commands.install.get_profile_requirements_paths",
-                return_value=[],
-            ),
-            patch(
                 "dotfiles_cli.commands.install.get_repos_with_unpushed_changes",
                 return_value=([], []),
             ),
             patch(
-                "dotfiles_cli.types.AnsibleTagListType._get_all_supported_tags",
+                "dotfiles_cli.types.PyinfraTagListType._get_all_supported_tags",
                 return_value=["all", "brew", "cask", "dotfiles"],
             ),
         ):
@@ -536,12 +502,13 @@ class TestInstallCommand:
             f"Exit code: {result.exit_code}, Output: {result.output}"
         )
 
-        # Should run with specified profiles (localhost is always included for Bootstrap/Finalize plays)
-        ansible_call = mock_ansible_runner["run"].call_args
-        assert ansible_call[1]["limit"] == "alpha,bravo,localhost"
+        # Should run with the specified profiles, passed via env to pyinfra's
+        # inventory.py (no more Ansible --limit).
+        env = mock_pyinfra_subprocess.call_args.kwargs["env"]
+        assert env["DOTFILES_SELECTED_PROFILES"] == "alpha,bravo"
 
     def test_install_with_dry_run(
-        self, cli_runner, mock_ansible_runner, temp_dotfiles_dir, mock_getpass
+        self, cli_runner, mock_pyinfra_subprocess, temp_dotfiles_dir, mock_getpass
     ):
         """Test install with --dry-run flag."""
         with (
@@ -555,18 +522,11 @@ class TestInstallCommand:
                 return_value=["alpha"],
             ),
             patch(
-                "dotfiles_cli.commands.install.get_profile_roles_paths", return_value=[]
-            ),
-            patch(
-                "dotfiles_cli.commands.install.get_profile_requirements_paths",
-                return_value=[],
-            ),
-            patch(
                 "dotfiles_cli.commands.install.get_repos_with_unpushed_changes",
                 return_value=([], []),
             ),
             patch(
-                "dotfiles_cli.types.AnsibleTagListType._get_all_supported_tags",
+                "dotfiles_cli.types.PyinfraTagListType._get_all_supported_tags",
                 return_value=["all", "brew", "cask", "dotfiles"],
             ),
         ):
@@ -577,12 +537,12 @@ class TestInstallCommand:
         )
         assert "dry-run" in result.output
 
-        # Should pass --check to ansible
-        ansible_call = mock_ansible_runner["run"].call_args
-        assert ansible_call[1]["cmdline"] == "--check"
+        # Should pass --dry to pyinfra
+        pyinfra_cmd = mock_pyinfra_subprocess.call_args.args[0]
+        assert "--dry" in pyinfra_cmd
 
     def test_install_with_sync_flag(
-        self, cli_runner, mock_ansible_runner, temp_dotfiles_dir, mock_getpass
+        self, cli_runner, mock_pyinfra_subprocess, temp_dotfiles_dir, mock_getpass
     ):
         """Test install with --sync flag runs sync first."""
         with (
@@ -596,18 +556,11 @@ class TestInstallCommand:
                 return_value=["alpha"],
             ),
             patch(
-                "dotfiles_cli.commands.install.get_profile_roles_paths", return_value=[]
-            ),
-            patch(
-                "dotfiles_cli.commands.install.get_profile_requirements_paths",
-                return_value=[],
-            ),
-            patch(
                 "dotfiles_cli.commands.install.get_repos_with_unpushed_changes",
                 return_value=([], []),
             ),
             patch(
-                "dotfiles_cli.types.AnsibleTagListType._get_all_supported_tags",
+                "dotfiles_cli.types.PyinfraTagListType._get_all_supported_tags",
                 return_value=["all", "brew", "cask", "dotfiles"],
             ),
             patch("dotfiles_cli.commands.git._sync_all_repos", return_value=True),
@@ -626,7 +579,7 @@ class TestInstallCommand:
         with (
             patch("dotfiles_cli.constants.DOTFILES_DIR", str(temp_dotfiles_dir)),
             patch(
-                "dotfiles_cli.types.AnsibleTagListType._get_all_supported_tags",
+                "dotfiles_cli.types.PyinfraTagListType._get_all_supported_tags",
                 return_value=["all", "brew", "cask", "dotfiles"],
             ),
             patch("dotfiles_cli.commands.git._sync_all_repos", return_value=False),
@@ -636,7 +589,7 @@ class TestInstallCommand:
         assert "sync failed" in result.output or "failed to pull" in result.output
 
     def test_install_cleans_up_old_logs(
-        self, cli_runner, mock_ansible_runner, temp_dotfiles_dir, mock_getpass
+        self, cli_runner, mock_pyinfra_subprocess, temp_dotfiles_dir, mock_getpass
     ):
         """Test install cleans up old log files."""
         with (
@@ -650,18 +603,11 @@ class TestInstallCommand:
                 return_value=["alpha"],
             ),
             patch(
-                "dotfiles_cli.commands.install.get_profile_roles_paths", return_value=[]
-            ),
-            patch(
-                "dotfiles_cli.commands.install.get_profile_requirements_paths",
-                return_value=[],
-            ),
-            patch(
                 "dotfiles_cli.commands.install.get_repos_with_unpushed_changes",
                 return_value=([], []),
             ),
             patch(
-                "dotfiles_cli.types.AnsibleTagListType._get_all_supported_tags",
+                "dotfiles_cli.types.PyinfraTagListType._get_all_supported_tags",
                 return_value=["all", "brew", "cask", "dotfiles"],
             ),
             patch("dotfiles_cli.commands.install.cleanup_old_logs") as mock_cleanup,
@@ -690,7 +636,7 @@ class TestInstallCommand:
                 return_value=["alpha", "bravo"],
             ),
             patch(
-                "dotfiles_cli.types.AnsibleTagListType._get_all_supported_tags",
+                "dotfiles_cli.types.PyinfraTagListType._get_all_supported_tags",
                 return_value=["all", "brew", "cask", "dotfiles"],
             ),
             patch("dotfiles_cli.commands.install.cleanup_old_logs"),

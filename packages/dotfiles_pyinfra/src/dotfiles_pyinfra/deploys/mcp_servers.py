@@ -29,18 +29,19 @@ Two simplifications versus the Ansible role, both deliberate:
     produced by its own ``git_repo`` clone will not exist on the first run and
     is skipped — same first-run limitation the role tolerates via its
     availability check, just evaluated earlier.
-  * Vault ``env``/``headers`` values are written verbatim. Secret resolution is
-    the wrapper's job at spawn time for ``secret_env``; inline ``env`` lookups
-    are out of scope for this port (the role resolves them via Jinja filters
-    that have no pyinfra equivalent here).
+  * Plain ``env``/``headers`` values are written verbatim — inline Jinja
+    ``{{ lookup('vault_secret', …) }}`` expressions are NOT rendered (the old
+    role's Jinja filters have no pyinfra equivalent). Secrets belong in
+    ``secret_env`` (resolved at spawn time by the wrapper) or, for URL servers,
+    ``secret_headers`` (resolved at build time via sops and merged into
+    ``headers``; the plaintext lands in the rendered config file, same as the
+    old install-time lookup behavior).
 
 Caller contract: ``merged["mcp_servers"]`` is what ``merge_var(..., "list")``
-produces — a list of per-profile sub-lists. Each entry is expected to carry a
-``_profile`` key (the owning profile name) so the merge can route contributor
-secrets and the wrapper can target the right vault. NOTE: the current
-``deploy/inventory.py`` does not inject ``_profile`` yet; until it does, the
-suffix routing and ``run-with-secrets.sh -p`` argument degrade to the empty
-default. See the module's deploy report / follow-up.
+produces — a list of per-profile sub-lists. Each entry carries a ``_profile``
+key (the owning profile name, injected by ``deploy/inventory.py``) so the
+merge can route contributor secrets and the wrapper can target the right
+vault.
 """
 
 from __future__ import annotations
@@ -56,10 +57,14 @@ from typing import Any
 from pyinfra import logger
 from pyinfra.operations import files, git
 
+from dotfiles_pyinfra.secrets import decrypt_key
+
 # Fields a *contribution* entry may carry. Anything else makes the entry a
 # standalone record (owner, pruning entry, top-level absent) — see the filter
 # plugin docstring.
-_CONTRIB_ALLOWED_FIELDS = frozenset({"name", "secret_env", "env", "_profile"})
+_CONTRIB_ALLOWED_FIELDS = frozenset(
+    {"name", "secret_env", "env", "secret_headers", "_profile"}
+)
 
 # Default config files when a server does not declare its own ``config_files``.
 # Mirrors ``mcp_default_config_files`` in roles/mcp_servers/defaults/main.yml;
@@ -112,11 +117,17 @@ def deploy(merged: dict[str, Any], dotfiles_dir: Path) -> None:
     optional_map: dict[str, bool] = {}
 
     for srv in servers:
-        is_absent = srv.get("state") == "absent"
+        server_absent = srv.get("state") == "absent"
         for cf in _normalize_config_files(srv, default_config_files):
             path = cf["path"]
-            optional = bool(cf.get("optional", False)) or is_absent
-            files_map.setdefault(path, []).append(srv)
+            # Effective per-file state: a present server may still be absent
+            # from individual files via `config_files: [{path, state: absent}]`
+            # (mirrors the role's `item.1.state | default('present')`).
+            entry_absent = server_absent or cf["state"] == "absent"
+            optional = bool(cf.get("optional", False)) or entry_absent
+            files_map.setdefault(path, []).append(
+                {**srv, "state": "absent"} if entry_absent else srv
+            )
             # A path is optional only if *every* entry targeting it is optional.
             optional_map[path] = optional_map.get(path, True) and optional
 
@@ -128,6 +139,7 @@ def deploy(merged: dict[str, Any], dotfiles_dir: Path) -> None:
             servers=srvs,
             optional=optional_map[raw_path],
             run_with_secrets=run_with_secrets,
+            dotfiles_dir=dotfiles_dir,
         )
 
 
@@ -159,7 +171,7 @@ def _merge_mcp_servers(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
     def is_contribution(e: dict[str, Any]) -> bool:
         if set(e) - _CONTRIB_ALLOWED_FIELDS:
             return False
-        return bool(e.get("secret_env") or e.get("env"))
+        return bool(e.get("secret_env") or e.get("env") or e.get("secret_headers"))
 
     # Owners: non-contribution entries that set command or url. At most one
     # per name.
@@ -180,15 +192,27 @@ def _merge_mcp_servers(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
             )
         owners[name] = e
 
-    # Track source of each env/secret_env var for conflict error messages.
+    # Track source of each env/secret_env/header var for conflict error
+    # messages. Headers share one namespace: plain ``headers`` and
+    # ``secret_headers`` both land in the rendered ``headers`` block.
     secret_sources: dict[tuple[str, str], str] = {}
     env_sources: dict[tuple[str, str], str] = {}
+    header_sources: dict[tuple[str, str], str] = {}
     for name, owner in owners.items():
         owner_profile = owner.get("_profile", "<unknown>")
         for var in owner.get("secret_env") or {}:
             secret_sources[(name, var)] = owner_profile
         for var in owner.get("env") or {}:
             env_sources[(name, var)] = owner_profile
+        for var in owner.get("headers") or {}:
+            header_sources[(name, var)] = owner_profile
+        for var in owner.get("secret_headers") or {}:
+            if (name, var) in header_sources:
+                raise MergeMcpServersError(
+                    f"merge_mcp_servers: header {var!r} on server {name!r} is "
+                    f"declared in both 'headers' and 'secret_headers'"
+                )
+            header_sources[(name, var)] = owner_profile
 
     result: list[dict[str, Any]] = []
     for e in entries:
@@ -232,6 +256,30 @@ def _merge_mcp_servers(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 owner["secret_env"] = {}
             owner["secret_env"][var] = f"{path}{suffix}"
             secret_sources[key] = contributor
+
+        header_contribution = e.get("secret_headers") or {}
+        if not isinstance(header_contribution, dict):
+            raise MergeMcpServersError(
+                f"merge_mcp_servers: non-mapping 'secret_headers' in "
+                f"contribution to {name!r} from {contributor!r}"
+            )
+        for var, path in header_contribution.items():
+            if not isinstance(path, str):
+                raise MergeMcpServersError(
+                    f"merge_mcp_servers: non-string secret_headers value for "
+                    f"{var!r} on {name!r} from profile {contributor!r}"
+                )
+            key = (name, var)
+            if key in header_sources:
+                raise MergeMcpServersError(
+                    f"merge_mcp_servers: header {var!r} on server {name!r} is "
+                    f"declared by both {header_sources[key]!r} and "
+                    f"{contributor!r}"
+                )
+            if owner.get("secret_headers") is None:
+                owner["secret_headers"] = {}
+            owner["secret_headers"][var] = f"{path}{suffix}"
+            header_sources[key] = contributor
 
         env_contribution = e.get("env") or {}
         if not isinstance(env_contribution, dict):
@@ -313,10 +361,10 @@ def _git_repos(servers: list[dict[str, Any]], merged: dict[str, Any]) -> None:
 def _normalize_config_files(
     server: dict[str, Any], defaults: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
-    """Return a server's target config files as ``{path, optional}`` dicts.
+    """Return a server's target config files as ``{path, optional, state}`` dicts.
 
-    Items may be plain path strings or ``{path, optional}`` mappings. When the
-    server declares no ``config_files`` the role defaults apply.
+    Items may be plain path strings or ``{path, optional, state}`` mappings.
+    When the server declares no ``config_files`` the role defaults apply.
     """
     raw = server.get("config_files")
     source = raw if raw is not None else defaults
@@ -324,10 +372,14 @@ def _normalize_config_files(
     normalized: list[dict[str, Any]] = []
     for cf in source:
         if isinstance(cf, str):
-            normalized.append({"path": cf, "optional": False})
+            normalized.append({"path": cf, "optional": False, "state": "present"})
         elif isinstance(cf, dict):
             normalized.append(
-                {"path": cf["path"], "optional": bool(cf.get("optional", False))}
+                {
+                    "path": cf["path"],
+                    "optional": bool(cf.get("optional", False)),
+                    "state": cf.get("state", "present"),
+                }
             )
         else:
             raise MergeMcpServersError(
@@ -343,6 +395,7 @@ def _configure_file(
     servers: list[dict[str, Any]],
     optional: bool,
     run_with_secrets: str,
+    dotfiles_dir: Path,
 ) -> None:
     """Build and write one MCP config file's ``mcpServers`` block."""
     path = Path(raw_path).expanduser()
@@ -392,6 +445,15 @@ def _configure_file(
                     f"{srv.get('command')!r} not found"
                 )
                 continue
+        elif srv.get("secret_headers"):
+            headers = _resolve_secret_headers(srv, dotfiles_dir)
+            if headers is None:
+                logger.warning(
+                    f"mcp_servers: skipping {name!r} — could not resolve "
+                    f"secret_headers (see warnings above)"
+                )
+                continue
+            srv = {**srv, "headers": headers}
 
         built = _build_server(srv, run_with_secrets)
         if _server_has_secrets(srv):
@@ -429,9 +491,33 @@ def _command_available(command: str) -> bool:
     return shutil.which(expanded) is not None
 
 
+def _resolve_secret_headers(
+    server: dict[str, Any], dotfiles_dir: Path
+) -> dict[str, str] | None:
+    """Resolve a URL server's ``secret_headers`` into a full headers dict.
+
+    Values are ``key.path`` (resolved against the server's owning profile) or
+    ``key.path@profile``. Returns plain ``headers`` merged with the resolved
+    secrets, or ``None`` when any value fails to resolve — the caller skips
+    the server rather than writing a broken config.
+    """
+    headers: dict[str, str] = dict(server.get("headers") or {})
+    for header, spec in (server.get("secret_headers") or {}).items():
+        key_path, _, profile = spec.rpartition("@")
+        if not key_path:  # no '@' — whole spec is the key path
+            key_path, profile = spec, server.get("_profile", "")
+        value = decrypt_key(profile, key_path, dotfiles_dir)
+        if value is None:
+            return None
+        headers[header] = value
+    return headers
+
+
 def _server_has_secrets(server: dict[str, Any]) -> bool:
     """True if this server contributes secret material to the file's mode."""
     if server.get("secret_env"):
+        return True
+    if "url" in server and server.get("secret_headers"):
         return True
     if server.get("env"):  # any non-empty env mapping
         return True

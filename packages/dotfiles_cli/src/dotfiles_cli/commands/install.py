@@ -290,15 +290,15 @@ def install(
         sudo_keepalive = SudoKeepAlive()
         sudo_keepalive.start()
 
-    # Read the age private key when secret-sensitive tags are selected.
-    sops_age_key = None
-    if set(tags) & VAULT_TAGS or "all" in tags:
-        sops_age_key = read_age_key()
-        if sops_age_key is None:
-            click.echo(
-                "Warning: No age key found. Run 'dotfiles secret init' first. Continuing without secret decryption.",
-                err=True,
-            )
+    # Always try to load the age key — Phase 3 profile deploys run on every
+    # invocation and may need build-time secrets regardless of tag selection.
+    # Only warn when a secrets-sensitive tag was explicitly in play.
+    sops_age_key = read_age_key()
+    if sops_age_key is None and (set(tags) & VAULT_TAGS or "all" in tags):
+        click.echo(
+            "Warning: No age key found. Run 'dotfiles secret init' first. Continuing without secret decryption.",
+            err=True,
+        )
 
     # Build the environment for the pyinfra subprocess. The deploy's
     # inventory.py reads these env vars (never argv) to select profiles,

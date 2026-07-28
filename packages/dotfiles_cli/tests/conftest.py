@@ -75,26 +75,25 @@ def mock_subprocess():
 
 
 @pytest.fixture
-def mock_ansible_runner():
-    """Mock ansible_runner for CLI tests."""
+def mock_pyinfra_subprocess():
+    """Mock the subprocess calls install.py shells out to (mise, Homebrew,
+    pyinfra) for CLI tests.
+
+    Patches `shutil.which` so `mise`/`brew` appear present (skipping the real
+    Homebrew bootstrap), patches `subprocess.run` in the install module so no
+    real process is spawned, and patches `read_age_key` to return None so
+    tests never touch the real OS keychain/GPG backend unless they override
+    it themselves. The pyinfra deploy invocation is always the *last*
+    recorded call — inspect `mock_run.call_args` (or
+    `mock_run.call_args_list[-1]`) for its `env`/argv.
+    """
     with (
-        patch("ansible_runner.run") as mock_run,
-        patch("ansible_runner.run_command") as mock_run_command,
+        patch("dotfiles_cli.commands.install.subprocess.run") as mock_run,
+        patch("shutil.which", return_value="/usr/local/bin/mise"),
+        patch("dotfiles_cli.commands.install.read_age_key", return_value=None),
     ):
-        # Mock successful ansible run
-        mock_result = MagicMock()
-        mock_result.rc = 0
-        mock_result.status = "successful"
-        mock_run.return_value = mock_result
-
-        # Mock successful ansible-galaxy command
-        mock_run_command.return_value = (0, "", "")
-
-        yield {
-            "run": mock_run,
-            "run_command": mock_run_command,
-            "result": mock_result,
-        }
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        yield mock_run
 
 
 @pytest.fixture

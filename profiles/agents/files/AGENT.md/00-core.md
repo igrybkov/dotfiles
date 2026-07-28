@@ -97,7 +97,18 @@ mcp_servers:
       API_TOKEN: mcp_secrets.myservice.token       # vault key path, resolved at spawn
 ```
 
-URL-based servers with secret headers still need install-time `vault_secret` lookups — that's the one exception.
+URL-based servers use `secret_headers:` instead — values are sops key paths (`key.path` or `key.path@profile`) resolved at install time and merged into `headers:` in the rendered config. Inline Jinja `vault_secret` lookups in `env:`/`headers:` are no longer rendered and must not be used.
+
+```yaml
+mcp_servers:
+  - name: my-remote-server
+    type: http
+    url: "https://example.com/api/mcp"
+    secret_headers:
+      Authorization: mcp_secrets.myservice.bearer    # resolved at install time
+```
+
+The secret must hold the complete header value (store `Bearer <token>`, not just the token).
 
 ### Example
 

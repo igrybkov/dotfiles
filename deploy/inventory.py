@@ -25,7 +25,11 @@ from dotfiles_pyinfra.tags import ALL_SELECTOR
 # ---------------------------------------------------------------------------
 # Resolve profiles
 # ---------------------------------------------------------------------------
-DOTFILES_DIR = Path(__file__).parent.parent
+# resolve() matters: pyinfra loads this file by *relative* path, so a bare
+# Path(__file__).parent.parent is "." and every dotfiles_dir-derived path
+# (e.g. the run-with-secrets.sh command in rendered MCP configs) would be
+# relative to whatever cwd the consumer happens to have.
+DOTFILES_DIR = Path(__file__).resolve().parent.parent
 
 _selected_names_raw = os.environ.get("DOTFILES_SELECTED_PROFILES", "")
 _enabled_names_raw = os.environ.get("DOTFILES_ENABLED_PROFILES", "")

@@ -554,6 +554,10 @@
             "description": "Environment variables whose values are resolved at server spawn time by the `run-with-secrets.sh` wrapper (via `dotfiles secret get`). Values in this dict are vault key paths (dot-notation), never the secrets themselves \u2014 so the rendered MCP config stays commit-safe. The role rewrites `command`/`args` to invoke the wrapper; plain `env` still ships as-is alongside. Stdio servers only.",
             "type": "object"
           },
+          "secret_headers": {
+            "description": "HTTP headers whose values are sops key paths (dot-notation, optionally suffixed `@profile`), resolved at install time by the pyinfra deploy and merged into `headers`. The secret must hold the complete header value (e.g. `Bearer <token>`). A header may appear in `headers` or `secret_headers`, never both. URL-based servers only.",
+            "type": "object"
+          },
           "state": {
             "description": "Whether the server should be present or absent",
             "type": "string",
@@ -685,6 +689,10 @@
           "env": {
             "description": "Environment variables for the build",
             "type": "object"
+          },
+          "git": {
+            "description": "Git URL to install from (e.g. git+https://github.com/user/repo.git). Uses `uv tool install --from <git> <name>` when uv is available, falls back to `pipx install <git>`. Mutually exclusive with `path`.",
+            "type": "string"
           },
           "name": {
             "description": "Package name",

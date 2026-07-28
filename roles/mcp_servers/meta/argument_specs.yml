@@ -65,6 +65,15 @@ argument_specs:
             description: HTTP headers for URL-based servers (supports vault and 1Password secrets)
             type: dict
             required: false
+          secret_headers:
+            description: >
+              HTTP headers whose values are sops key paths (dot-notation,
+              optionally suffixed `@profile`), resolved at install time by the
+              pyinfra deploy and merged into `headers`. The secret must hold the
+              complete header value (e.g. `Bearer <token>`). A header may appear
+              in `headers` or `secret_headers`, never both. URL-based servers only.
+            type: dict
+            required: false
           git_repo:
             description: Git repository URL to clone for the server
             type: str

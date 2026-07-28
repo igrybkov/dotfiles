@@ -152,12 +152,11 @@ At install time this renders as one `obsidian` entry with both keys; the rendere
 
 #### Hand-written `@profile` suffix (lower-level)
 
-For ad-hoc cases that don't warrant splitting across profiles — or for the `vault_secret` Jinja lookup (install-time URL-server headers) — the resolver also accepts an explicit `@profile-name` suffix on any path:
+For ad-hoc cases that don't warrant splitting across profiles, the resolver also accepts an explicit `@profile-name` suffix on any path (works in both `secret_env:` and `secret_headers:`):
 
 ```yaml
-# Jinja lookup — install-time header resolution
-env:
-  ADOBE_KEY: "{{ lookup('vault_secret', 'mcp_secrets.obsidian_adobe.api_key@private-adobe') }}"
+secret_env:
+  ADOBE_KEY: mcp_secrets.obsidian_adobe.api_key@private-adobe
 ```
 
 The wrapper groups requested keys by profile and does one decrypt per referenced profile (so N secrets across M profiles = M decrypts, not M×N). Each referenced profile must have its vault password available via `dotfiles secret keychain` — missing entries produce a clear error naming the profile that needs `./dotfiles secret keychain push <profile>`.
@@ -165,23 +164,25 @@ The wrapper groups requested keys by profile and does one decrypt per referenced
 Paths are split at the **last** `@`, so profile names containing `/` work naturally (`key@personal/productivity`). Leave the suffix off to use the server's home profile — backward compatible.
 
 Limitations:
-- Stdio servers only. URL-based servers (`url:` + `headers:`) use install-time `vault_secret` lookups (see below).
+- Stdio servers only. URL-based servers (`url:` + `headers:`) use install-time `secret_headers:` (see below).
 - Requires the vault backend to be populated — run `secret init` once per machine.
 
-### Install-time secrets (URL servers, other fields)
+### Install-time secrets (URL servers): `secret_headers`
 
-For fields that can't be rewritten at runtime (e.g. HTTP headers on URL-based servers), reference secrets using the `vault_secret` lookup plugin. These values **are** rendered into the config file, so the task writes it `0600`.
+HTTP headers on URL-based servers can't be resolved at spawn time (the client connects directly; there is no wrapper process). Declare them under `secret_headers:` — values are sops key paths (`key.path`, or `key.path@profile` for cross-profile references), resolved during the deploy and merged into `headers:`. The resolved values **are** rendered into the config file, so it is written `0600`.
 
 ```yaml
 mcp_servers:
   - name: authenticated-api
     url: "https://secure.example.com/mcp"
     transport: streamable-http
-    headers:
-      x-api-key: "{{ lookup('vault_secret', 'mcp_secrets.secure.api_key') }}"
+    secret_headers:
+      x-api-key: mcp_secrets.secure.api_key
 ```
 
-The lookup plugin reads the vault-id label from each file header and invokes `bin/dotfiles-vault-client` to fetch the password from the backend. Tasks that receive the resolved values are marked `no_log: true` so `-vvv` debug output never contains decrypted secrets.
+The secret must hold the **complete header value** — for `Authorization: Bearer <token>`, store `Bearer <token>` in the vault, not just the token. A header may appear in `headers:` or `secret_headers:`, never both. If a secret can't be resolved (no age key, missing key path), the server is skipped with a warning and any existing entry in the target file is left untouched.
+
+Inline Jinja `{{ lookup('vault_secret', …) }}` expressions in `env:`/`headers:` are **not rendered** by the pyinfra deploy — the literal template string would be written to the config file. Use `secret_env:` (stdio) or `secret_headers:` (URL) instead.
 
 ## Ansible integration
 
