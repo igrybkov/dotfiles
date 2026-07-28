@@ -31,5 +31,5 @@ def deploy(merged: dict[str, Any]) -> None:
     else:
         server.shell(
             name="Upgrade Cursor CLI",
-            commands=["agent upgrade"],
+            commands=["agent upgrade || true"],
         )

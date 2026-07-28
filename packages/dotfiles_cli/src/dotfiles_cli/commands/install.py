@@ -30,6 +30,7 @@ from ..profiles import (
 )
 from ..types import ansible_tags_type
 from ..utils import (
+    SudoKeepAlive,
     cleanup_old_logs,
     generate_logfile_name,
     send_notification,
@@ -240,8 +241,13 @@ def install(
         if result.returncode != 0:
             click.echo("Warning: Homebrew install failed", err=True)
 
-    # Prompt for the sudo password when any selected tag needs root.
-    become_password = None
+    # Prompt for the sudo password when any selected tag needs root. The
+    # password only primes the OS sudo ticket cache (via `sudo -S -v`) — it is
+    # never passed to pyinfra or held beyond this block. A background thread
+    # then refreshes that same ticket for the life of the deploy so it can't
+    # expire mid-run (see SudoKeepAlive).
+    sudo_keepalive: SudoKeepAlive | None = None
+    become_password: str | None = None
     if set(tags) & SUDO_TAGS or "all" in tags:
         max_attempts = 3
 
@@ -252,7 +258,7 @@ def install(
                     "Waiting for sudo password...",
                 ):
                     become_password = getpass.getpass("SUDO password: ")
-            except KeyboardInterrupt, EOFError:
+            except (KeyboardInterrupt, EOFError):
                 click.echo("\nError: Password prompt cancelled.", err=True)
                 return 1
 
@@ -280,6 +286,10 @@ def install(
                     )
                     return 1
 
+        become_password = None
+        sudo_keepalive = SudoKeepAlive()
+        sudo_keepalive.start()
+
     # Read the age private key when secret-sensitive tags are selected.
     sops_age_key = None
     if set(tags) & VAULT_TAGS or "all" in tags:
@@ -292,13 +302,12 @@ def install(
 
     # Build the environment for the pyinfra subprocess. The deploy's
     # inventory.py reads these env vars (never argv) to select profiles,
-    # tags, the sudo password, and the age key.
+    # tags, and the age key. The sudo password is deliberately not included —
+    # pyinfra relies on the OS sudo ticket kept warm by `sudo_keepalive` above.
     env = dict(os.environ)
     env["DOTFILES_SELECTED_PROFILES"] = ",".join(active_profiles)
     env["DOTFILES_ENABLED_PROFILES"] = ",".join(all_enabled_profiles)
     env["DOTFILES_TAGS"] = ",".join(tags)
-    if become_password:
-        env["DOTFILES_SUDO_PASSWORD"] = become_password
     if sops_age_key:
         env["SOPS_AGE_KEY"] = sops_age_key
 
@@ -325,20 +334,24 @@ def install(
     if logfile == LOGFILE_AUTO:
         logfile = generate_logfile_name()
 
-    if logfile:
-        # Tee pyinfra output to both the terminal and the log file.
-        # `set -o pipefail` makes the pipeline exit status reflect pyinfra's
-        # rc rather than tee's, so a failed deploy is reported correctly.
-        tee_cmd = (
-            "set -o pipefail; "
-            + " ".join(shlex.quote(c) for c in cmd)
-            + " 2>&1 | tee "
-            + shlex.quote(logfile)
-        )
-        result = subprocess.run(["bash", "-c", tee_cmd], cwd=DOTFILES_DIR, env=env)
-        click.echo(f"\nLog file: {logfile}")
-    else:
-        result = subprocess.run(cmd, cwd=DOTFILES_DIR, env=env)
+    try:
+        if logfile:
+            # Tee pyinfra output to both the terminal and the log file.
+            # `set -o pipefail` makes the pipeline exit status reflect pyinfra's
+            # rc rather than tee's, so a failed deploy is reported correctly.
+            tee_cmd = (
+                "set -o pipefail; "
+                + " ".join(shlex.quote(c) for c in cmd)
+                + " 2>&1 | tee "
+                + shlex.quote(logfile)
+            )
+            result = subprocess.run(["bash", "-c", tee_cmd], cwd=DOTFILES_DIR, env=env)
+            click.echo(f"\nLog file: {logfile}")
+        else:
+            result = subprocess.run(cmd, cwd=DOTFILES_DIR, env=env)
+    finally:
+        if sudo_keepalive:
+            sudo_keepalive.stop()
 
     exit_code = result.returncode
 

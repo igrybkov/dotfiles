@@ -122,7 +122,7 @@ def _pypi_package(pkg: dict[str, Any], *, use_uv: bool, use_pipx: bool) -> None:
             name=f"Install pipx package {name} (uv)",
             commands=[
                 f"uv tool list 2>/dev/null | awk '{{print $1}}' | grep -qxF {quoted}"
-                f" || {env_prefix}uv tool install {quoted}"
+                f" || {env_prefix}uv tool install --force {quoted}"
             ],
         )
     elif use_pipx:
@@ -180,7 +180,7 @@ def _git_package(pkg: dict[str, Any], *, use_uv: bool, use_pipx: bool) -> None:
             name=f"Install git package {name} (uv)",
             commands=[
                 f"uv tool list 2>/dev/null | awk '{{print $1}}' | grep -qxF {quoted_name}"
-                f" || uv tool install --from {quoted_git} {quoted_name}"
+                f" || uv tool install --force --from {quoted_git} {quoted_name}"
             ],
         )
     elif use_pipx:

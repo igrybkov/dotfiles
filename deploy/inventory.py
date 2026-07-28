@@ -4,8 +4,12 @@ Environment variables consumed:
   DOTFILES_SELECTED_PROFILES  comma-separated list of -p selected profile names
   DOTFILES_ENABLED_PROFILES   comma-separated list of all enabled profile names
   DOTFILES_TAGS               comma-separated list of selected tags (or 'all')
-  DOTFILES_SUDO_PASSWORD      sudo password (never passed on argv)
   SOPS_AGE_KEY                age private key for secret decryption (Phase 3)
+
+Sudo: the CLI validates the password once up front and then keeps the OS sudo
+ticket warm with a background `sudo -n -v` refresher for the run's duration
+(see dotfiles_cli.utils.sudo.SudoKeepAlive) — the password itself is never
+passed to pyinfra, so `_sudo=True` operations rely on the ticket cache alone.
 """
 
 from __future__ import annotations
@@ -27,22 +31,24 @@ _selected_names_raw = os.environ.get("DOTFILES_SELECTED_PROFILES", "")
 _enabled_names_raw = os.environ.get("DOTFILES_ENABLED_PROFILES", "")
 _tags_raw = os.environ.get("DOTFILES_TAGS", ALL_SELECTOR)
 
-selected_names: list[str] = [n for n in _selected_names_raw.split(",") if n]
-enabled_names: list[str] = [n for n in _enabled_names_raw.split(",") if n]
-selected_tags: set[str] = set(_tags_raw.split(",")) if _tags_raw else {ALL_SELECTOR}
+_selected_names: list[str] = [n for n in _selected_names_raw.split(",") if n]
+_enabled_names: list[str] = [n for n in _enabled_names_raw.split(",") if n]
+_selected_tags: set[str] = set(_tags_raw.split(",")) if _tags_raw else {ALL_SELECTOR}
 
 # Discover all profiles on disk.
 # Prefixed with _ so pyinfra doesn't scan these as candidate host groups.
 _all_discovered = sort_profiles(discover_profiles(DOTFILES_DIR / "profiles"))
 
 # Active profile sets
-if enabled_names:
-    _enabled_profiles = [p for p in _all_discovered if p.name in set(enabled_names)]
+if _enabled_names:
+    _enabled_profiles = [p for p in _all_discovered if p.name in set(_enabled_names)]
 else:
     _enabled_profiles = list(_all_discovered)
 
-if selected_names:
-    _selected_profiles = [p for p in _enabled_profiles if p.name in set(selected_names)]
+if _selected_names:
+    _selected_profiles = [
+        p for p in _enabled_profiles if p.name in set(_selected_names)
+    ]
 else:
     _selected_profiles = list(_enabled_profiles)
 
@@ -62,7 +68,19 @@ def _build_merged(profiles):
     mas_packages = lists_mergeby(merge_var(profiles, "mas_packages"), "id")
     npm_packages = lists_mergeby(merge_var(profiles, "npm_packages"), "name")
     pip_packages = lists_mergeby(merge_var(profiles, "pip_packages"), "name")
-    pipx_packages = lists_mergeby(merge_var(profiles, "pipx_packages"), "name")
+    # Resolve relative paths in pipx_packages against each profile's directory.
+    _pipx_raw: list[list[dict[str, Any]]] = []
+    for p in profiles:
+        profile_pkgs = []
+        for pkg in p.config.get("pipx_packages", []):
+            if isinstance(pkg, dict) and "path" in pkg:
+                raw = pkg["path"]
+                if not Path(raw).is_absolute():
+                    pkg = {**pkg, "path": str(p.path / raw)}
+            profile_pkgs.append(pkg)
+        if profile_pkgs:
+            _pipx_raw.append(profile_pkgs)
+    pipx_packages = lists_mergeby(_pipx_raw, "name")
     gem_packages = lists_mergeby(merge_var(profiles, "gem_packages"), "name")
     composer_packages = lists_mergeby(merge_var(profiles, "composer_packages"), "name")
     gh_extensions = lists_mergeby(merge_var(profiles, "gh_extensions"), "name")
@@ -157,9 +175,7 @@ hosts = [
                 "merged_all": merged_all,
                 "merged_selected": merged_selected,
                 # Tag selection
-                "tags": selected_tags,
-                # Sudo
-                "sudo_password": os.environ.get("DOTFILES_SUDO_PASSWORD"),
+                "tags": _selected_tags,
                 # Paths
                 "dotfiles_dir": DOTFILES_DIR,
                 # sops age key (Phase 3, may be None until then)

@@ -32,9 +32,13 @@ def deploy(merged: dict[str, Any]) -> None:
     _remove_taps(taps)
 
     if upgrade_all:
+        # brew upgrade exits 1 when a single cask fails (e.g. the app is
+        # running) even though everything else upgraded — the Ansible role
+        # tolerated this via failed_when; don't let it abort the deploy.
         brew.packages(
             name="Upgrade all Homebrew packages",
             upgrade=True,
+            _ignore_errors=True,
         )
 
 
@@ -131,22 +135,22 @@ def _casks(casks: list[dict[str, Any]]) -> None:
         if c.get("state", "present") == "present" and "version" not in c
     ]
 
-    if absent:
+    for name in absent:
         brew.casks(
-            name=f"Uninstall {len(absent)} brew {'cask' if len(absent) == 1 else 'casks'}",
-            casks=absent,
+            name=f"Uninstall cask {name}",
+            casks=[name],
             present=False,
         )
-    if present:
+    for name in present:
         brew.casks(
-            name=f"Install {len(present)} brew {'cask' if len(present) == 1 else 'casks'}",
-            casks=present,
+            name=f"Install cask {name}",
+            casks=[name],
             present=True,
         )
-    if latest:
+    for name in latest:
         brew.casks(
-            name=f"Upgrade {len(latest)} brew {'cask' if len(latest) == 1 else 'casks'} to latest",
-            casks=latest,
+            name=f"Upgrade cask {name} to latest",
+            casks=[name],
             present=True,
             latest=True,
         )
