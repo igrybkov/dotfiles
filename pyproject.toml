@@ -64,7 +64,7 @@ norecursedirs = [ ".git", ".venv", "node_modules", "__pycache__" ]
 python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
-addopts = "-v --tb=short"
+addopts = "-v --tb=short --import-mode=importlib"
 filterwarnings = [
   "ignore:The '__version__' attribute is deprecated:DeprecationWarning:click_aliases",
 ]
