@@ -1,14 +1,14 @@
 """Vault backend protocol and platform-specific selector.
 
-Two backends, selected by platform:
+Generic labelled-secret storage. Its primary use is holding this machine's
+age private key (label ``_age_private_key``); the same abstraction can store
+any labelled value. Two backends, selected by platform:
 
-- macOS: dedicated keychain file with per-item ACL (`security` CLI).
+- macOS: dedicated login-keychain storage with per-item ACL (`security` CLI).
 - Anywhere else (Linux / WSL / containers): GPG-symmetric-encrypted file
   unlocked by a single master password (`gpg` CLI).
 
-Both backends store per-vault-id passwords keyed by label. The `label`
-matches the Ansible `--vault-id` label and, in this repo, equals the
-profile name (or `common` for the shared default).
+Both back the same `VaultBackend` protocol, keyed by label.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from typing import Protocol, runtime_checkable
 
 @runtime_checkable
 class VaultBackend(Protocol):
-    """Persistent storage for per-vault-id passwords."""
+    """Persistent storage for labelled secrets (e.g. this machine's age key)."""
 
     def ensure_ready(self) -> None:
         """Idempotently set up whatever the backend needs to operate.
@@ -30,26 +30,25 @@ class VaultBackend(Protocol):
         """
 
     def read(self, label: str) -> str | None:
-        """Return the stored password for `label`, or None if absent.
+        """Return the stored value for `label`, or None if absent.
 
-        Must not prompt the user directly — prompting happens in CLI wrappers
-        before any Ansible invocation, so vault-client runs never block on
-        missing TTYs.
+        Must not prompt the user directly — prompting happens in CLI wrappers,
+        so reads never block on a missing TTY.
         """
 
     def write(self, label: str, password: str) -> None:
         """Persist `password` under `label`, replacing any prior value."""
 
     def delete(self, label: str) -> None:
-        """Remove the stored password for `label`. No-op if absent."""
+        """Remove the stored value for `label`. No-op if absent."""
 
     def list_labels(self) -> list[str]:
-        """Return all labels with a stored password, sorted."""
+        """Return all labels with a stored value, sorted."""
 
     def status(self) -> dict:
         """Return a diagnostic snapshot for `dotfiles secret keychain status`.
 
-        Must not include password values — keys only.
+        Must not include stored values — keys only.
         """
 
 
@@ -59,8 +58,8 @@ _backend: VaultBackend | None = None
 def get_backend() -> VaultBackend:
     """Return the platform-appropriate backend, memoized for the process.
 
-    macOS → MacOSDedicatedKeychain; everything else → GpgFileBackend.
-    No env-var override in v1 — the platform split is opinionated.
+    macOS → MacOSKeyringBackend; everything else → GpgFileBackend.
+    No env-var override — the platform split is opinionated.
     """
     global _backend
     if _backend is not None:

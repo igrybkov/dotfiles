@@ -92,6 +92,12 @@ repos:
         entry: bash -c 'echo "Refusing to commit disk vault-password files. Store secrets via \`dotfiles secret init\`." >&2; exit 1'
         language: system
         files: '(^|/)\.vault_password$'
+      - id: check-no-committed-secrets
+        name: check-no-committed-secrets
+        description: Forbid tracking encrypted secrets (secrets.yml, secrets/ dirs, ansible-vault, sops) in the public repo.
+        entry: bash -c 'mise x -- uv run python scripts/check_no_committed_secrets.py'
+        language: system
+        pass_filenames: false
       - id: trufflehog
         name: TruffleHog
         description: Detect secrets in your data.

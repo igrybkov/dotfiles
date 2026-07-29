@@ -137,25 +137,6 @@ def isolated_env(tmp_path):
 
 
 @pytest.fixture
-def mock_vault_operations():
-    """Mock vault password operations."""
-    with (
-        patch("dotfiles_cli.vault.password.get_vault_password") as mock_get,
-        patch("dotfiles_cli.vault.password.validate_vault_password") as mock_validate,
-        patch("dotfiles_cli.vault.operations.run_ansible_vault") as mock_vault,
-    ):
-        mock_get.return_value = "test_password"
-        mock_validate.return_value = True
-        mock_vault.return_value = (0, "decrypted: value", "")
-
-        yield {
-            "get": mock_get,
-            "validate": mock_validate,
-            "vault": mock_vault,
-        }
-
-
-@pytest.fixture
 def sample_profiles_data():
     """Sample profile data for testing."""
     return {

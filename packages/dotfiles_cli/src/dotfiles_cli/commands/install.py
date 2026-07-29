@@ -18,10 +18,9 @@ from ..constants import (
     DOTFILES_DIR,
     LOGFILE_AUTO,
     SUDO_TAGS,
-    VAULT_TAGS,
     get_env_file,
-    get_vault_client_script,
 )
+from .cache import get_marker_path
 from ..profiles import (
     get_active_profiles,
     get_all_profile_names,
@@ -36,9 +35,6 @@ from ..utils import (
     generate_logfile_name,
     send_notification,
     validate_sudo_password,
-)
-from ..vault import (
-    get_profiles_with_secrets,
 )
 
 
@@ -57,6 +53,30 @@ def _notify_on_idle_prompt(
         yield
     finally:
         timer.cancel()
+
+
+def _ensure_homebrew() -> None:
+    """Install Homebrew before the playbook runs if it is missing.
+
+    Bootstrapping brew from the CLI (rather than only via the
+    geerlingguy.mac.homebrew role) keeps it engine-agnostic and guarantees it
+    exists before ansible-galaxy needs it on a fresh machine. Skipped when brew
+    is already on PATH or the shared skip-homebrew cache marker is present.
+    """
+    if shutil.which("brew") or get_marker_path("skip-homebrew").exists():
+        return
+
+    click.echo("Homebrew not found; installing...")
+    result = subprocess.run(
+        [
+            "/bin/bash",
+            "-c",
+            "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)",
+        ],
+        check=False,
+    )
+    if result.returncode != 0:
+        click.echo("Warning: Homebrew installation failed", err=True)
 
 
 def complete_profiles(
@@ -228,6 +248,9 @@ def install(
     else:
         click.echo("Warning: mise not found in PATH", err=True)
 
+    # Ensure Homebrew exists before Ansible runs (fresh-machine bootstrap).
+    _ensure_homebrew()
+
     with TemporaryDirectory() as tmpdir:
         # Install Ansible dependencies from main requirements
         ansible_runner.run_command(
@@ -331,20 +354,6 @@ def install(
             if dry_run:
                 cmdline_args.append("--check")
                 click.echo("Running in dry-run mode (no changes will be made)")
-
-            needs_vault_password = len(set(tags) & VAULT_TAGS) > 0 or "all" in tags
-
-            if needs_vault_password:
-                # Build ANSIBLE_VAULT_IDENTITY_LIST from profiles that have
-                # an encrypted secrets.yml. Ansible spawns our client script
-                # for each listed vault-id when it needs a password; the
-                # script reads from the OS backend.
-                vault_ids = get_profiles_with_secrets()
-                if vault_ids:
-                    client_script = str(get_vault_client_script())
-                    envvars["ANSIBLE_VAULT_IDENTITY_LIST"] = ",".join(
-                        f"{vid}@{client_script}" for vid in vault_ids
-                    )
 
             # Include localhost for Bootstrap and Finalize plays
             # Convert hyphens to underscores for Ansible group names (Ansible doesn't allow hyphens in group names)

@@ -554,6 +554,10 @@
             "description": "Environment variables whose values are resolved at server spawn time by the `run-with-secrets.sh` wrapper (via `dotfiles secret get`). Values in this dict are vault key paths (dot-notation), never the secrets themselves \u2014 so the rendered MCP config stays commit-safe. The role rewrites `command`/`args` to invoke the wrapper; plain `env` still ships as-is alongside. Stdio servers only.",
             "type": "object"
           },
+          "secret_headers": {
+            "description": "HTTP header name mapped to a sops key-path (dot notation, optional at-profile suffix) resolved into `headers` at install time via the vault_secret lookup. A simpler, validated alternative to writing a lookup('vault_secret', ...) expression by hand in `headers`. URL-based servers only. A header name must not appear in both `headers` and `secret_headers`.",
+            "type": "object"
+          },
           "state": {
             "description": "Whether the server should be present or absent",
             "type": "string",

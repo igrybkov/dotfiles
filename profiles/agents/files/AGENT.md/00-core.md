@@ -97,7 +97,18 @@ mcp_servers:
       API_TOKEN: mcp_secrets.myservice.token       # vault key path, resolved at spawn
 ```
 
-URL-based servers with secret headers still need install-time `vault_secret` lookups — that's the one exception.
+URL-based servers have no spawn-time hook to wrap (HTTP headers are just static values in the rendered config, unlike a stdio command), so header secrets are always resolved at install time and written into the file — prefer `secret_headers:` over hand-writing a `{{ lookup('vault_secret', ...) }}` expression directly in `headers:`; both resolve the same way, but `secret_headers:` uses the same bare key-path syntax as `secret_env:` and is validated (a header name can't appear in both `headers:` and `secret_headers:`). The rendered config file is still written mode `0600` since it carries a resolved value.
+
+```yaml
+mcp_servers:
+  - name: my-remote-server
+    type: http
+    url: "https://example.com/api/mcp"
+    secret_headers:
+      Authorization: mcp_secrets.myservice.bearer    # resolved at install time
+```
+
+The secret must hold the complete header value (store `Bearer <token>`, not just the token).
 
 ### Example
 

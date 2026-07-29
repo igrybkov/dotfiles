@@ -230,57 +230,6 @@ class TestProfileSelectionWorkflow:
             assert "bravo" not in active
 
 
-class TestVaultWorkflow:
-    """Integration tests for vault operations."""
-
-    def test_vault_password_from_backend(self):
-        """Vault password retrieval delegates to the backend."""
-        from unittest.mock import MagicMock
-
-        from dotfiles_cli.vault.password import get_vault_password
-
-        fake_backend = MagicMock()
-        fake_backend.read.return_value = "my_secret_password"
-
-        with patch(
-            "dotfiles_cli.vault.password.get_backend",
-            return_value=fake_backend,
-        ):
-            password = get_vault_password("alpha")
-
-        assert password == "my_secret_password"
-        fake_backend.read.assert_called_once_with("alpha")
-
-    def test_vault_encrypt_decrypt_workflow(self, tmp_path):
-        """Test encrypting and decrypting with vault."""
-        from dotfiles_cli.vault.operations import run_ansible_vault
-
-        secrets_file = tmp_path / "secrets.yml"
-        secrets_file.write_text("api_key: secret123")
-
-        # Mock subprocess calls for encrypt/decrypt
-        with (
-            patch("subprocess.run") as mock_run,
-            patch("dotfiles_cli.vault.operations.DOTFILES_DIR", str(tmp_path)),
-        ):
-            # Test encrypt
-            mock_run.return_value = Mock(returncode=0, stdout="", stderr="")
-            rc, stdout, stderr = run_ansible_vault(
-                ["encrypt", str(secrets_file)], password="vault_pass"
-            )
-            assert rc == 0
-
-            # Test decrypt
-            mock_run.return_value = Mock(
-                returncode=0, stdout="api_key: secret123", stderr=""
-            )
-            rc, stdout, stderr = run_ansible_vault(
-                ["decrypt", "--output", "-", str(secrets_file)], password="vault_pass"
-            )
-            assert rc == 0
-            assert "api_key" in stdout
-
-
 class TestCommandAliases:
     """Integration tests for command aliases and shortcuts."""
 
