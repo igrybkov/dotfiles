@@ -11,10 +11,12 @@ from dotfiles_cli.vault import sops
 from dotfiles_cli.vault.age import (
     _find_mise,
     _mise_tool_path,
+    _mise_which,
     generate_keypair,
     get_public_key_from_private,
     is_age_keygen_available,
     is_sops_available,
+    resolve_age_keygen,
     resolve_sops,
 )
 from dotfiles_cli.vault.sops import SopsError
@@ -129,6 +131,90 @@ class TestResolveSops:
             patch("dotfiles_cli.constants.DOTFILES_DIR", str(tmp_path)),
         ):
             assert _mise_tool_path("sops") is None
+
+
+# ===========================================================================
+# TestResolveAgeKeygen — PATH first, then `mise which` (nested install dir,
+# tool name `age` vs binary name `age-keygen` — `mise where` + append can't
+# resolve this, unlike sops)
+# ===========================================================================
+
+
+class TestResolveAgeKeygen:
+    @pytest.fixture(autouse=True)
+    def _clear_cache(self):
+        """resolve_age_keygen is lru_cache'd; each test needs a clean slate."""
+        resolve_age_keygen.cache_clear()
+        yield
+        resolve_age_keygen.cache_clear()
+
+    def test_prefers_path_when_age_keygen_present(self):
+        with (
+            patch(f"{_AGE}.shutil.which", return_value="/usr/bin/age-keygen"),
+            patch(f"{_AGE}.subprocess.run") as mock_run,
+        ):
+            assert resolve_age_keygen() == "/usr/bin/age-keygen"
+        mock_run.assert_not_called()
+
+    def test_falls_back_to_mise_which_nested_install_dir(self, tmp_path):
+        # mise installs age one directory level deeper than `mise where age`
+        # reports (`installs/age/1.3.1/age/age-keygen`) — `mise which` is the
+        # only primitive that knows about that extra level.
+        age_keygen_bin = tmp_path / "installs" / "age" / "1.3.1" / "age" / "age-keygen"
+        age_keygen_bin.parent.mkdir(parents=True)
+        _make_executable(age_keygen_bin)
+
+        def which_side_effect(name):
+            return "/usr/local/bin/mise" if name == "mise" else None
+
+        with (
+            patch(f"{_AGE}.shutil.which", side_effect=which_side_effect),
+            patch(f"{_AGE}.subprocess.run") as mock_run,
+            patch("dotfiles_cli.constants.DOTFILES_DIR", str(tmp_path)),
+        ):
+            mock_run.return_value = Mock(returncode=0, stdout=f"{age_keygen_bin}\n")
+            assert resolve_age_keygen() == str(age_keygen_bin)
+            assert is_age_keygen_available() is True
+
+        assert mock_run.call_args[0][0][1] == "which"
+        assert mock_run.call_args[0][0][2] == "age-keygen"
+
+    def test_returns_none_when_neither_found(self, tmp_path):
+        with (
+            patch(f"{_AGE}.shutil.which", return_value=None),
+            patch("dotfiles_cli.constants.DOTFILES_DIR", str(tmp_path)),
+        ):
+            assert resolve_age_keygen() is None
+            assert is_age_keygen_available() is False
+
+    def test_mise_which_none_on_nonzero_exit(self, tmp_path):
+        mise = tmp_path / "mise"
+        _make_executable(mise)
+        with (
+            patch(f"{_AGE}.shutil.which", return_value=str(mise)),
+            patch(f"{_AGE}.subprocess.run") as mock_run,
+        ):
+            mock_run.return_value = Mock(returncode=1, stdout="", stderr="not found")
+            assert _mise_which("age-keygen") is None
+
+    def test_mise_which_none_on_timeout(self, tmp_path):
+        mise = tmp_path / "mise"
+        _make_executable(mise)
+        with (
+            patch(f"{_AGE}.shutil.which", return_value=str(mise)),
+            patch(
+                f"{_AGE}.subprocess.run",
+                side_effect=subprocess.TimeoutExpired(cmd="mise", timeout=10),
+            ),
+        ):
+            assert _mise_which("age-keygen") is None
+
+    def test_mise_which_none_when_mise_missing(self, tmp_path):
+        with (
+            patch(f"{_AGE}.shutil.which", return_value=None),
+            patch("dotfiles_cli.constants.DOTFILES_DIR", str(tmp_path)),
+        ):
+            assert _mise_which("age-keygen") is None
 
 
 # ===========================================================================
