@@ -160,14 +160,40 @@
 # to `pipx install <git>`.
 # =============================================================================
 
+# uv doesn't replace a tool installed from a different source (editable path,
+# PyPI, or a different git URL) without --force. Locate the receipts dir so
+# the install task below can detect that mismatch per-package.
+- name: "[⚡ uv] Locate uv tool directory"
+  ansible.builtin.command: "{{ uv_check.stdout }} tool dir"
+  register: _uv_tool_dir
+  changed_when: false
+  when:
+    - uv_check.rc == 0
+    - pipx_packages | default([]) | selectattr('git', 'defined') | list | length > 0
+
 - name: "[⚡ uv] Install git packages"
   ansible.builtin.command:
-    cmd: "{{ uv_check.stdout }} tool install --from {{ item.git }} {{ item.name }}"
+    cmd: >-
+      {{ uv_check.stdout }} tool install
+      {{ '--force ' if _needs_force else '' }}--from {{ item.git }} {{ item.name }}
   loop: "{{ pipx_packages | selectattr('git', 'defined') | list }}"
   when:
     - pipx_packages is defined and pipx_packages | length > 0
     - uv_check.rc == 0
     - item.state | default('present') != 'absent'
+  vars:
+    # uv writes the install source into the receipt. If a receipt exists but
+    # doesn't mention this URL, the tool is currently installed from somewhere
+    # else (editable path, PyPI, or a different git URL) and uv will not
+    # replace it without --force. No receipt = not installed = plain install.
+    # Caveat: a git URL carrying an explicit ref (item.git@v1) is stored by uv
+    # as separate rev/tag keys, so it would not substring-match here and would
+    # force every run. Neither current entry uses one.
+    _receipt: >-
+      {{ lookup('file', _uv_tool_dir.stdout ~ '/' ~ item.name ~ '/uv-receipt.toml',
+                errors='ignore') | default('', true) }}
+    _want: "{{ item.git | regex_replace('^git\\+', '') }}"
+    _needs_force: "{{ _receipt | length > 0 and _want not in _receipt }}"
   changed_when: >-
     _uv_git_install_result.stderr is search('(Installed|Uninstalled) \d+ package')
   register: _uv_git_install_result
