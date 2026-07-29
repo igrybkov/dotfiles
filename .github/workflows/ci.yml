@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out the codebase
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Run yamllint
         uses: karancode/yamllint-github-action@master
@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out the codebase
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Run ansible-lint
         uses: ansible/ansible-lint@main
@@ -35,7 +35,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out the codebase
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install mise
         uses: jdx/mise-action@v4
@@ -61,7 +61,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out the codebase
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install mise
         uses: jdx/mise-action@v4
@@ -83,7 +83,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out the codebase
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Validate Renovate config
         uses: rinchsan/renovate-config-validator@v0.2.1
@@ -95,7 +95,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out the codebase
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
@@ -128,7 +128,7 @@ jobs:
             cli_args: "-e SC1071"
     name: "ShellCheck: ${{ matrix.name }}"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Run shellcheck
         id: shellcheck-global
         run: "shopt -s globstar nullglob; files=(${{ matrix.glob }}); filtered=(); for f in \"${files[@]}\"; do [ -f \"$f\" ] && filtered+=(\"$f\"); done; if [ ${#filtered[@]} -eq 0 ]; then echo 'No files matched pattern: ${{ matrix.glob }}'; exit 0; else shellcheck ${{ matrix.cli_args }} \"${filtered[@]}\"; fi"
@@ -139,7 +139,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out the codebase
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install mise
         uses: jdx/mise-action@v4
@@ -166,7 +166,7 @@ jobs:
           - ssh_config
     steps:
       - name: Check out the codebase
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install mise
         uses: jdx/mise-action@v4
@@ -191,7 +191,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out the codebase
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install mise
         uses: jdx/mise-action@v4
@@ -215,7 +215,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch'
     steps:
       - name: Check out the codebase
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install Tart
         run: brew install cirruslabs/cli/tart
@@ -248,7 +248,7 @@ jobs:
 
     steps:
       - name: Check out the codebase
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Uninstall GitHub Actions' built-in Homebrew
         run: |
