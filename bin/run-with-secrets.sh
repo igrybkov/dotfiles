@@ -36,6 +36,32 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DOTFILES="${SCRIPT_DIR}/../dotfiles"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+# `dotfiles secret get` shells out to `sops`, which this repo pins via mise
+# (see mise.toml). mise only puts it on PATH for shells activated inside this
+# repo — but this script is spawned by MCP hosts from whatever directory they
+# happen to run in, inheriting a PATH with no sops on it. The result was a
+# confusing pair of errors: the CLI's "sops not found on PATH", followed by
+# this script reporting it got 0 values back.
+#
+# Resolve the pinned binary explicitly instead. `-C "$REPO_ROOT"` pins the
+# lookup to this repo's mise config so it can't pick up a version another
+# project happens to have active. Nothing here is fatal: if mise or sops is
+# missing we leave PATH alone and let the CLI report it as before.
+sops_path_prefix=""
+if ! command -v sops >/dev/null 2>&1 && command -v mise >/dev/null 2>&1; then
+    if sops_dir="$(mise where sops -C "$REPO_ROOT" 2>/dev/null)" \
+        && [[ -x "${sops_dir}/sops" ]]; then
+        sops_path_prefix="${sops_dir}:"
+    fi
+fi
+
+# Scoped to the CLI call rather than exported: the command we exec at the end
+# is someone else's program, and it should not inherit this repo's toolchain.
+dotfiles_secret_get() {
+    PATH="${sops_path_prefix}${PATH}" "$DOTFILES" secret get "$@"
+}
 
 usage() {
     cat >&2 <<EOF
@@ -164,7 +190,7 @@ if [[ ${#keys[@]} -gt 0 ]]; then
             orig="${subidx[j]}"
             resolved[orig]="$value"
             j=$((j + 1))
-        done < <("$DOTFILES" secret get -p "$up" -0 "${subkeys[@]}")
+        done < <(dotfiles_secret_get -p "$up" -0 "${subkeys[@]}")
 
         if [[ $j -ne ${#subkeys[@]} ]]; then
             echo "run-with-secrets: expected ${#subkeys[@]} values for profile ${up}, got $j" >&2
