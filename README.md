@@ -12,7 +12,7 @@ Ansible-based macOS environment setup with profile-based configuration managemen
 
 ## Overview
 
-Automated macOS development environment setup powered by Ansible. One command installs Homebrew packages, symlinks dotfiles, configures SSH and Git per profile, manages secrets with Ansible Vault, and applies macOS system settings. The profile system lets you separate work, personal, and private configurations — and keep private profiles in their own git repos.
+Automated macOS development environment setup powered by Ansible. One command installs Homebrew packages, symlinks dotfiles, configures SSH and Git per profile, manages secrets with sops + age, and applies macOS system settings. The profile system lets you separate work, personal, and private configurations — and keep private profiles in their own git repos.
 
 This repo ships with an opinionated set of packages and tools across four topical profiles (`shell`, `neovim`, `development`, `macos-desktop`). Clone it and customize to your needs — swap in your own packages, dotfiles, and profiles.
 
@@ -22,7 +22,7 @@ This repo ships with an opinionated set of packages and tools across four topica
 - **Homebrew, Cask, and Mac App Store** automation
 - **Dotfile symlinking** with XDG config directory support
 - **Per-profile SSH and Git** configuration
-- **Secret management** with Ansible Vault
+- **Secret management** with sops + age (per-machine keys)
 - **Private profiles as separate git repos** — keep sensitive configs out of your public dotfiles
 - **CLI with shell completions** for fish, bash, and zsh
 - **18 modular Ansible roles** — use what you need, ignore the rest
@@ -141,7 +141,7 @@ Create `config.yml` in the repository root to override any profile variables. Th
 | `dotfiles upgrade` | Upgrade mise, Ansible Galaxy, Python packages |
 | `dotfiles pull` / `push` | Git operations (main repo + profile repos) |
 | `dotfiles edit` | Open dotfiles in `$EDITOR` |
-| `dotfiles secret <cmd>` | Manage Ansible Vault secrets |
+| `dotfiles secret <cmd>` | Manage sops + age secrets |
 | `dotfiles completion <shell>` | Generate or install shell completions |
 | `dotfiles profile list` | List all profiles with status and priority |
 | `dotfiles profile bootstrap <name>` | Create a new profile |
@@ -194,7 +194,7 @@ profiles/
         ├── files/bin/         # Profile scripts
         ├── tasks/main.yml     # Custom Ansible tasks
         ├── roles/             # Custom Ansible roles
-        ├── secrets/           # Vault-encrypted secrets
+        ├── secrets.yml        # sops-encrypted secrets (+ .sops.yaml recipients)
         └── .git/              # Managed as a separate git repo
 ```
 
@@ -275,15 +275,15 @@ Run specific parts of the setup using tags:
 ## Secret Management
 
 ```bash
-dotfiles secret init                          # Create global vault password
-dotfiles secret init -p shell                 # Create profile-specific vault password
+dotfiles secret init                          # Provision THIS machine's age key
+dotfiles secret enroll -p shell               # Enroll this machine into a profile
 dotfiles secret set -p shell mcp.api_key      # Set a secret (prompts for value)
 dotfiles secret get -p shell mcp.api_key      # Retrieve a secret
 ```
 
-Secrets are encrypted with Ansible Vault. Each profile can have its own secrets file and vault password.
+Secrets are encrypted with [sops](https://github.com/getsops/sops) + [age](https://github.com/FiloSottile/age) using a per-machine key model: each machine has its own age keypair (private key in the login keychain), and each profile carries its own `.sops.yaml` recipient list. There is no single global key. The public dotfiles repo never tracks an encrypted secret file — encrypted secrets live only in private profiles.
 
-See [docs/secrets.md](docs/secrets.md) for the full reference including profile secrets, editing, rekeying, and more.
+See [docs/secrets.md](docs/secrets.md) for the full reference including enrollment, revocation, the opt-in 1Password escrow key, and editing.
 
 ## Architecture
 
@@ -331,7 +331,7 @@ Python CLI (`profiles/agents/packages/hive_cli/`) for multi-agent and worktree w
 
 ### MCP Secrets
 
-MCP server credentials are encrypted with Ansible Vault per profile. The vault password lives in the macOS login keychain (or a GPG-encrypted file on Linux), populated from 1Password during `./dotfiles secret init`. At spawn time, `bin/run-with-secrets.sh` resolves each `secret_env:` entry via `dotfiles secret get` — rendered configs in `~/.config/mcp-hub/` contain only vault key paths, never plaintext tokens. Cross-profile references use a `@profile-name` suffix (e.g. `mcp_secrets.foo.token@adobe`).
+MCP server credentials are encrypted with sops+age per profile. This machine's age private key lives in the macOS login keychain; each profile's `.sops.yaml` lists the machine (and optional escrow) public keys allowed to decrypt it. At spawn time, `bin/run-with-secrets.sh` resolves each `secret_env:` entry via `dotfiles secret get` — rendered configs in `~/.config/mcp-hub/` contain only key paths, never plaintext tokens. Cross-profile references use a `@profile-name` suffix (e.g. `mcp_secrets.foo.token@adobe`).
 
 ### Picking what to adopt
 

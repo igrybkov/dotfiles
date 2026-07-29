@@ -65,6 +65,16 @@ argument_specs:
             description: HTTP headers for URL-based servers (supports vault and 1Password secrets)
             type: dict
             required: false
+          secret_headers:
+            description: >
+              HTTP header name mapped to a sops key-path (dot notation, optional
+              at-profile suffix) resolved into `headers` at install time via the
+              vault_secret lookup. A simpler, validated alternative to writing a
+              lookup('vault_secret', ...) expression by hand in `headers`.
+              URL-based servers only. A header name must not appear in both
+              `headers` and `secret_headers`.
+            type: dict
+            required: false
           git_repo:
             description: Git repository URL to clone for the server
             type: str

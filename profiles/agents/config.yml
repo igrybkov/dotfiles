@@ -159,7 +159,7 @@ json_configs:
         pyright-lsp@claude-plugins-official: false
         basedpyright-lsp@custom-lsp: true
         typescript-lsp@claude-plugins-official: true
-        ralph-wiggum@claude-plugins-official: true
+        ralph-loop@claude-plugins-official: true
         ansible-lsp@custom-lsp: true
         marksman-lsp@custom-lsp: true
         plannotator@plannotator: true
@@ -241,6 +241,8 @@ claude_plugins:
     marketplace: custom-lsp
   - name: typescript-lsp
   - name: ralph-wiggum
+    state: absent
+  - name: ralph-loop
   - name: ansible-lsp
     marketplace: custom-lsp
   - name: marksman-lsp

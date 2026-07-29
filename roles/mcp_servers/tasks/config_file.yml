@@ -6,6 +6,27 @@
   ansible.builtin.set_fact:
     _mcp_config_path: "{{ config_file.key | expanduser }}"
 
+# A header may be declared as either a literal (`headers`) or a secret key-path
+# (`secret_headers`), never both — otherwise the merge order would silently pick
+# a winner. Fail loudly, naming the server and the colliding header(s).
+- name: "[🤖 MCP] Validate no header appears in both headers and secret_headers"
+  ansible.builtin.assert:
+    that:
+      - >-
+        ((item.server.headers | default({})) | list)
+        | intersect((item.server.secret_headers | default({})) | list)
+        | length == 0
+    fail_msg: >-
+      MCP server '{{ item.name }}': header(s)
+      {{ ((item.server.headers | default({})) | list)
+         | intersect((item.server.secret_headers | default({})) | list) }}
+      declared in both 'headers' and 'secret_headers'. Put each header in only one.
+    quiet: true
+  loop: "{{ config_file.value }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: (item.server.secret_headers | default({})) | length > 0
+
 - name: "[🤖 MCP] Check if config directory exists for {{ _mcp_config_path | basename }}"
   ansible.builtin.stat:
     path: "{{ _mcp_config_path | dirname }}"
@@ -81,9 +102,20 @@
             {%- if server.transport is defined -%}
               {%- set _ = server_config.update({'transport': server.transport}) -%}
             {%- endif -%}
-            {# Process headers: resolve Jinja2 templates (vault_secret), then op:// references #}
-            {%- if server.headers is defined -%}
-              {%- set resolved_headers = server.headers | resolve_templates(hostvars[inventory_hostname], {'_vault_profile': server._profile | default('')}) | resolve_op_secrets -%}
+            {# Process headers: fold secret_headers (bare sops key-paths) into
+               literal headers as vault_secret lookups, then resolve Jinja2
+               templates (routing to the server's profile via _vault_profile)
+               and op:// references. Collision between the two dicts is caught
+               by the assert task above. #}
+            {%- if server.headers is defined or (server.secret_headers is defined and server.secret_headers) -%}
+              {%- set raw_headers = {} -%}
+              {%- for hname, hval in (server.headers | default({})).items() -%}
+                {%- set _ = raw_headers.update({hname: hval}) -%}
+              {%- endfor -%}
+              {%- for hname, keypath in (server.secret_headers | default({})).items() -%}
+                {%- set _ = raw_headers.update({hname: "{{ lookup('vault_secret', '" ~ keypath ~ "') }}"}) -%}
+              {%- endfor -%}
+              {%- set resolved_headers = raw_headers | resolve_templates(hostvars[inventory_hostname], {'_vault_profile': server._profile | default('')}) | resolve_op_secrets -%}
               {%- set _ = server_config.update({'headers': resolved_headers}) -%}
             {%- endif -%}
           {%- else -%}

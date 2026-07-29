@@ -30,13 +30,13 @@ See [docs/architecture.md](docs/architecture.md) for the full architecture docum
 ./dotfiles profile list                     # List all profiles
 ./dotfiles profile bootstrap myco           # Create a new profile
 ./dotfiles config                           # Interactive profile/settings configuration
-./dotfiles secret init                      # Provision OS-backed vault passwords
+./dotfiles secret init                      # Provision THIS machine's age key (import or generate)
+./dotfiles secret enroll -p shell           # Enroll this machine as a recipient of a profile
 ./dotfiles secret set -p shell key.path     # Set a secret (prompts for value)
 ./dotfiles secret get -p shell key.path     # Read one secret (clipboard on TTY)
-./dotfiles secret keychain status           # Inspect backend + stored labels
-./dotfiles secret keychain push <profile>   # Manually register a vault password
-./dotfiles secret keychain rm <profile>     # Remove a stored vault password
-./dotfiles secret rekey -p <profile>        # Change vault password for a profile
+./dotfiles secret revoke <pubkey> -p shell  # Remove a recipient + re-key the profile
+./dotfiles secret keychain status           # Inspect backend + this machine's public key
+./dotfiles secret keychain backup           # Designate this key as escrow (→ 1Password)
 ```
 
 ### Working with Ansible directly
@@ -275,7 +275,7 @@ mcp_servers:
     env:
       API_KEY: "{{ lookup('vault_secret', 'mcp_secrets.my_server.api_key') }}"
 ```
-Private profile MCP servers (adobe, productivity, home-network) use Ansible Vault for secrets — see [docs/secrets.md](docs/secrets.md).
+Private profile MCP servers (adobe, productivity, home-network) use sops + age for secrets — see [docs/secrets.md](docs/secrets.md).
 
 ### Global Gitignore
 
@@ -313,9 +313,9 @@ Two roles allow profiles to contribute partial configuration to shared files:
 
 This lets multiple profiles contribute to the same config file without overwriting each other.
 
-### Secret Management (Vault)
+### Secret Management (sops + age)
 
-Per-profile secrets are encrypted with Ansible Vault in `profiles/{profile}/secrets.yml`. The unlock password lives in the OS credential store — macOS login keychain (via `keyring`) or a GPG-symmetric-encrypted file on Linux — **never** on disk.
+Per-profile secrets are encrypted with sops + age in `profiles/{profile}/secrets.yml`. The model is per-machine keys: each machine has its own age keypair (private key in the macOS login keychain, `keyring`), and each profile carries its own `.sops.yaml` recipient list (the age public keys allowed to decrypt it). There is no single global key. The **public** dotfiles repo never tracks an encrypted secret file — encrypted secrets live only in private profiles (enforced by `scripts/check_no_committed_secrets.py` in pre-commit + CI).
 
 Reference a secret value in profile config:
 ```yaml
@@ -323,16 +323,16 @@ env:
   MY_TOKEN: "{{ lookup('vault_secret', 'mcp_secrets.service.token') }}"
 ```
 
-For MCP server env vars, prefer `secret_env:` over `env:` with a lookup — values are resolved at spawn time (via `bin/run-with-secrets.sh`) instead of being rendered into config files. See [docs/secrets.md](docs/secrets.md) for the full flow including optional 1Password fallback.
+For MCP server env vars, prefer `secret_env:` over `env:` with a lookup — values are resolved at spawn time (via `bin/run-with-secrets.sh`) instead of being rendered into config files. See [docs/secrets.md](docs/secrets.md) for the full flow including enrollment, revocation, and the opt-in 1Password escrow key.
 
-Provision on a new machine with `./dotfiles secret init` (walks every profile with an encrypted `secrets.yml`, validates each password by decrypting the real file).
+Provision on a new machine with `./dotfiles secret init` (finds or generates this machine's age key), then `./dotfiles secret enroll -p <profile>` (or `--all`) to add this machine as a recipient. Losing a previous machine is the normal case — the escrow key can always re-key a profile.
 
 ## Detailed Documentation
 
 | Topic | Documentation |
 |-------|---------------|
 | Profiles (nested profiles, git repos, custom tasks) | [docs/profiles.md](docs/profiles.md) |
-| Secret management (Ansible Vault) | [docs/secrets.md](docs/secrets.md) |
+| Secret management (sops + age) | [docs/secrets.md](docs/secrets.md) |
 | Testing (pytest, Molecule) | [docs/testing.md](docs/testing.md) |
 | CLI package structure | [docs/cli.md](docs/cli.md) |
 | Multi-agent workflow | [docs/agent-management.md](docs/agent-management.md) |

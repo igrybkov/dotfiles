@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# run-with-secrets.sh — resolve Ansible Vault secrets into env vars, then exec.
+# run-with-secrets.sh — resolve sops-encrypted secrets into env vars, then exec.
 #
 # Intended for wrapping MCP servers (and similar) so their configs never
 # contain plaintext tokens. Secrets are fetched at spawn time via one

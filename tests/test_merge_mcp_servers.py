@@ -137,6 +137,31 @@ def test_url_based_owner(f):
     assert result[0]["secret_env"] == {"K": "p@contrib"}
 
 
+def test_secret_headers_passes_through_untouched(f):
+    """`secret_headers` is a URL-server-only field the merge filter never rewrites.
+
+    Header secrets are resolved at render time in config_file.yml (routed to the
+    server's profile via `_vault_profile`), not through the cross-profile
+    contribution model that `secret_env` uses. A URL owner carrying
+    `secret_headers` is not a contribution (it has non-allowed fields), so it
+    passes through verbatim — no `@profile` suffix, no merging.
+    """
+    entries = [
+        {
+            "name": "svc",
+            "_profile": "adobe",
+            "url": "https://svc.example.com/mcp",
+            "secret_headers": {"Authorization": "mcp_secrets.svc.token"},
+            "headers": {"X-Env": "prod"},
+        },
+    ]
+    result = f(entries)
+    assert len(result) == 1
+    assert result[0]["secret_headers"] == {"Authorization": "mcp_secrets.svc.token"}
+    assert result[0]["headers"] == {"X-Env": "prod"}
+    assert result[0]["url"] == "https://svc.example.com/mcp"
+
+
 def test_env_contribution_not_suffixed(f):
     """Plain `env:` contributions are unioned verbatim — no @profile suffix."""
     entries = [

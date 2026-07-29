@@ -7,7 +7,7 @@ from unittest.mock import Mock, call, patch
 
 
 from dotfiles_cli.app import cli
-from dotfiles_cli.commands.install import _notify_on_idle_prompt
+from dotfiles_cli.commands.install import _ensure_homebrew, _notify_on_idle_prompt
 from dotfiles_cli.constants import SUDO_TAGS
 
 
@@ -221,6 +221,84 @@ class TestCompletionCommand:
         )
 
 
+class TestEnsureHomebrew:
+    """Test the CLI-side Homebrew bootstrap pre-flight check."""
+
+    def _marker(self, exists: bool) -> Mock:
+        marker = Mock()
+        marker.exists.return_value = exists
+        return marker
+
+    def test_skips_when_brew_on_path(self):
+        """No install attempt when brew is already on PATH."""
+        with (
+            patch(
+                "dotfiles_cli.commands.install.shutil.which",
+                return_value="/opt/homebrew/bin/brew",
+            ),
+            patch(
+                "dotfiles_cli.commands.install.get_marker_path",
+                return_value=self._marker(False),
+            ),
+            patch("dotfiles_cli.commands.install.subprocess.run") as mock_run,
+        ):
+            _ensure_homebrew()
+
+        mock_run.assert_not_called()
+
+    def test_skips_when_marker_present(self):
+        """No install attempt when the skip-homebrew marker exists."""
+        with (
+            patch("dotfiles_cli.commands.install.shutil.which", return_value=None),
+            patch(
+                "dotfiles_cli.commands.install.get_marker_path",
+                return_value=self._marker(True),
+            ) as mock_marker,
+            patch("dotfiles_cli.commands.install.subprocess.run") as mock_run,
+        ):
+            _ensure_homebrew()
+
+        mock_marker.assert_called_once_with("skip-homebrew")
+        mock_run.assert_not_called()
+
+    def test_installs_when_missing_and_no_marker(self):
+        """Runs the official installer when brew is absent and no marker set."""
+        with (
+            patch("dotfiles_cli.commands.install.shutil.which", return_value=None),
+            patch(
+                "dotfiles_cli.commands.install.get_marker_path",
+                return_value=self._marker(False),
+            ),
+            patch(
+                "dotfiles_cli.commands.install.subprocess.run",
+                return_value=Mock(returncode=0),
+            ) as mock_run,
+        ):
+            _ensure_homebrew()
+
+        mock_run.assert_called_once()
+        argv = mock_run.call_args[0][0]
+        assert argv[0] == "/bin/bash"
+        assert argv[1] == "-c"
+        assert "Homebrew/install/HEAD/install.sh" in argv[2]
+        assert mock_run.call_args[1]["check"] is False
+
+    def test_warns_but_does_not_raise_on_installer_failure(self):
+        """A non-zero installer exit warns but does not raise."""
+        with (
+            patch("dotfiles_cli.commands.install.shutil.which", return_value=None),
+            patch(
+                "dotfiles_cli.commands.install.get_marker_path",
+                return_value=self._marker(False),
+            ),
+            patch(
+                "dotfiles_cli.commands.install.subprocess.run",
+                return_value=Mock(returncode=1),
+            ),
+        ):
+            _ensure_homebrew()  # must not raise
+
+
 class TestInstallCommand:
     """Test the install command."""
 
@@ -342,10 +420,14 @@ class TestInstallCommand:
         ansible_call = mock_ansible_runner["run"].call_args
         assert "all" in ansible_call[1]["tags"]
 
-    def test_install_sets_vault_identity_list(
+    def test_install_never_sets_vault_identity_list_for_vault_tags(
         self, cli_runner, mock_ansible_runner, temp_dotfiles_dir
     ):
-        """When tags include mcp-servers, ANSIBLE_VAULT_IDENTITY_LIST is set."""
+        """Even for mcp-servers, install no longer wires ANSIBLE_VAULT_IDENTITY_LIST.
+
+        Under sops the vault_secret lookup plugin self-resolves its decryption
+        key from the keychain, so no vault identity list is built or exported.
+        """
         with (
             patch("dotfiles_cli.constants.DOTFILES_DIR", str(temp_dotfiles_dir)),
             patch(
@@ -369,10 +451,6 @@ class TestInstallCommand:
                 return_value=([], []),
             ),
             patch(
-                "dotfiles_cli.commands.install.get_profiles_with_secrets",
-                return_value=["alpha"],
-            ),
-            patch(
                 "dotfiles_cli.commands.install.validate_sudo_password",
                 return_value=True,
             ),
@@ -385,13 +463,8 @@ class TestInstallCommand:
             result = cli_runner.invoke(cli, ["install", "mcp-servers"])
 
         assert result.exit_code == 0, result.output
-        ansible_call = mock_ansible_runner["run"].call_args
-        envvars = ansible_call[1]["envvars"]
-        identity_list = envvars.get("ANSIBLE_VAULT_IDENTITY_LIST")
-        assert identity_list is not None
-        # Points at the bin shim, built from profiles with encrypted secrets.
-        assert "dotfiles-vault-client" in identity_list
-        assert identity_list.startswith("alpha@")
+        envvars = mock_ansible_runner["run"].call_args[1]["envvars"]
+        assert "ANSIBLE_VAULT_IDENTITY_LIST" not in envvars
 
     def test_install_skips_vault_identity_list_for_non_vault_tags(
         self, cli_runner, mock_ansible_runner, temp_dotfiles_dir

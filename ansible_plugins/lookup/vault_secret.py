@@ -56,17 +56,53 @@ from ansible.parsing.vault import AnsibleVaultError, VaultLib, VaultSecret  # no
 from ansible.plugins.lookup import LookupBase  # noqa: E402
 from dotfiles_profile_discovery import get_profile_by_name  # noqa: E402
 
-# Best-effort import of the 1Password fallback + backend writer. These live
-# in the installed dotfiles_cli package (the venv Ansible runs under) and
-# are only consulted when primary decryption fails.
+# Best-effort import of the sops backend, 1Password fallback, and backend
+# writer. These live in the installed dotfiles_cli package (the venv Ansible
+# runs under). ``sops`` handles the new per-machine secret store; the
+# 1Password/backend pair is only consulted when Ansible-Vault decryption fails.
 try:
+    from dotfiles_cli.vault import age as _age  # noqa: E402
+    from dotfiles_cli.vault import sops as _sops  # noqa: E402
     from dotfiles_cli.vault.backend import get_backend as _get_backend  # noqa: E402
     from dotfiles_cli.vault.backends import onepassword as _onepassword  # noqa: E402
 except Exception:  # pragma: no cover — env without dotfiles_cli on path
+    _age = None
+    _sops = None
     _get_backend = None
     _onepassword = None
 
 VAULT_HEADER_PREFIX = b"$ANSIBLE_VAULT"
+
+
+@lru_cache(maxsize=1)
+def _get_age_key() -> str | None:
+    """Fetch this machine's age key via a fresh-exec subprocess, once per run.
+
+    Ansible runs lookup plugins inside forked worker processes (fork without
+    exec). Reading the keychain in-process (``age.read_age_key()``, via
+    python-keyring) touches the macOS Security framework — which aborts the
+    process when done after such a fork, killing the worker. Fetching the key
+    through ``read_age_key_via_subprocess()`` instead — a brand-new process,
+    never forked — sidesteps the crash entirely. Cached because it's this
+    machine's single key for the process lifetime; no need to re-exec per
+    decrypt.
+    """
+    if _age is None:
+        return None
+    return _age.read_age_key_via_subprocess()
+
+
+@lru_cache(maxsize=None)
+def _sops_decrypt_cached(path: Path) -> dict:
+    """Decrypt a sops file at most once per playbook process.
+
+    Ansible may instantiate ``LookupModule`` several times per run, so the
+    per-``run()`` ``secrets_cache`` is not enough to avoid re-shelling out to
+    ``sops`` for the same file. Keyed on the resolved absolute path (hashable),
+    this module-level cache lives for the process — analogous to the
+    ``_fetch_password`` cache on the Ansible-Vault path.
+    """
+    return _sops.decrypt_to_dict(path, age_key=_get_age_key())
 
 
 class LookupModule(LookupBase):
@@ -226,34 +262,47 @@ def _locate_client_script(playbook_dir: str | os.PathLike) -> Path:
 
 
 def _decrypt_file(vault_file: Path, client_script: Path) -> dict:
-    """Decrypt `vault_file` by reading its vault-id and invoking the client script.
+    """Decrypt `vault_file`, dispatching on its on-disk format.
 
-    On an `AnsibleVaultError` (typically: locally-cached password is stale
-    because the vault was rekeyed on another machine), consult 1Password
-    if configured, write the fresh value back to the local backend, and
-    retry once. Matches the retry semantics `run_ansible_vault` already
-    implements for the CLI path.
+    Three formats are supported, in order:
+
+    1. **Ansible-Vault** (``$ANSIBLE_VAULT`` header): read the vault-id from the
+       header and invoke the client script for the password. On an
+       `AnsibleVaultError` (typically: locally-cached password is stale because
+       the vault was rekeyed on another machine), consult 1Password if
+       configured, write the fresh value back to the local backend, and retry
+       once. Matches the retry semantics `run_ansible_vault` implements for the
+       CLI path.
+    2. **sops** (valid YAML with a top-level ``sops:`` mapping): decrypt via the
+       dotfiles_cli sops backend, which reads this machine's age key from the
+       keychain. Cached per process (see `_sops_decrypt_cached`).
+    3. **Plain YAML** (neither of the above): parsed as-is — a legacy or
+       not-yet-encrypted file.
     """
     raw = vault_file.read_bytes()
-    if not raw.startswith(VAULT_HEADER_PREFIX):
-        return yaml.safe_load(raw) or {}
 
-    header, _, body = raw.partition(b"\n")
-    parts = header.decode("utf-8", errors="replace").split(";")
-    vault_id = parts[3].strip() if len(parts) >= 4 else "default"
+    if raw.startswith(VAULT_HEADER_PREFIX):
+        header, _, body = raw.partition(b"\n")
+        parts = header.decode("utf-8", errors="replace").split(";")
+        vault_id = parts[3].strip() if len(parts) >= 4 else "default"
 
-    password = _fetch_password(client_script, vault_id)
-    try:
-        decrypted = _try_decrypt(raw, vault_id, password)
-    except AnsibleVaultError:
-        fresh = _refresh_from_onepassword(vault_id)
-        if fresh is None or fresh == password:
-            raise
-        decrypted = _try_decrypt(raw, vault_id, fresh)
-        # Clear cached wrong password so concurrent callers in this process
-        # pick up the refreshed value too.
-        _fetch_password.cache_clear()
-    return yaml.safe_load(decrypted) or {}
+        password = _fetch_password(client_script, vault_id)
+        try:
+            decrypted = _try_decrypt(raw, vault_id, password)
+        except AnsibleVaultError:
+            fresh = _refresh_from_onepassword(vault_id)
+            if fresh is None or fresh == password:
+                raise
+            decrypted = _try_decrypt(raw, vault_id, fresh)
+            # Clear cached wrong password so concurrent callers in this process
+            # pick up the refreshed value too.
+            _fetch_password.cache_clear()
+        return yaml.safe_load(decrypted) or {}
+
+    if _sops is not None and _sops.is_sops_encrypted(vault_file):
+        return _sops_decrypt_cached(vault_file.resolve())
+
+    return yaml.safe_load(raw) or {}
 
 
 def _try_decrypt(raw: bytes, vault_id: str, password: str) -> bytes:
