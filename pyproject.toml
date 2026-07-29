@@ -16,12 +16,12 @@ classifiers = [
 ]
 dependencies = [
   # Ansible core
-  "ansible~=14.0.0",
+  "ansible~=14.2.0",
   "ansible-runner~=2.4.2",
   # Cloud providers
   "boto3~=1.43.0",
   # Security
-  "certifi~=2026.5.20",
+  "certifi~=2026.7.22",
   # Workspace packages
   "dotfiles-cli",
   "dotfiles-profile-discovery",
@@ -32,13 +32,13 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-  "ansible-lint~=26.4.0",
+  "ansible-lint~=26.6.0",
   "docopt~=0.6.2",
-  "molecule~=26.4.0",
+  "molecule~=26.6.0",
   "molecule-plugins[docker]>=23.5",
   "pip>=25",
   "pre-commit~=4.6.0",
-  "pytest~=9.0.2",
+  "pytest~=9.1.1",
   "pytest-cov~=7.1.0",
   "pytest-testinfra>=9",
   "pytest-watcher~=0.6.1",
