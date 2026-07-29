@@ -686,6 +686,10 @@
             "description": "Environment variables for the build",
             "type": "object"
           },
+          "git": {
+            "description": "Git URL to install from (e.g. git+https://github.com/user/repo.git). Uses `uv tool install --from <git> <name>` when uv is available, falls back to `pipx install <git>`. Mutually exclusive with `path`.",
+            "type": "string"
+          },
           "name": {
             "description": "Package name",
             "type": "string"

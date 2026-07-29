@@ -315,7 +315,7 @@ Full MCP protocol support: tools, prompts, resources, sampling, elicitation, log
 
 ### Hive CLI
 
-Python CLI (`profiles/agents/packages/hive_cli/`) for multi-agent and worktree workflows.
+[`hive`](https://github.com/igrybkov/hive) is a standalone CLI (installed from Git, like mcp-hub) for multi-agent and worktree workflows.
 
 | Command | Description |
 |---------|-------------|
@@ -327,7 +327,7 @@ Python CLI (`profiles/agents/packages/hive_cli/`) for multi-agent and worktree w
 
 ### Zellij layout
 
-`profiles/agents/files/dotfiles/config/zellij/layouts/agent.kdl` defines a layout with up to 16 named agent panes (Anton, Bohdan, Chris, …) each running `hive run --restart`, plus a `hive status --watch --compact` board. It is purpose-built for parallelizing work across multiple independent branches — kick off agents on separate worktrees and watch them progress side by side.
+The `agent.kdl` layout ships inside the `hive` package (`hive zellij layout-path` prints the installed location) and defines a layout with up to 16 named agent panes (Anton, Bohdan, Chris, …) each running `hive run --restart`, plus a `hive status --watch --compact` board. It is purpose-built for parallelizing work across multiple independent branches — kick off agents on separate worktrees and watch them progress side by side.
 
 ### MCP Secrets
 
@@ -340,8 +340,8 @@ The components are independently usable. You don't need the full stack to get va
 | If you want… | Minimum to adopt |
 |---|---|
 | Just the MCP tool integrations | Install the `agents` profile for mcp-hub, then configure `~/.config/mcp-hub/servers.json` |
-| Just multi-agent worktree management | `pipx install -e profiles/agents/packages/hive_cli` standalone |
-| Just the Zellij layout | Copy `profiles/agents/files/dotfiles/config/zellij/layouts/agent.kdl` to `~/.config/zellij/layouts/` |
+| Just multi-agent worktree management | `uv tool install --from git+https://github.com/igrybkov/hive.git hive-cli` |
+| Just the Zellij layout | It ships inside the `hive` package — see `hive zellij layout-path`, or copy the file it prints to `~/.config/zellij/layouts/` |
 | Just Claude skills or sub-agents | Copy `profiles/agents/files/skills/` and `profiles/agents/files/agents/` to `~/.claude/` |
 | Everything wired together | `./dotfiles install -p agents --all` |
 

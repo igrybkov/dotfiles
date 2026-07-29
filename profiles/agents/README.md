@@ -592,21 +592,7 @@ profiles/agents/
 ├── config.yml                      # Package declarations & settings
 ├── README.md
 ├── packages/
-│   └── hive_cli/                   # Hive CLI Python package
-│       ├── pyproject.toml
-│       ├── README.md
-│       └── src/hive_cli/
-│           ├── app.py              # CLI entry point
-│           ├── config.py           # Agent configurations
-│           ├── agents/             # Agent detection
-│           ├── git/                # Git/worktree operations
-│           ├── utils/              # Terminal, fuzzy finder
-│           └── commands/           # CLI commands
-│               ├── run.py          # hive run
-│               ├── zellij.py       # hive zellij
-│               ├── wt.py           # hive wt
-│               ├── exec_runner.py  # Worktree execution logic
-│               └── ...
+│   └── apple-mail/                 # Local MCP server package (installed editable via pipx)
 └── files/
     ├── bin/                        # Shell scripts (→ ~/.local/bin/)
     │   ├── zc                      # Zellij agent launcher (cross-shell)
@@ -621,8 +607,12 @@ profiles/agents/
     │   ├── skills/
     │   └── hooks/
     ├── dotfiles/config/
-    │   ├── fish/conf.d/agents.fish # Fish-specific functions & abbreviations
-    │   └── zellij/layouts/agent.kdl
+    │   └── fish/conf.d/agents.fish # Fish-specific functions & abbreviations
     └── dotfiles-copy/.config/mcp-hub/
         └── servers.json            # MCP servers template
 ```
+
+The `hive` CLI (`hive run`, `hive zellij`, `hive wt`, …) and its bundled Zellij
+`agent.kdl` layout live in their own repo,
+[igrybkov/hive](https://github.com/igrybkov/hive), installed via the
+`pipx_packages` `git:` entry above — same pattern as `mcp-hub`.
