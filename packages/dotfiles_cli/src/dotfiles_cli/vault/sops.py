@@ -23,7 +23,15 @@ import yaml
 
 from ..constants import get_dotfiles_dir
 from ..profiles import get_profile_names, get_profile_path
-from .age import read_age_key
+from .age import read_age_key, resolve_sops
+
+# Shown when sops can be found neither on PATH nor via mise. Points at `mise
+# install` because that is how this repo pins it (see mise.toml); suggesting
+# Homebrew sent people to install a second, unpinned copy.
+SOPS_MISSING_MESSAGE = (
+    "sops not found. This repo pins it with mise — run: mise install "
+    "(or install sops yourself and put it on PATH)"
+)
 
 
 class SopsError(RuntimeError):
@@ -200,16 +208,15 @@ def _run_sops(
         capture: capture stdout/stderr (False for interactive ``sops edit``).
 
     Raises:
-        SopsError: if ``sops`` is not on PATH.
+        SopsError: if ``sops`` cannot be found.
     """
-    import shutil
-
-    if shutil.which("sops") is None:
-        raise SopsError("sops not found on PATH. Install sops: brew install sops")
+    sops_bin = resolve_sops()
+    if sops_bin is None:
+        raise SopsError(SOPS_MISSING_MESSAGE)
 
     env = _sops_env(age_key) if inject_key else dict(os.environ)
     return subprocess.run(
-        ["sops", *args],
+        [sops_bin, *args],
         cwd=get_dotfiles_dir(),
         env=env,
         capture_output=capture,
@@ -377,17 +384,16 @@ def run_sops_edit(path: Path, editor: str = "vim") -> int:
     exit code.
 
     Raises:
-        SopsError: if ``sops`` is not on PATH.
+        SopsError: if ``sops`` cannot be found.
     """
-    import shutil
-
-    if shutil.which("sops") is None:
-        raise SopsError("sops not found on PATH. Install sops: brew install sops")
+    sops_bin = resolve_sops()
+    if sops_bin is None:
+        raise SopsError(SOPS_MISSING_MESSAGE)
 
     env = _sops_env()
     env["EDITOR"] = editor
     return subprocess.run(
-        ["sops", "edit", str(path)],
+        [sops_bin, "edit", str(path)],
         cwd=get_dotfiles_dir(),
         env=env,
     ).returncode

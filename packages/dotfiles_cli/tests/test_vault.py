@@ -1,9 +1,16 @@
 """Tests for vault operations and password management."""
 
+import subprocess
 import pytest
 from unittest.mock import MagicMock, Mock, patch
 
 
+from dotfiles_cli.vault.age import (
+    _find_mise,
+    _mise_tool_path,
+    is_sops_available,
+    resolve_sops,
+)
 from dotfiles_cli.vault.operations import (
     get_all_secret_locations,
     get_profiles_with_secrets,
@@ -19,6 +26,12 @@ from dotfiles_cli.vault.password import (
     validate_vault_password,
     write_vault_password_file,
 )
+
+
+def _make_executable(path):
+    """Write a stub file at ``path`` and mark it executable."""
+    path.write_text("#!/bin/sh\n")
+    path.chmod(0o755)
 
 
 class TestGetSecretsFile:
@@ -697,6 +710,125 @@ class TestValidateVaultPassword:
             result = validate_vault_password("any_password")
 
         assert result is True
+
+
+class TestResolveSops:
+    """Test sops resolution: PATH first, then mise (ambient or vendored shim)."""
+
+    @pytest.fixture(autouse=True)
+    def _clear_cache(self):
+        """resolve_sops is lru_cache'd; each test needs a clean slate."""
+        resolve_sops.cache_clear()
+        yield
+        resolve_sops.cache_clear()
+
+    def test_prefers_path_when_sops_present(self):
+        """PATH wins — mise is never consulted."""
+        with (
+            patch("dotfiles_cli.vault.age.shutil.which", return_value="/usr/bin/sops"),
+            patch("dotfiles_cli.vault.age.subprocess.run") as mock_run,
+        ):
+            assert resolve_sops() == "/usr/bin/sops"
+
+        mock_run.assert_not_called()
+
+    def test_falls_back_to_ambient_mise_when_sops_missing_from_path(self, tmp_path):
+        """sops absent from PATH, but an ambient `mise` on PATH can locate it."""
+        sops_bin = tmp_path / "sops"
+        _make_executable(sops_bin)
+
+        def which_side_effect(name):
+            return "/usr/local/bin/mise" if name == "mise" else None
+
+        with (
+            patch("dotfiles_cli.vault.age.shutil.which", side_effect=which_side_effect),
+            patch("dotfiles_cli.vault.age.subprocess.run") as mock_run,
+            patch("dotfiles_cli.constants.DOTFILES_DIR", str(tmp_path)),
+        ):
+            mock_run.return_value = Mock(returncode=0, stdout=f"{tmp_path}\n")
+            assert resolve_sops() == str(sops_bin)
+            assert is_sops_available() is True
+
+    def test_falls_back_to_vendored_shim_when_mise_not_on_path(self, tmp_path):
+        """No ambient mise at all — resolve via this repo's vendored bin/mise.
+
+        Regression test: a GUI/launchd-spawned process gets a minimal PATH with
+        neither sops nor mise on it. The repo vendors a self-contained mise
+        bootstrap at bin/mise (own project-local install, no ambient mise or
+        Homebrew required), and resolve_sops must fall back to it rather than
+        giving up.
+        """
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+        vendored_mise = bin_dir / "mise"
+        _make_executable(vendored_mise)
+
+        sops_install_dir = tmp_path / "installs" / "sops" / "3.13.1"
+        sops_install_dir.mkdir(parents=True)
+        sops_bin = sops_install_dir / "sops"
+        _make_executable(sops_bin)
+
+        with (
+            patch("dotfiles_cli.vault.age.shutil.which", return_value=None),
+            patch("dotfiles_cli.vault.age.subprocess.run") as mock_run,
+            patch("dotfiles_cli.constants.DOTFILES_DIR", str(tmp_path)),
+        ):
+            mock_run.return_value = Mock(returncode=0, stdout=f"{sops_install_dir}\n")
+            assert resolve_sops() == str(sops_bin)
+
+        # The vendored shim (not some guessed system path) is what got invoked.
+        assert mock_run.call_args[0][0][0] == str(vendored_mise)
+
+    def test_returns_none_when_neither_sops_nor_mise_found(self, tmp_path):
+        """No sops on PATH, no ambient mise, no vendored bin/mise either."""
+        with (
+            patch("dotfiles_cli.vault.age.shutil.which", return_value=None),
+            patch("dotfiles_cli.constants.DOTFILES_DIR", str(tmp_path)),
+        ):
+            assert resolve_sops() is None
+            assert is_sops_available() is False
+
+    def test_find_mise_returns_none_when_not_on_path_or_vendored(self, tmp_path):
+        """_find_mise itself returns None with no PATH hit and no bin/mise."""
+        with (
+            patch("dotfiles_cli.vault.age.shutil.which", return_value=None),
+            patch("dotfiles_cli.constants.DOTFILES_DIR", str(tmp_path)),
+        ):
+            assert _find_mise() is None
+
+    def test_mise_tool_path_returns_none_on_nonzero_exit(self, tmp_path):
+        """`mise where` running but reporting failure (e.g. tool not pinned)."""
+        mise = tmp_path / "mise"
+        _make_executable(mise)
+
+        with (
+            patch("dotfiles_cli.vault.age.shutil.which", return_value=str(mise)),
+            patch("dotfiles_cli.vault.age.subprocess.run") as mock_run,
+        ):
+            mock_run.return_value = Mock(returncode=1, stdout="", stderr="not found")
+            assert _mise_tool_path("sops") is None
+
+    def test_mise_tool_path_returns_none_on_timeout(self, tmp_path):
+        """A hung `mise where` must not hang secret resolution."""
+        mise = tmp_path / "mise"
+        _make_executable(mise)
+
+        with (
+            patch("dotfiles_cli.vault.age.shutil.which", return_value=str(mise)),
+            patch(
+                "dotfiles_cli.vault.age.subprocess.run",
+                side_effect=subprocess.TimeoutExpired(cmd="mise", timeout=10),
+            ),
+        ):
+            assert _mise_tool_path("sops") is None
+
+    def test_mise_tool_path_returns_none_when_mise_missing(self, tmp_path):
+        """No mise anywhere — _mise_tool_path must not attempt to run one."""
+        with (
+            patch("dotfiles_cli.vault.age.shutil.which", return_value=None),
+            patch("dotfiles_cli.constants.DOTFILES_DIR", str(tmp_path)),
+        ):
+            assert _mise_tool_path("sops") is None
 
 
 class TestVaultIntegration:

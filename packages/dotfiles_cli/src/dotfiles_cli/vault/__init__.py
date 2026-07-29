@@ -39,6 +39,7 @@ from .age import (
     is_sops_available,
     read_age_key,
     read_age_key_from_op,
+    resolve_sops,
     write_age_key,
     write_age_key_to_op,
 )
@@ -73,6 +74,7 @@ __all__ = [
     "is_sops_available",
     "read_age_key",
     "read_age_key_from_op",
+    "resolve_sops",
     "write_age_key",
     "write_age_key_to_op",
 ]

@@ -12,8 +12,11 @@ Consumers that need to decrypt (e.g. ``vault.sops``) read the key with
 
 from __future__ import annotations
 
+import functools
+import os
 import shutil
 import subprocess
+from pathlib import Path
 
 from .backend import get_backend
 
@@ -21,15 +24,94 @@ from .backend import get_backend
 # with a profile name (profiles never start with an underscore).
 AGE_KEY_LABEL = "_age_private_key"
 
+# Bound on the `mise where` lookup. Generous for local metadata, but this runs
+# on the path that spawns MCP servers, and a hung resolve would look to a host
+# like a hung server rather than a missing tool.
+_MISE_LOOKUP_TIMEOUT = 10.0
+
 
 def is_age_keygen_available() -> bool:
     """Return True if ``age-keygen`` is on PATH."""
     return shutil.which("age-keygen") is not None
 
 
+def _find_mise() -> str | None:
+    """Locate the mise executable, on PATH or via the repo's vendored shim.
+
+    Processes launched outside a shell — a GUI MCP host, launchd, cron — get
+    ``PATH=/usr/bin:/bin:/usr/sbin:/sbin`` and never see an ambient mise. But
+    this repo vendors a self-contained mise bootstrap at ``bin/mise`` (own
+    project-local install under ``.mise/``, no Homebrew or system mise
+    required), so falling back to it is safe rather than guessing at system
+    install locations that may not exist or may be a different version.
+    """
+    found = shutil.which("mise")
+    if found:
+        return found
+
+    # Imported lazily: `constants` is a leaf today, and keeping this edge out of
+    # module scope avoids growing the import graph around vault.sops -> vault.age.
+    from ..constants import get_dotfiles_dir
+
+    candidate = Path(get_dotfiles_dir()) / "bin" / "mise"
+    if candidate.is_file() and os.access(candidate, os.X_OK):
+        return str(candidate)
+    return None
+
+
+def _mise_tool_path(tool: str) -> str | None:
+    """Ask mise where it installed ``tool``, or None if it can't say.
+
+    ``-C`` pins the lookup to this repo's ``mise.toml`` so another project's
+    active config can't answer with a different version.
+    """
+    mise = _find_mise()
+    if mise is None:
+        return None
+
+    # Imported lazily: `constants` is a leaf today, and keeping this edge out of
+    # module scope avoids growing the import graph around vault.sops -> vault.age.
+    from ..constants import get_dotfiles_dir
+
+    try:
+        result = subprocess.run(
+            [mise, "where", tool, "-C", str(get_dotfiles_dir())],
+            capture_output=True,
+            text=True,
+            timeout=_MISE_LOOKUP_TIMEOUT,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode != 0:
+        return None
+
+    candidate = Path(result.stdout.strip()) / tool
+    if candidate.is_file() and os.access(candidate, os.X_OK):
+        return str(candidate)
+    return None
+
+
+@functools.lru_cache(maxsize=1)
+def resolve_sops() -> str | None:
+    """Return the path to the ``sops`` executable, or None if unavailable.
+
+    PATH wins when it has an answer. Otherwise fall back to the version mise
+    pins for this repo, because the CLI is routinely run from contexts that
+    never activated mise — MCP servers spawned by a host, cron, launchd — and
+    mise only puts sops on PATH for shells started inside the repo. Depending on
+    ambient PATH alone made secret resolution fail in exactly those contexts
+    while working fine interactively.
+
+    Cached because a single command would otherwise pay for the lookup several
+    times over: the availability check, then each sops invocation. Call
+    ``resolve_sops.cache_clear()`` if a test changes what is installed.
+    """
+    return shutil.which("sops") or _mise_tool_path("sops")
+
+
 def is_sops_available() -> bool:
-    """Return True if ``sops`` is on PATH."""
-    return shutil.which("sops") is not None
+    """Return True if ``sops`` can be found, on PATH or via mise."""
+    return resolve_sops() is not None
 
 
 def generate_keypair() -> tuple[str, str]:

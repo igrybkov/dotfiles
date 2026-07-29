@@ -27,6 +27,7 @@ from ..vault.age import (
 )
 from ..vault.backend import get_backend
 from ..vault.sops import (
+    SOPS_MISSING_MESSAGE,
     SopsError,
     get_all_secret_locations,
     get_secrets_file,
@@ -762,8 +763,5 @@ def _ensure_recipient_in_sops_config(public_key: str) -> None:
 def _require_sops() -> None:
     """Exit with a helpful message if sops is not installed."""
     if not is_sops_available():
-        click.echo(
-            "Error: sops not found on PATH. Install sops: brew install sops",
-            err=True,
-        )
+        click.echo(f"Error: {SOPS_MISSING_MESSAGE}", err=True)
         sys.exit(1)
