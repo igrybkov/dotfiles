@@ -44,8 +44,8 @@ _MISE_RUN_ERRORS = (OSError, subprocess.SubprocessError)
 
 
 def is_age_keygen_available() -> bool:
-    """Return True if ``age-keygen`` is on PATH."""
-    return shutil.which("age-keygen") is not None
+    """Return True if ``age-keygen`` can be found, on PATH or via mise."""
+    return resolve_age_keygen() is not None
 
 
 def _find_mise() -> str | None:
@@ -104,6 +104,58 @@ def _mise_tool_path(tool: str) -> str | None:
     return None
 
 
+def _mise_which(binary: str) -> str | None:
+    """Ask mise for the resolved path of ``binary`` via ``mise which``.
+
+    Unlike ``_mise_tool_path``, this doesn't assume the binary lives at the
+    tool install root under a name matching the mise tool — ``mise which``
+    already resolves that internally, which matters for age: the mise tool is
+    named ``age`` but installs ``age-keygen`` one directory level deeper than
+    ``mise where age`` reports.
+    """
+    mise = _find_mise()
+    if mise is None:
+        return None
+
+    # Imported lazily: `constants` is a leaf today, and keeping this edge out of
+    # module scope avoids growing the import graph around vault.sops -> vault.age.
+    from ..constants import get_dotfiles_dir
+
+    try:
+        result = subprocess.run(
+            [mise, "which", binary, "-C", str(get_dotfiles_dir())],
+            capture_output=True,
+            text=True,
+            timeout=_MISE_LOOKUP_TIMEOUT,
+        )
+    except _MISE_RUN_ERRORS:
+        return None
+    if result.returncode != 0:
+        return None
+
+    candidate = Path(result.stdout.strip())
+    if candidate.is_file() and os.access(candidate, os.X_OK):
+        return str(candidate)
+    return None
+
+
+@functools.lru_cache(maxsize=1)
+def resolve_age_keygen() -> str | None:
+    """Return the path to the ``age-keygen`` executable, or None if unavailable.
+
+    PATH wins when it has an answer. Otherwise fall back to the version mise
+    pins for this repo, for the same reason ``resolve_sops`` does: the CLI is
+    routinely run before mise has been activated in the calling shell (a
+    fresh machine, an MCP host, cron), so age-keygen may be installed but not
+    yet on PATH.
+
+    Cached because a single command would otherwise pay for the lookup
+    several times over. Call ``resolve_age_keygen.cache_clear()`` if a test
+    changes what is installed.
+    """
+    return shutil.which("age-keygen") or _mise_which("age-keygen")
+
+
 @functools.lru_cache(maxsize=1)
 def resolve_sops() -> str | None:
     """Return the path to the ``sops`` executable, or None if unavailable.
@@ -140,14 +192,15 @@ def generate_keypair() -> tuple[str, str]:
     Raises:
         RuntimeError: if ``age-keygen`` is missing or exits non-zero.
     """
-    if not is_age_keygen_available():
+    age_keygen = resolve_age_keygen()
+    if age_keygen is None:
         raise RuntimeError(
             "age-keygen not found on PATH. Install age: brew install age"
         )
 
     try:
         result = subprocess.run(
-            ["age-keygen"],
+            [age_keygen],
             capture_output=True,
             text=True,
             check=True,
@@ -182,13 +235,14 @@ def get_public_key_from_private(private_key: str) -> str:
     Raises:
         RuntimeError: if ``age-keygen`` is missing or exits non-zero.
     """
-    if not is_age_keygen_available():
+    age_keygen = resolve_age_keygen()
+    if age_keygen is None:
         raise RuntimeError(
             "age-keygen not found on PATH. Install age: brew install age"
         )
     try:
         result = subprocess.run(
-            ["age-keygen", "-y"],
+            [age_keygen, "-y"],
             input=private_key,
             capture_output=True,
             text=True,
@@ -248,7 +302,7 @@ def read_age_key_via_subprocess(
             text=True,
             timeout=timeout,
         )
-    except (OSError, subprocess.SubprocessError):
+    except OSError, subprocess.SubprocessError:
         return None
     if result.returncode != 0:
         return None
