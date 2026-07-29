@@ -254,6 +254,12 @@ Layouts are stored in `~/.config/zellij/layouts/`. Start with a layout:
 zellij --layout my-layout
 ```
 
+The multi-agent `agent.kdl` layout (default for `hive zellij`) is not in this
+directory — it ships inside the `hive` package
+([igrybkov/hive](https://github.com/igrybkov/hive)). Run
+`hive zellij layout-path` to print the installed location, or just use
+`hive zellij` directly.
+
 ## Troubleshooting
 
 ### Keys not working in Neovim
