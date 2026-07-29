@@ -18,16 +18,23 @@ The multi-agent system enables running multiple AI coding agents simultaneously 
 
 ### 1. Install the hive CLI
 
-If you've run the dotfiles installation:
+`hive` lives in its own repo, [igrybkov/hive](https://github.com/igrybkov/hive).
+If you've run the dotfiles installation, the `agents` profile installs it for you:
 
 ```bash
 ./dotfiles install pipx
 ```
 
-Or install directly via pipx:
+Or install it standalone:
 
 ```bash
-pipx install -e /path/to/profiles/agents/packages/hive_cli
+uv tool install --from git+https://github.com/igrybkov/hive.git hive-cli
+```
+
+For local development against a checkout:
+
+```bash
+uv tool install -e /path/to/hive
 ```
 
 ### 2. Run an AI agent
@@ -796,7 +803,9 @@ The Zellij layout provides a complete multi-agent environment.
 
 **Layout Structure:**
 
-The `agent.kdl` layout (default for `hive zellij`) includes these tabs:
+The `agent.kdl` layout (default for `hive zellij`, bundled inside the `hive`
+package — see `hive zellij layout-path` to locate the installed copy) includes
+these tabs:
 
 | Tab | Purpose | Panes |
 |-----|---------|-------|

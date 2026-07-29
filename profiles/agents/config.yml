@@ -35,12 +35,12 @@ cask_packages:
   - name: cursor # Optional - remove if not needed
   - name: codex # Optional - remove if not needed
 
-# Python CLI package (installed via pipx in editable mode)
-# Paths starting with "packages/" are relative to profile_dir
+# Python CLI packages (local ones installed via pipx in editable mode; git
+# ones fetched from their own repo — see igrybkov/hive, igrybkov/mcp-hub)
+# Local paths starting with "packages/" are relative to profile_dir
 pipx_packages:
   - name: hive-cli
-    path: packages/hive_cli
-    editable: true
+    git: git+https://github.com/igrybkov/hive.git
   - name: apple-mail-mcp
     path: packages/apple-mail
     editable: true
@@ -198,12 +198,12 @@ json_configs:
         - "mcp-hub:*"
 
 # YAML config settings (via yaml_config role)
+# zellij.layout is intentionally not set here: "agent" is the hive package
+# default (bundled inside hive-cli), so restating it here would be redundant.
 yaml_configs:
   - file: ~/.config/hive/hive.yml
     create_file: true
     content:
-      zellij:
-        layout: agent
       agents:
         order:
           - claude

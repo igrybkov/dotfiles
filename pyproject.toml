@@ -33,7 +33,6 @@ dependencies = [
 [dependency-groups]
 dev = [
   "ansible-lint~=26.4.0",
-  "cyclopts~=4.16.0",
   "docopt~=0.6.2",
   "molecule~=26.4.0",
   "molecule-plugins[docker]>=23.5",
@@ -59,7 +58,6 @@ testpaths = [
   "packages/dotfiles_cli/tests",
   "packages/dotfiles_profile_discovery/tests",
   "packages/symlink_dotfiles/tests",
-  "profiles/agents/packages/hive_cli/tests",
   "tests",
 ]
 norecursedirs = [ ".git", ".venv", "node_modules", "__pycache__" ]
