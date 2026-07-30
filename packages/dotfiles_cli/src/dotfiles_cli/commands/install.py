@@ -328,10 +328,23 @@ def install(
                         )
                         return 1
 
+            assert (
+                become_password
+            )  # loop above only exits via break on a validated password
+
             # Pass become password via ansible-runner's extravars mechanism.
             # ansible-runner writes extravars to a temp file and passes via
             # `-e @file`, so the password is not visible in process listings.
-            become_extravars = {"ansible_become_password": become_password}
+            #
+            # Also expose it as dotfiles_sudo_askpass_password, which the
+            # Bootstrap play forwards to Homebrew's SUDO_ASKPASS helper. Some
+            # cask postflight scripts (e.g. docker-desktop) shell out to sudo
+            # themselves; without this, that sudo call has no tty to prompt
+            # on and blocks forever instead of failing or succeeding.
+            become_extravars = {
+                "ansible_become_password": become_password,
+                "dotfiles_sudo_askpass_password": become_password,
+            }
 
         if logfile == LOGFILE_AUTO:
             logfile = generate_logfile_name()
