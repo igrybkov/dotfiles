@@ -56,6 +56,39 @@
   loop: "{{ brew_taps_missing | default([]) }}"
   when: brew_taps_missing | default([]) | length > 0
 
+# Homebrew requires third-party taps to be explicitly trusted (via `brew trust`)
+# before it will load their formulae/casks/commands, or it silently skips them
+# with a warning. This applies even to taps that were already tapped before
+# this requirement existed, so we re-check trust on every run, not just on tap.
+- name: "[🍺 homebrew] Get list of trusted taps"
+  tags: [brew-packages, taps, brew]
+  ansible.builtin.command: brew trust --tap --json=v1
+  register: brew_trusted_taps
+  changed_when: false
+  when: brew_taps_present | default([]) | length > 0
+
+- name: "[🍺 homebrew] Compute untrusted taps"
+  tags: [brew-packages, taps, brew]
+  ansible.builtin.set_fact:
+    brew_taps_untrusted: >-
+      {{ brew_taps_present
+         | rejectattr('name', 'in', brew_trusted_taps.stdout | default('[]') | from_json)
+         | list }}
+  when: brew_taps_present | default([]) | length > 0
+
+- name: "[🍺 homebrew] Trusting taps: {{ brew_taps_untrusted | length }}"
+  tags: [brew-packages, taps, brew]
+  ansible.builtin.debug:
+    msg: "brew trust --tap {{ brew_taps_untrusted | map(attribute='name') | sort | join(' ') }}"
+  when: brew_taps_untrusted | default([]) | length > 0
+
+- name: "[🍺 homebrew] Trust Homebrew taps"
+  tags: [brew-packages, taps, brew]
+  ansible.builtin.command:
+    cmd: "brew trust --tap {{ brew_taps_untrusted | map(attribute='name') | join(' ') }}"
+  when: brew_taps_untrusted | default([]) | length > 0
+  changed_when: true
+
 # =============================================================================
 # FORMULAE - Get installed packages and group by state
 # =============================================================================
@@ -325,6 +358,14 @@
     state: absent
   loop: "{{ brew_taps_absent | default([]) }}"
   when: brew_taps_absent | default([]) | length > 0
+
+- name: "[🍺 homebrew] Untrust removed Homebrew taps"
+  tags: [brew-packages, taps, brew]
+  ansible.builtin.command:
+    cmd: "brew untrust --tap {{ brew_taps_absent | map(attribute='name') | join(' ') }}"
+  register: brew_untrust_result
+  when: brew_taps_absent | default([]) | length > 0
+  changed_when: "'Untrusted tap' in brew_untrust_result.stdout"
 
 # =============================================================================
 # UPGRADE ALL (optional)
