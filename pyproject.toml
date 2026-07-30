@@ -42,7 +42,7 @@ dev = [
   "pytest-cov~=7.1.0",
   "pytest-testinfra>=9",
   "pytest-watcher~=0.6.1",
-  "ruff~=0.15.0",
+  "ruff~=0.16.0",
 ]
 
 [tool.uv.workspace]
