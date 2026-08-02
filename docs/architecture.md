@@ -74,8 +74,15 @@ The `dotfiles` role (`roles/dotfiles/tasks/main.yml`):
 The Python CLI implements secure sudo authentication:
 
 - Sudo tags (defined in `SUDO_TAGS`): `mas`, `chsh`, `brew`, `cask`
-- For sudo tasks: prompts once, stores in environment variable, uses askpass script
-- Bypasses Touch ID entirely, preventing multiple biometric prompts
+- Prompts once (via `getpass`) and validates the password before running Ansible
+- Ansible's own `become: true` tasks (`chsh`, `mas`, cask uninstall) authenticate via
+  `ansible_become_password`, passed through ansible-runner's extravars mechanism
+  (written to a short-lived temp file, not visible in process listings)
+- Some tools shell out to `sudo` on their own outside of `become` (e.g. a Homebrew
+  cask postflight symlinking files into `/usr/local/bin`). Since Ansible tasks have
+  no attached tty, these would otherwise hang waiting for input that never arrives.
+  For these, the same collected password is exposed as `SUDO_ASKPASS` (`bin/askpass.sh`),
+  which tools that check that env var (like Homebrew, via `sudo -A`) use instead of a tty
 
 ## Shell Integration
 

@@ -34,6 +34,8 @@
   gather_facts: false
   environment:
     PIP_BREAK_SYSTEM_PACKAGES: "1"
+    SUDO_ASKPASS: "{{ playbook_dir }}/bin/askpass.sh"
+    DOTFILES_SUDO_ASKPASS_PASSWORD: "{{ dotfiles_sudo_askpass_password | default('') }}"
   pre_tasks:
     - name: "[﬒ dotfiles] Include config.yml overrides"
       ansible.builtin.include_vars:

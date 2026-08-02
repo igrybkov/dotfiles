@@ -36,6 +36,12 @@ brew_taps:
 | `name`  | Yes      | -         | Tap name                        |
 | `state` | No       | `present` | `present` or `absent`           |
 
+Homebrew requires third-party taps to be explicitly trusted (`brew trust`) before it
+will load their formulae, casks, or commands — otherwise it silently skips them with
+a `Skipping ... because it is not trusted` warning. This role trusts every tap listed
+in `brew_taps` (with `state: present`) on every run, including taps that were already
+tapped before this requirement existed, and untrusts taps removed via `state: absent`.
+
 ### `brew_packages`
 
 List of Homebrew formulas to install. Each item must be a dict with a `name` key.
