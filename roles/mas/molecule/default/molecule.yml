@@ -11,7 +11,7 @@ platforms:
     pre_build_image: true
     command: /bin/bash -c "while true; do sleep 1000; done"
     privileged: true
-    environment:
+    env:
       HOME: /root
 
 provisioner:
