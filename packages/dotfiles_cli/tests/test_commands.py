@@ -185,18 +185,17 @@ class TestCompletionCommand:
         assert result.exception is not None
         assert "not supported" in str(result.exception)
 
-    def test_click_fish_template_still_broken(self):
-        """Canary: when click ships a working fish template, this fails and
-        we can delete the hand-maintained dotfiles.fish + --install guard.
+    def test_click_fish_template_fixed(self):
+        """click >=8.4.2 fixed both symptoms this used to guard against (was
+        `test_click_fish_template_still_broken`, a canary that failed loudly
+        the moment upstream fixed it). Verified end-to-end with
+        `_DOTFILES_COMPLETE=fish_complete dotfiles` producing one
+        `type,value<TAB>help` record per line.
 
-        Two independent symptoms of the bug — assert both so a partial fix
-        upstream still trips the test:
-
-        1. `string split \\n` in the template renders as a real newline,
-           producing a fish script that won't parse.
-        2. Each completion item is emitted as 3 newline-separated lines
-           (type/value/help) but `set -l response (cmd)` flattens them, so
-           per-element splitting can't recover the records.
+        The hand-maintained dotfiles.fish + --install guard in
+        completion.py is now safe to remove — left in place here since this
+        change rides on an unrelated dependency bump; removal is follow-up
+        work. This test just guards against a future regression.
         """
         import click as _click
         from click.shell_completion import (
@@ -205,19 +204,21 @@ class TestCompletionCommand:
             _SOURCE_FISH,
         )
 
-        # Symptom 1: literal newline mid-statement in the rendered template.
-        assert "string split \n" in _SOURCE_FISH, (
-            "click's fish template no longer embeds a literal newline in "
-            "`string split` — check if upstream fixed it and drop the workaround"
+        # Symptom 1 (fixed in 8.4.2): no more literal newline mid-statement
+        # in `string split` — it now splits on "," instead.
+        assert "string split \n" not in _SOURCE_FISH, (
+            "click's fish template embeds a literal newline in `string split` "
+            "again — restore the hand-maintained dotfiles.fish workaround"
         )
 
-        # Symptom 2: format_completion emits 3 newline-separated lines per item.
+        # Symptom 2 (fixed in 8.4.2): format_completion emits a single
+        # "type,value" line per item instead of 3 newline-separated lines.
         formatted = FishComplete(
             cli=_click.Command("x"), ctx_args={}, prog_name="x", complete_var="X"
         ).format_completion(CompletionItem("value", type="plain", help=None))
-        assert formatted.count("\n") == 2, (
-            "click's fish format_completion no longer emits 3-line records — "
-            "check if upstream changed the wire format and drop the workaround"
+        assert formatted.count("\n") == 0, (
+            "click's fish format_completion emits multi-line records again — "
+            "restore the hand-maintained dotfiles.fish workaround"
         )
 
 

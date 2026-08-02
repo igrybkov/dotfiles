@@ -13,7 +13,7 @@ platforms:
     image: ubuntu:24.04
     pre_build_image: true
     command: /bin/bash -c "while true; do sleep 1000; done"
-    environment:
+    env:
       HOME: /root
 
 provisioner:
