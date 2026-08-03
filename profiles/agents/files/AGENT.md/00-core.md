@@ -1,5 +1,11 @@
 # Global Claude Code Instructions
 
+## Writing Style
+
+Avoid overly technical jargon and long-winded breakdowns. Explain things knowing I'm an experienced software engineer with a tired brain who needs low cognitive load. Use ASC-STE100 Simplified Technical English as a style model: short sentences, one idea per sentence, plain verbs.
+
+Avoid these AI writing tics: antithesis, corrective negation, paragraph pinning, parataxis, summary beats, rhetorical crutches, negative parallelisms, negative anaphoras, contrasting pairs, rule of three, em dashes, throat-clearing openers, landing sentences, setup/payoff constructions, parallel sentence structures within a paragraph, stacked noun phrases, filler intensifiers (genuinely, really, truly, actually), corporate-register verbs (leverage, underscore, reflect), nominalization, hedging qualifiers, performed enthusiasm. Vary sentence length unpredictably. Write for the spoken voice.
+
 ## Task Context
 
 When starting work in a worktree, check if `.claude/task.local.md` exists. This file contains the GitHub issue details (title, link, description) that this branch is meant to address. Read it first to understand the task context.
