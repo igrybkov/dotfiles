@@ -29,6 +29,7 @@ class SymlinkResult:
     created: list[str] = field(default_factory=list)
     updated: list[str] = field(default_factory=list)
     skipped: list[str] = field(default_factory=list)
+    yielded: list[str] = field(default_factory=list)
     conflicts: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
 
@@ -47,6 +48,7 @@ class SymlinkResult:
             "created": len(self.created),
             "updated": len(self.updated),
             "skipped": len(self.skipped),
+            "yielded": len(self.yielded),
             "conflicts": self.conflicts,
             "errors": self.errors,
         }
@@ -76,6 +78,27 @@ def is_inside_marker_dir(path: Path, marker_dirs: list[Path]) -> bool:
             return True
         except ValueError:
             continue
+    return False
+
+
+def has_symlinked_parent(target: Path, root: Path) -> bool:
+    """Check whether a parent directory of *target* (below *root*) is a symlink.
+
+    A symlinked parent means another tool owns this subtree as a whole-directory
+    symlink. We treat the files underneath as non-managed and yield to that owner
+    instead of clobbering them, so an external installer can take priority while
+    we still ship a fallback copy on machines where it never ran.
+    """
+    parent = target.parent
+    while parent != root:
+        try:
+            parent.relative_to(root)
+        except ValueError:
+            # Walked above root without finding a symlink.
+            return False
+        if parent.is_symlink():
+            return True
+        parent = parent.parent
     return False
 
 
@@ -183,9 +206,18 @@ def symlink_dotfiles(
                 continue
 
             target_path = target_dir / f"{prefix}{rel_path}"
+            target_str = str(target_path)
+
+            # Yield to another tool that owns this subtree via a directory symlink.
+            if has_symlinked_parent(target_path, target_dir):
+                result.yielded.append(target_str)
+                if verbose:
+                    print(
+                        f"  [yielded] {target_path} (owned elsewhere)", file=sys.stderr
+                    )
+                continue
 
             status = create_symlink(marker_dir, target_path, dry_run)
-            target_str = str(target_path)
 
             if status == "created":
                 result.created.append(target_str)
@@ -227,9 +259,18 @@ def symlink_dotfiles(
                 continue
 
             target_path = target_dir / f"{prefix}{rel_path}"
+            target_str = str(target_path)
+
+            # Yield to another tool that owns this subtree via a directory symlink.
+            if has_symlinked_parent(target_path, target_dir):
+                result.yielded.append(target_str)
+                if verbose:
+                    print(
+                        f"  [yielded] {target_path} (owned elsewhere)", file=sys.stderr
+                    )
+                continue
 
             status = create_symlink(source_file, target_path, dry_run)
-            target_str = str(target_path)
 
             if status == "created":
                 result.created.append(target_str)

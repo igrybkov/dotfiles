@@ -1,14 +1,15 @@
 """Tests for symlink_dotfiles core functionality."""
 
-import pytest
 from pathlib import Path
 
+import pytest
 from symlink_dotfiles.core import (
     DEFAULT_DIRECTORY_MARKER,
     DEFAULT_EXCLUDE_PATTERNS,
     SymlinkResult,
     create_symlink,
     find_marker_directories,
+    has_symlinked_parent,
     is_inside_marker_dir,
     matches_exclude_pattern,
     symlink_dotfiles,
@@ -74,6 +75,12 @@ class TestSymlinkResult:
         assert d["updated"] == 1
         assert d["skipped"] == 3
         assert d["conflicts"] == ["g"]
+
+    def test_yielded_is_not_failed(self):
+        result = SymlinkResult(yielded=["a"])
+        assert not result.failed
+        assert not result.changed
+        assert result.to_dict()["yielded"] == 1
 
 
 class TestFindMarkerDirectories:
@@ -341,3 +348,83 @@ class TestMatchesExcludePattern:
         assert matches_exclude_pattern("file.swp", DEFAULT_EXCLUDE_PATTERNS)
         assert matches_exclude_pattern("file~", DEFAULT_EXCLUDE_PATTERNS)
         assert not matches_exclude_pattern("regular_file.txt", DEFAULT_EXCLUDE_PATTERNS)
+
+
+class TestHasSymlinkedParent:
+    """Tests for has_symlinked_parent (yield-to-foreign-owner detection)."""
+
+    def test_no_symlinked_parent(self, tmp_path: Path):
+        root = tmp_path / "root"
+        (root / "skill").mkdir(parents=True)
+        target = root / "skill" / "SKILL.md"
+        assert not has_symlinked_parent(target, root)
+
+    def test_direct_parent_is_symlink(self, tmp_path: Path):
+        root = tmp_path / "root"
+        root.mkdir()
+        external = tmp_path / "external" / "skill"
+        external.mkdir(parents=True)
+        (root / "skill").symlink_to(external)
+        target = root / "skill" / "SKILL.md"
+        assert has_symlinked_parent(target, root)
+
+    def test_grandparent_is_symlink(self, tmp_path: Path):
+        root = tmp_path / "root"
+        root.mkdir()
+        external = tmp_path / "external" / "group"
+        external.mkdir(parents=True)
+        (root / "group").symlink_to(external)
+        target = root / "group" / "skill" / "SKILL.md"
+        assert has_symlinked_parent(target, root)
+
+    def test_root_itself_symlink_is_ignored(self, tmp_path: Path):
+        # A symlink AT the root boundary is the target dir itself, not a parent.
+        real_root = tmp_path / "real_root"
+        real_root.mkdir()
+        root = tmp_path / "root"
+        root.symlink_to(real_root)
+        target = root / "SKILL.md"
+        assert not has_symlinked_parent(target, root)
+
+
+class TestYieldToForeignOwner:
+    """symlink_dotfiles should yield files under a foreign directory symlink."""
+
+    def test_yields_instead_of_conflict(self, tmp_path: Path):
+        # Source provides skill/SKILL.md.
+        src = tmp_path / "source"
+        (src / "skill").mkdir(parents=True)
+        (src / "skill" / "SKILL.md").write_text("ours")
+
+        # Target's skill dir is a symlink owned by another tool, holding a real file.
+        target = tmp_path / "target"
+        target.mkdir()
+        external = tmp_path / "external" / "skill"
+        external.mkdir(parents=True)
+        (external / "SKILL.md").write_text("theirs")
+        (target / "skill").symlink_to(external)
+
+        result = symlink_dotfiles([src], target)
+
+        assert result.conflicts == []
+        assert not result.failed
+        assert len(result.yielded) == 1
+        # The foreign file is left untouched.
+        assert (external / "SKILL.md").read_text() == "theirs"
+
+    def test_installs_fallback_when_no_owner(self, tmp_path: Path):
+        # No foreign symlink -> dotfiles installs its own copy normally.
+        src = tmp_path / "source"
+        (src / "skill").mkdir(parents=True)
+        (src / "skill" / "SKILL.md").write_text("ours")
+
+        target = tmp_path / "target"
+        target.mkdir()
+
+        result = symlink_dotfiles([src], target)
+
+        assert result.yielded == []
+        assert len(result.created) == 1
+        link = target / "skill" / "SKILL.md"
+        assert link.is_symlink()
+        assert link.resolve() == (src / "skill" / "SKILL.md").resolve()
