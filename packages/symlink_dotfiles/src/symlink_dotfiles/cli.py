@@ -118,6 +118,8 @@ def main() -> int:
         print(f"Created: {len(result.created)}")
         print(f"Updated: {len(result.updated)}")
         print(f"Skipped: {len(result.skipped)}")
+        if result.yielded:
+            print(f"Yielded: {len(result.yielded)} (owned by another tool)")
         if result.conflicts:
             print(f"Conflicts: {len(result.conflicts)}")
             for conflict in result.conflicts:

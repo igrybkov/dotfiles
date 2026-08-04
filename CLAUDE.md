@@ -220,7 +220,9 @@ Skills are symlinked to both `~/.claude/skills/` and `~/.cursor/skills/` (config
 
 **Existing skills (14):** agent-team, changelog, claude-for-chrome, explain, fixup, git-commit, github, handoff, omnifocus, pr, pr-triage, review, test, verify
 
-> Note: the `jira` and `wiki` skills now live in the team-shared `brand-service-team` repo and are intentionally not duplicated here.
+> Note: the `jira` and `wiki` skills are work-only and are managed outside this repo — not duplicated here.
+
+**Yielding to non-managed files.** Another tool may own a skill (or any dotfile) by symlinking its name as a whole directory — e.g. `~/.claude/skills/some-skill` pointing at an external source. The dotfiles symlink step treats everything under such a directory symlink as non-managed: it **yields** rather than clobbering those files, and does not fail on the conflict (see `has_symlinked_parent` in `packages/symlink_dotfiles/src/symlink_dotfiles/core.py`). Where no such symlink exists, dotfiles installs its own copy as normal. This lets the same profile ship a fallback copy of a skill while letting an external owner take priority on machines where it is present. The install report shows a `Yielded: N` count for files skipped this way.
 
 #### Sub-agents
 Specialized agents invoked by Claude Code's `Agent` tool. Each agent lives at `profiles/agents/files/agents/{name}.md`.

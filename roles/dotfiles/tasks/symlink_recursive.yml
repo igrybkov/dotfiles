@@ -33,7 +33,8 @@
     msg: >-
       Created: {{ _result.created }},
       Updated: {{ _result.updated }},
-      Skipped: {{ _result.skipped }}
+      Skipped: {{ _result.skipped }},
+      Yielded: {{ _result.yielded }}
   when: symlink_result.stdout is defined and (symlink_result.stdout | trim | length > 0)
 
 - name: "[🔗 dotfiles] Fail on symlink conflicts"
