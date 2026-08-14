@@ -23,7 +23,7 @@ dependencies = [
   "dotfiles-profile-discovery",
   "keyring>=25; sys_platform=='darwin'",
   "prompt-toolkit>=3.0.52",
-  "pydantic-settings~=2.14.0",
+  "pydantic-settings~=2.15.0",
   "python-dotenv~=1.2.1",
   "pyyaml>=6",
   "rich~=15.0.0",
