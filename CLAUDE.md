@@ -218,7 +218,7 @@ Workflow, usage patterns, examples...
 ```
 Skills are symlinked to both `~/.claude/skills/` and `~/.cursor/skills/` (configured via `skill_folders` in `profiles/agents/config.yml`).
 
-**Existing skills (14):** agent-team, changelog, claude-for-chrome, explain, fixup, git-commit, github, handoff, omnifocus, pr, pr-triage, review, test, verify
+**Existing skills (16):** agent-team, changelog, claude-for-chrome, explain, fixup, git-commit, github, grill-me, grilling, handoff, omnifocus, pr, pr-triage, review, test, verify
 
 > Note: the `jira` and `wiki` skills are work-only and are managed outside this repo — not duplicated here.
 
