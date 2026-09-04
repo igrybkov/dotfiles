@@ -609,6 +609,13 @@ session_serialization false
 //
 // stacked_resize false
 
+// Whether to draw collapsed stacked panes as a "stacked pane list" box
+// (Zellij 0.45+) instead of one-line title bars. Off: the boxes with dead
+// space around them are gone and collapsed panes render as before.
+// Default: true
+//
+stacked_pane_list false
+
 // Whether to show tips on startup
 // Default: true
 //
