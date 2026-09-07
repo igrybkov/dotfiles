@@ -3,3 +3,35 @@ gitconfig_conf_d: ~/.config/git/conf.d
 gitconfig_includes_file: ~/.config/git/conf.d/includes.gitconfig
 gitignore_file: ~/.config/git/gitignore
 allowed_signers_file: ~/.config/git/allowed_signers
+
+git_hooks_dir: ~/.config/git/hooks
+git_hooks_gitconfig_file: ~/.config/git/hooks.gitconfig
+git_hooks_precommit_config: .pre-commit-config.yaml
+git_hooks_precommit_uvx_spec: pre-commit
+git_hooks_all_names:
+  - applypatch-msg
+  - pre-applypatch
+  - post-applypatch
+  - pre-commit
+  - pre-merge-commit
+  - prepare-commit-msg
+  - commit-msg
+  - post-commit
+  - pre-rebase
+  - post-checkout
+  - post-merge
+  - pre-push
+  - pre-auto-gc
+  - post-rewrite
+  - sendemail-validate
+git_hooks_precommit_types:
+  - pre-commit
+  - pre-merge-commit
+  - commit-msg
+  - prepare-commit-msg
+  - post-commit
+  - post-checkout
+  - post-merge
+  - post-rewrite
+  - pre-push
+  - pre-rebase

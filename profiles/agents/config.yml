@@ -197,6 +197,27 @@ json_configs:
         - "scout:*"
         - "mcp-hub:*"
 
+# Strip AI-attribution trailers (Co-authored-by, Claude-Session) from commit
+# messages before they're finalized. Only touches commits that already carry
+# one of these markers — everything else passes through byte-for-byte
+# untouched. Matches "claude"/"anthropic"/"cursor" in Co-authored-by lines
+# (case-insensitive), so a genuine human co-author is left alone unless their
+# name/email happens to contain one of those words.
+git_hooks:
+  - hook: commit-msg
+    scope: global
+    script: |
+      _msg_file="$1"
+      if [ -f "$_msg_file" ] && grep -qiE '^Co-authored-by:.*(claude|anthropic|cursor)|^Claude-Session:' "$_msg_file"; then
+        _tmp="$(mktemp "${_msg_file}.XXXXXX")" && \
+        grep -viE '^Co-authored-by:.*(claude|anthropic|cursor)|^Claude-Session:' "$_msg_file" | \
+          awk '{a[++n]=$0} END{while(n>0 && a[n] ~ /^[ \t]*$/) n--; for(i=1;i<=n;i++) print a[i]}' > "$_tmp" && \
+        mv "$_tmp" "$_msg_file"
+      fi
+      # Cosmetic cleanup only — never fail the commit over it (a nonzero
+      # exit here would make the dispatcher abort commit-msg entirely).
+      true
+
 # YAML config settings (via yaml_config role)
 # zellij.layout is intentionally not set here: "agent" is the hive package
 # default (bundled inside hive-cli), so restating it here would be redundant.

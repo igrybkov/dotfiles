@@ -129,6 +129,59 @@ profiles/work/files/gitconfig/
   └─ gitignore                  # Work gitignore patterns
 ```
 
+## Git Hooks
+
+Profiles can also contribute git hook snippets, materialized into a global dispatcher script per hook name:
+
+```
+~/.config/git/hooks/
+  ├─ commit-msg          # GENERATED: dispatcher for this hook name
+  ├─ pre-commit          # GENERATED
+  ├─ post-checkout       # GENERATED
+  └─ ...                 # one file per name in git_hooks_all_names
+
+~/.config/git/hooks.gitconfig                          # GENERATED: sets core.hooksPath
+```
+
+**Conditional activation.** This is entirely off by default: `core.hooksPath` is never set, and neither `~/.config/git/hooks/` nor `~/.config/git/hooks.gitconfig` are created, unless at least one profile declares a `git_hooks` entry. The shell profile's gitconfig fragment always carries an unconditional `[include] path = ~/.config/git/hooks.gitconfig` — harmless while that file doesn't exist, since git silently skips a missing `[include]` path. As soon as any profile declares a `git_hooks` entry, this role writes that file (turning `core.hooksPath` on) and renders every dispatcher script; remove the last `git_hooks` entry anywhere and the next run tears both back down.
+
+**Each generated dispatcher does four things, in order:**
+
+1. Chains to any pre-existing repo-local hook (`$(git rev-parse --git-common-dir)/hooks/<name>`) — needed because `core.hooksPath` makes git stop looking at `$GIT_DIR/hooks` entirely, for every repo on the machine, not just ones using this feature. Without this step, turning hooksPath on would silently break any repo-local hook installed by anything else (a prior `pre-commit install`, git-lfs, husky, lefthook, ...). Unconditional — a local hook file can only exist because something on this machine put it there, never via `git clone` itself, so trust doesn't gate this step. Records whether a local hook was actually present.
+2. Runs every `scope: global` snippet declared for that hook name, unconditionally. These should only ever be pure shell over git's own hook inputs (e.g. the commit message file path) — never anything that reads or executes repo-committed content.
+3. Checks whether the repo's remote(s) match `git_hooks_trusted_remotes` (both sides normalized to a scheme-less `host/path` form, so one pattern matches a repo whether it's cloned over ssh or https). This gate exists because a repo's own `.pre-commit-config.yaml` is fully attacker-controlled (a `repo: local` hook can declare any `entry:` command) — running it against an arbitrary cloned repo would otherwise be a real malware vector.
+4. Only if trusted (step 3) **and** no local hook ran in step 1: runs every `scope: trusted` snippet, then, for the 10 hook types pre-commit's `hook-impl` subcommand supports, invokes `pre-commit hook-impl --hook-type=<name> --skip-on-missing-config`. A pre-existing local hook is this repo's own choice for how to handle that hook type — steps 3+4 are the fallback for trusted repos that don't already have one, not something layered on top of it.
+
+### Adding a git hook
+
+```yaml
+# profiles/{name}/config.yml
+git_hooks:
+  - hook: commit-msg        # a single name, or a list of names, from git_hooks_all_names
+    scope: global           # global (always runs) | trusted (remote-gated)
+    order: 1000              # optional, default 1000 — lower runs first among snippets for this hook
+    script: |
+      # pure shell, e.g. $1 = path to the commit message file
+      ...
+  - hook: [pre-commit, commit-msg, post-checkout, pre-push]   # same script, several hook names
+    scope: trusted
+    script: |
+      ...
+
+git_hooks_trusted_remotes:
+  - "git@github.com:your-user/**"   # ssh or https form, doesn't matter
+```
+
+Entries for the same hook name from multiple profiles concatenate (sorted by `order`, then profile priority) rather than overwrite each other, same as `git_allowed_signers`. `hook:` accepting a list avoids repeating an identical entry once per hook name when the same snippet should apply to several (e.g. chaining to a `.husky/<hook>` script, which behaves the same way across every commit-lifecycle hook).
+
+### Repos with their own pre-existing local hooks
+
+The moment this feature goes live (the first `git_hooks` entry lands anywhere), `core.hooksPath` starts applying to every repo on the machine — including ones that already have their own local hooks, from a prior `pre-commit install`, husky, git-lfs, or a hand-written script. This is handled automatically and generically: **a pre-existing local hook always wins.** Step 1 chains to it unconditionally, and if it ran, steps 3+4 (trusted-scope snippets and the automatic pre-commit invocation) are skipped for that run — whatever the repo's own local hook does is treated as the complete answer for that hook type, not something to layer more onto. Steps 3+4 only ever fire as the fallback for a trusted repo that doesn't already have a local hook of its own. You don't need to run `pre-commit uninstall` (or remove any other local hook) for correctness; you may still want to, purely to remove now-dead files.
+
+### Known interaction
+
+Running `git lfs install` (or similarly husky/lefthook) after this feature is active writes hook stubs into whatever `core.hooksPath` resolves to — i.e. the shared `git_hooks_dir` — colliding with the generated dispatcher for that hook name. Not something this role can fix generically; if you use one of those tools in a given repo, be aware it's writing into shared, not repo-local, territory.
+
 ## Side Effects
 
 - Creates `~/.config/git/conf.d/` directory
@@ -137,3 +190,4 @@ profiles/work/files/gitconfig/
 - Generates `~/.config/git/gitignore` from all profile gitignore files
 - Removes dead symlinks from conf.d
 - Removes legacy `~/.config/git/local.gitconfig` if present
+- If any profile declares a `git_hooks` entry: creates `~/.config/git/hooks/` with one dispatcher script per hook name, and `~/.config/git/hooks.gitconfig` (which sets `core.hooksPath`); otherwise ensures both are absent

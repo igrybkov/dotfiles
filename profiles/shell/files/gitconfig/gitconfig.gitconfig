@@ -118,8 +118,14 @@ helper = osxkeychain
 
 [core]
 excludesfile = ~/.config/git/gitignore
-# hooksPath = ~/.config/git/hooks
 autocrlf = input
+
+# Global git hooks (see roles/gitconfig README "Git Hooks" section). This
+# include is always present but harmless when the target doesn't exist:
+# core.hooksPath is only ever set here once at least one profile declares a
+# git_hooks entry; git silently skips a missing [include] path otherwise.
+[include]
+path = ~/.config/git/hooks.gitconfig
 
 [init]
 defaultBranch = main

@@ -279,6 +279,11 @@ mcp_servers:
 ```
 Private profile MCP servers (adobe, productivity, home-network) use sops + age for secrets — see [docs/secrets.md](docs/secrets.md).
 
+#### Git Hooks
+Profiles can declare `git_hooks:` entries in `config.yml`, materialized by the `gitconfig` role into a single global `core.hooksPath` dispatcher (one script per hook name) — off by default, only activated once at least one profile declares an entry. Each entry has a `scope`: `global` snippets run unconditionally in every repo (pure shell over git's own hook inputs only); `trusted` snippets — and the automatic `pre-commit` invocation against a repo's own `.pre-commit-config.yaml` — only run when the repo's remote matches a `git_hooks_trusted_remotes` glob, since a repo's committed pre-commit config is otherwise a real malware vector to run blindly.
+
+**To add a git hook:** Add a `git_hooks:` entry (and, for `scope: trusted`, a `git_hooks_trusted_remotes:` pattern) to `profiles/{profile}/config.yml` — see the "Git Hooks" section of `roles/gitconfig/README.md` for the schema.
+
 ### Global Gitignore
 
 Each profile can contribute patterns to the **global** git ignore list (i.e., `~/.config/git/ignore`, applied to all repos on the machine) via `profiles/{profile}/files/gitconfig/gitignore`. These are merged by the `gitconfig` role.

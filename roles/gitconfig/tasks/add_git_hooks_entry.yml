@@ -1,0 +1,25 @@
+---
+# Expand one git_hooks entry (whose `hook:` may be a single name or a list
+# of names) into one _git_hooks_entries item per hook name.
+# Variables: _raw_hook (the raw entry), _profile_name, _profile_priority
+
+- name: "[🔧 gitconfig] Normalize hook names for {{ _profile_name }}"
+  ansible.builtin.set_fact:
+    _hook_names: "{{ [_raw_hook.hook] if _raw_hook.hook is string else _raw_hook.hook }}"
+
+- name: "[🔧 gitconfig] Add git hooks entry for {{ _profile_name }}"
+  ansible.builtin.set_fact:
+    _git_hooks_entries: >-
+      {{ _git_hooks_entries + [
+        {
+          'hook': _hook_name,
+          'scope': _raw_hook.scope | default('global'),
+          'order': _raw_hook.order | default(1000) | int,
+          'script': _raw_hook.script,
+          'profile': _profile_name,
+          'priority': _profile_priority | int
+        }
+      ] }}
+  loop: "{{ _hook_names }}"
+  loop_control:
+    loop_var: _hook_name
