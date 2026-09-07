@@ -142,6 +142,16 @@ After installation, configure your MCP servers in `~/.config/mcp-hub/servers.jso
 Cursor CLI installation is enabled by default in this profile via `install_cursor_cli: true`.
 To disable, set it to `false` in your local config override.
 
+### Commit Message Cleanup
+
+This profile declares a global `commit-msg` git hook (via the `gitconfig` role's
+[git hooks feature](../../roles/gitconfig/README.md#git-hooks)) that strips
+AI-attribution trailers — `Co-authored-by:` lines mentioning Claude/Anthropic/Cursor,
+and `Claude-Session:` lines — from commit messages before they're finalized.
+It only touches commits that already carry one of these markers; every other
+commit passes through untouched, and a genuine human `Co-authored-by:` line is
+left alone. See `git_hooks` in `profiles/agents/config.yml`.
+
 ## Customization
 
 ### Removing Agents

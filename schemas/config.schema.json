@@ -345,6 +345,113 @@
       "type": "string",
       "default": "~/Projects"
     },
+    "git_hooks": {
+      "description": "Git hook snippets contributed by this profile, materialized into a per-hook-name dispatcher script in git_hooks_dir. Entries for the same hook name from multiple profiles concatenate in (order, priority) order, they do not overwrite each other. Not read by this role directly \u2014 collected from every profile's hostvars, see collect_profile_fragments.yml.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "hook": {
+            "description": "Git hook name, or a list of hook names, from git_hooks_all_names \u2014 one entry applying to several hook names is common (e.g. the same husky/pre-commit chaining snippet across every commit lifecycle hook), so a list is accepted here instead of forcing a separate git_hooks entry per name."
+          },
+          "order": {
+            "description": "Explicit sequencing among snippets for the same hook name, independent of which profile declared them. Lower runs first; ties fall back to profile priority.",
+            "type": "integer",
+            "default": 1000
+          },
+          "scope": {
+            "description": "\"global\": pure shell over git's own hook inputs only (e.g. the commit message file path) \u2014 runs unconditionally in every repo. \"trusted\": runs only when the repo's remote URL(s) match git_hooks_trusted_remotes, checked at hook runtime via normalized shell glob matching, not includeIf.",
+            "type": "string",
+            "enum": [
+              "global",
+              "trusted"
+            ],
+            "default": "global"
+          },
+          "script": {
+            "description": "Shell snippet body, inlined verbatim into the generated dispatcher.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "hook",
+          "script"
+        ],
+        "additionalProperties": false
+      },
+      "default": []
+    },
+    "git_hooks_all_names": {
+      "description": "Fixed list of client-side git hook names materialized as dispatchers whenever git_hooks is in use, independent of which names any profile actually declares a git_hooks entry for \u2014 so chaining to a pre-existing repo-local hook (see the gitconfig role README) keeps working for every hook type, not just customized ones. Deliberately excludes reference-transaction and post-index-change (fire far too often per operation for the per-invocation trust-check overhead to be worth it) and fsmonitor-watchman (not a lifecycle hook \u2014 git queries it for a protocol response, there's nothing to dispatch). Override this var in a profile's config.yml if you genuinely need one of those.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [
+        "applypatch-msg",
+        "pre-applypatch",
+        "post-applypatch",
+        "pre-commit",
+        "pre-merge-commit",
+        "prepare-commit-msg",
+        "commit-msg",
+        "post-commit",
+        "pre-rebase",
+        "post-checkout",
+        "post-merge",
+        "pre-push",
+        "pre-auto-gc",
+        "post-rewrite",
+        "sendemail-validate"
+      ]
+    },
+    "git_hooks_dir": {
+      "description": "Directory that becomes core.hooksPath and holds the generated per-hook-name dispatcher scripts, once at least one profile declares a git_hooks entry.",
+      "type": "string",
+      "default": "~/.config/git/hooks"
+    },
+    "git_hooks_gitconfig_file": {
+      "description": "Generated gitconfig fragment that sets core.hooksPath to git_hooks_dir. Only written when at least one profile declares a git_hooks entry; removed (and core.hooksPath left unset) otherwise. Always referenced via an unconditional [include] in the shell profile's gitconfig fragment, which git silently skips while this file doesn't exist.",
+      "type": "string",
+      "default": "~/.config/git/hooks.gitconfig"
+    },
+    "git_hooks_precommit_config": {
+      "description": "Config filename passed to `pre-commit hook-impl --config=`.",
+      "type": "string",
+      "default": ".pre-commit-config.yaml"
+    },
+    "git_hooks_precommit_types": {
+      "description": "Hook names pre-commit's `hook-impl` subcommand actually supports. The pre-commit invocation is only ever rendered for these; other hook names never get an automatic pre-commit tail, though user-authored trusted-scope snippets can still target them.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [
+        "pre-commit",
+        "pre-merge-commit",
+        "commit-msg",
+        "prepare-commit-msg",
+        "post-commit",
+        "post-checkout",
+        "post-merge",
+        "post-rewrite",
+        "pre-push",
+        "pre-rebase"
+      ]
+    },
+    "git_hooks_precommit_uvx_spec": {
+      "description": "Package spec passed to `uvx` when pre-commit isn't found on PATH.",
+      "type": "string",
+      "default": "pre-commit"
+    },
+    "git_hooks_trusted_remotes": {
+      "description": "Glob patterns matched against this machine's repo remote URLs, after both sides are normalized to a scheme-less host/path form (so one pattern matches a repo whether it was cloned over ssh or https). Entries from all profiles are unioned. A repo is trusted if ANY configured remote matches ANY pattern; a repo with no remotes is untrusted. Gates scope: trusted git_hooks entries and the pre-commit hook-impl invocation. Not read by this role directly \u2014 collected from every profile's hostvars.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
     "gitconfig_conf_d": {
       "description": "Path to the git conf.d directory for config fragments",
       "type": "string",

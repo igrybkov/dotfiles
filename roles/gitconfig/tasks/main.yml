@@ -17,6 +17,8 @@
     _gitconfig_fragments: []
     _gitignore_sources: []
     _allowed_signers_entries: []
+    _git_hooks_entries: []
+    _trusted_remote_patterns: []
 
 - name: "[🔧 gitconfig] Collect fragments from each profile"
   ansible.builtin.include_tasks: collect_profile_fragments.yml
@@ -63,6 +65,13 @@
 
 - name: "[🔧 gitconfig] Aggregate allowed signers"
   ansible.builtin.include_tasks: aggregate_allowed_signers.yml
+
+# ==============================================================================
+# Materialize global git hooks dispatcher (only if any profile declares one)
+# ==============================================================================
+
+- name: "[🔧 gitconfig] Materialize global git hooks dispatcher"
+  ansible.builtin.include_tasks: aggregate_git_hooks.yml
 
 # ==============================================================================
 # Clean up legacy files

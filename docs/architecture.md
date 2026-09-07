@@ -57,7 +57,7 @@ The Finalize play uses the `aggregated_profile_var` lookup plugin to collect var
 brew_packages: "{{ lookup('aggregated_profile_var', 'brew_packages') | community.general.lists_mergeby('name') }}"
 ```
 
-This pattern is used for: brew_packages, cask_packages, mas_packages, ssh_client_config, git config blocks, gh_extensions, pip_packages, gem_packages, composer_packages, gh_repos, and MCP servers.
+This pattern is used for: brew_packages, cask_packages, mas_packages, ssh_client_config, git config blocks, git hooks, gh_extensions, pip_packages, gem_packages, composer_packages, gh_repos, and MCP servers.
 
 ## Dotfile Symlinking
 

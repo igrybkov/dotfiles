@@ -54,4 +54,16 @@
         (hostvars[_profile_host].git_allowed_signers | default([]) | map('combine', {'profile': _profile_name, 'priority': _profile_priority | int}) | list)
       }}
   when: hostvars[_profile_host].git_allowed_signers is defined
+
+- name: "[🔧 gitconfig] Expand git hooks entries for {{ _profile_name }}"
+  ansible.builtin.include_tasks: add_git_hooks_entry.yml
+  loop: "{{ hostvars[_profile_host].git_hooks | default([]) }}"
+  loop_control:
+    loop_var: _raw_hook
+
+- name: "[🔧 gitconfig] Collect trusted remote patterns from {{ _profile_name }}"
+  ansible.builtin.set_fact:
+    _trusted_remote_patterns: >-
+      {{ (_trusted_remote_patterns + (hostvars[_profile_host].git_hooks_trusted_remotes | default([]))) | unique }}
+  when: hostvars[_profile_host].git_hooks_trusted_remotes is defined
 # yamllint enable rule:line-length
