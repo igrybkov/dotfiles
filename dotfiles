@@ -122,7 +122,15 @@ if needs_preparation; then
     log
 
     log "Installing pre-commit hooks..."
-    env -u VIRTUAL_ENV mise x -- uv run --managed-python --directory="${DOTFILES_DIR}" pre-commit install --install-hooks
+    if git config --get core.hooksPath >/dev/null 2>&1; then
+      # core.hooksPath is set (e.g. by roles/gitconfig's global git hooks
+      # dispatcher, see roles/gitconfig/README.md#git-hooks) — pre-commit
+      # refuses to install local hooks in that case, and doesn't need to:
+      # the dispatcher already invokes `pre-commit hook-impl` for trusted repos.
+      log "  Skipped: core.hooksPath is set, hooks run via the global dispatcher instead"
+    else
+      env -u VIRTUAL_ENV mise x -- uv run --managed-python --directory="${DOTFILES_DIR}" pre-commit install --install-hooks
+    fi
   } 2>&1)"
 
   end="$(date +%s)"
