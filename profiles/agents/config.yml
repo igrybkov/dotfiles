@@ -297,6 +297,8 @@ mcp_servers:
         state: present
       - path: ~/.cursor/mcp.json
         state: present
+      - path: ~/.copilot/mcp-config.json
+        state: present
 
   # Apple Mail bridge — drives Mail.app via JXA (osascript). No auth/tokens needed;
   # uses the existing Mail.app session. Set APPLE_MAIL_ACCOUNT to scope to a specific
