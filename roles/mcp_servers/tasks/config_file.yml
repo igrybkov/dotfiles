@@ -6,6 +6,13 @@
   ansible.builtin.set_fact:
     _mcp_config_path: "{{ config_file.key | expanduser }}"
 
+# All entries targeting the same config file share one client, so the first
+# entry's format speaks for the whole file.
+- name: "[🤖 MCP] Determine target format for {{ _mcp_config_path | basename }}"
+  ansible.builtin.set_fact:
+    _mcp_format: "{{ config_file.value[0].format | default('default') }}"
+    _mcp_servers_key: "{{ 'servers' if (config_file.value[0].format | default('default')) == 'vscode' else 'mcpServers' }}"
+
 # A header may be declared as either a literal (`headers`) or a secret key-path
 # (`secret_headers`), never both — otherwise the merge order would silently pick
 # a winner. Fail loudly, naming the server and the colliding header(s).
@@ -80,7 +87,7 @@
 - name: "[🤖 MCP] Build updated mcpServers for {{ _mcp_config_path | basename }}"
   ansible.builtin.set_fact:
     mcp_updated_servers: >-
-      {%- set current_servers = mcp_current_config.get('mcpServers', {}) -%}
+      {%- set current_servers = mcp_current_config.get(_mcp_servers_key, {}) -%}
       {%- set result = current_servers.copy() -%}
       {%- for entry in config_file.value -%}
         {%- set name = entry.name -%}
@@ -97,6 +104,8 @@
             {# URL-based server (HTTP/SSE transport) #}
             {%- if server.type is defined -%}
               {%- set _ = server_config.update({'type': server.type}) -%}
+            {%- elif _mcp_format == 'vscode' -%}
+              {%- set _ = server_config.update({'type': ('sse' if (server.transport | default('')) == 'sse' else 'http')}) -%}
             {%- endif -%}
             {%- set _ = server_config.update({'url': server.url}) -%}
             {%- if server.transport is defined -%}
@@ -154,6 +163,9 @@
                 {%- set _ = server_config.update({'args': expanded_args}) -%}
               {%- endif -%}
             {%- endif -%}
+            {%- if _mcp_format == 'vscode' -%}
+              {%- set _ = server_config.update({'type': 'stdio'}) -%}
+            {%- endif -%}
             {# Process env vars: first resolve Jinja2 templates (vault_secret), then op:// references, then expand ~ #}
             {%- if server.env is defined -%}
               {%- set resolved_env = server.env | resolve_templates(hostvars[inventory_hostname], {'_vault_profile': server._profile | default('')}) | resolve_op_secrets -%}
@@ -206,7 +218,7 @@
   ansible.builtin.set_fact:
     mcp_final_config: >-
       {{
-        mcp_current_config | combine({'mcpServers': mcp_updated_servers})
+        mcp_current_config | combine({(_mcp_servers_key): mcp_updated_servers})
       }}
   no_log: true  # merged config carries resolved secret values
   when: _mcp_proceed

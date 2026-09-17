@@ -274,6 +274,16 @@ mcp_servers:
       - path: ~/Projects/productivity/.mcp.local.json
         state: present
         optional: true               # skipped when sibling repo not cloned
+
+  # Server also registered with VS Code (different schema: "servers" key + required "type")
+  - name: vscode-target-server
+    command: some-command
+    config_files:
+      - path: ~/.mcp.json
+        state: present
+      - path: "~/Library/Application Support/Code/User/mcp.json"
+        state: present
+        format: vscode
 ```
 
 ### `config_files` options
@@ -283,6 +293,7 @@ mcp_servers:
 | `path` | — | Target config file path (required). `~` is expanded. |
 | `state` | `present` | `present` adds the server entry, `absent` removes it. |
 | `optional` | `false` | When `true`, silently skip this path if its parent directory does not exist. Use for paths that depend on optional tools (Claude Desktop, sibling repos). When `false`, the role creates the parent directory if missing and writes the file. `state: absent` entries are always treated as optional — removing from a nonexistent path is a no-op. |
+| `format` | `default` | Target client's config schema. `default` nests servers under `mcpServers` (Claude Code, Claude Desktop, Cursor, Copilot CLI). `vscode` nests them under `servers` instead and always adds a `type` field per entry (`stdio`, or `http`/`sse` for URL-based servers), matching VS Code's MCP configuration schema. If a path is targeted by more than one server, they must agree on `format`. |
 
 ### URL-based Servers (HTTP/SSE transport)
 
@@ -360,6 +371,26 @@ The role generates JSON config files in the standard MCP format:
         "x-api-key": "resolved-secret-value",
         "x-user-id": "user@example.com"
       }
+    }
+  }
+}
+```
+
+### VS Code (`format: vscode`)
+
+VS Code's MCP schema nests servers under `servers` (not `mcpServers`) and requires a `type` field per entry:
+
+```json
+{
+  "servers": {
+    "server-name": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "package-name"]
+    },
+    "remote-api": {
+      "type": "http",
+      "url": "https://api.example.com/mcp"
     }
   }
 }

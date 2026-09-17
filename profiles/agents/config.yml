@@ -299,6 +299,9 @@ mcp_servers:
         state: present
       - path: ~/.copilot/mcp-config.json
         state: present
+      - path: "~/Library/Application Support/Code/User/mcp.json"
+        state: present
+        format: vscode
 
   # Apple Mail bridge — drives Mail.app via JXA (osascript). No auth/tokens needed;
   # uses the existing Mail.app session. Set APPLE_MAIL_ACCOUNT to scope to a specific

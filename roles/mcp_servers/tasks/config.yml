@@ -16,7 +16,8 @@
             {%- if path not in files -%}
               {%- set _ = files.update({path: []}) -%}
             {%- endif -%}
-            {%- set _ = files[path].append({'name': name, 'server': server, 'state': state, 'optional': optional}) -%}
+            {%- set format = cf.format | default('default') -%}
+            {%- set _ = files[path].append({'name': name, 'server': server, 'state': state, 'optional': optional, 'format': format}) -%}
           {%- endfor -%}
         {%- else -%}
           {%- for path in mcp_default_config_files -%}
@@ -26,7 +27,7 @@
             {%- if path not in files -%}
               {%- set _ = files.update({path: []}) -%}
             {%- endif -%}
-            {%- set _ = files[path].append({'name': name, 'server': server, 'state': state, 'optional': optional}) -%}
+            {%- set _ = files[path].append({'name': name, 'server': server, 'state': state, 'optional': optional, 'format': 'default'}) -%}
           {%- endfor -%}
         {%- endif -%}
       {%- endfor -%}

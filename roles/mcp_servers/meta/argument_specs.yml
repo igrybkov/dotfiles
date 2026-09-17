@@ -180,6 +180,19 @@ argument_specs:
                   directory if missing and writes the config file.
                 type: bool
                 default: false
+              format:
+                description: >
+                  Target client's config schema. 'default' nests servers under
+                  a top-level "mcpServers" key (Claude Code, Claude Desktop,
+                  Cursor, Copilot CLI). 'vscode' nests them under "servers"
+                  instead and always emits a "type" field per entry (stdio, or
+                  http/sse for URL-based servers), matching VS Code's MCP
+                  configuration schema.
+                type: str
+                choices:
+                  - default
+                  - vscode
+                default: default
 
       mcp_default_config_files:
         description: Default config files to update when config_files is not specified per server
