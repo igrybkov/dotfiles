@@ -180,6 +180,8 @@ The moment this feature goes live (the first `git_hooks` entry lands anywhere), 
 
 ### Known interaction
 
+Don't ship files at `~/.config/git/hooks/<name>` from a profile's `files/dotfiles/config/git/hooks/`. That directory is owned by this role: the `dotfiles` role would symlink the file into place, this role would replace the symlink with the generated dispatcher, and the next `install dotfiles` run would then fail with a symlink conflict. Declare a `git_hooks` entry instead.
+
 Running `git lfs install` (or similarly husky/lefthook) after this feature is active writes hook stubs into whatever `core.hooksPath` resolves to — i.e. the shared `git_hooks_dir` — colliding with the generated dispatcher for that hook name. Not something this role can fix generically; if you use one of those tools in a given repo, be aware it's writing into shared, not repo-local, territory.
 
 ## Side Effects
