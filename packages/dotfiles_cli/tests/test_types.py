@@ -3,11 +3,11 @@
 from unittest.mock import Mock, patch
 
 import pytest
-
 from dotfiles_cli.types import (
     AliasedGroup,
     AnsibleHostListType,
     AnsibleTagListType,
+    _get_cached_tags,
 )
 
 
@@ -109,6 +109,36 @@ TAGS: [all, brew, cask, dotfiles, gh-extensions, gh-repos, macos, never, pip, ss
         assert "all" in completion_values
         assert "brew" in completion_values
         assert "dotfiles" in completion_values
+
+    def test_all_only_cache_is_refetched(self):
+        """An incomplete discovery result must not hide real tags."""
+        with (
+            patch("dotfiles_cli.types._get_playbook_mtime", return_value=10),
+            patch("dotfiles_cli.types._load_tags_cache", return_value=(["all"], 10)),
+            patch(
+                "dotfiles_cli.types._fetch_tags_from_ansible",
+                return_value=["all", "skills"],
+            ) as mock_fetch,
+            patch("dotfiles_cli.types._save_tags_cache") as mock_save,
+        ):
+            tags = _get_cached_tags()
+
+        assert tags == ["all", "skills"]
+        mock_fetch.assert_called_once_with()
+        mock_save.assert_called_once_with(["all", "skills"], 10)
+
+    def test_all_only_discovery_is_not_cached(self):
+        """A transient Ansible failure should be retried on the next command."""
+        with (
+            patch("dotfiles_cli.types._get_playbook_mtime", return_value=10),
+            patch("dotfiles_cli.types._load_tags_cache", return_value=None),
+            patch("dotfiles_cli.types._fetch_tags_from_ansible", return_value=["all"]),
+            patch("dotfiles_cli.types._save_tags_cache") as mock_save,
+        ):
+            tags = _get_cached_tags()
+
+        assert tags == ["all"]
+        mock_save.assert_not_called()
 
 
 class TestAnsibleHostListType:

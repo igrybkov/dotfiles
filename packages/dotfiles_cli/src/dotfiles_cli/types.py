@@ -134,12 +134,16 @@ def _get_cached_tags() -> list[str]:
     cache_result = _load_tags_cache()
     if cache_result is not None:
         cached_tags, cached_mtime = cache_result
-        if cached_mtime >= current_mtime and cached_tags:
+        # ``all`` is seeded before Ansible runs, so an all-only cache means tag
+        # discovery failed before producing usable output. Never let that
+        # transient failure hide every real tag until the playbook changes.
+        if cached_mtime >= current_mtime and cached_tags and cached_tags != ["all"]:
             return cached_tags
 
     # Cache miss or stale - fetch fresh tags
     tags = _fetch_tags_from_ansible()
-    _save_tags_cache(tags, current_mtime)
+    if tags and tags != ["all"]:
+        _save_tags_cache(tags, current_mtime)
     return tags
 
 
