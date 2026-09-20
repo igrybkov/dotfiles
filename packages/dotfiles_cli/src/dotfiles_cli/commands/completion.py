@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import click
 
 
@@ -25,28 +27,14 @@ def completion(ctx, shell: str, install: bool = False):
             ctx_args={},
         )
     )
-    if shell == "fish":
-        # click >=8.4's fish source template is broken: `string split \n` in the
-        # template renders as a literal newline, and each completion is emitted
-        # as 3 lines (type/value/help) which `set -l response (cmd)` flattens.
-        # Until upstream ships a fix, ship our own hand-rolled fish script and
-        # refuse to install it programmatically — the canonical copy lives in
-        # profiles/shell/files/dotfiles/config/fish/completions/dotfiles.fish
-        # and is already symlinked into place by the dotfiles role.
-        if install:
-            raise click.ClickException(
-                "fish completion is hand-maintained at "
-                "profiles/shell/files/dotfiles/config/fish/completions/dotfiles.fish "
-                "(click 8.4's generated fish script is broken). "
-                "It's already symlinked by the dotfiles role — run "
-                "`dotfiles install dotfiles` if it's missing."
-            )
-        click.echo(shell_completion.source())
-        return 0
-
     completion_str = shell_completion.source()
     if not install:
         click.echo(completion_str)
+        return 0
+    if shell == "fish":
+        completion_path = Path.home() / ".config/fish/completions/dotfiles.fish"
+        completion_path.parent.mkdir(parents=True, exist_ok=True)
+        completion_path.write_text(completion_str)
         return 0
     raise NotImplementedError(
         f"Automatic installation for {shell} is not supported yet."

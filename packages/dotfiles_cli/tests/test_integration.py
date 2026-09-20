@@ -2,7 +2,6 @@
 
 from unittest.mock import Mock, call, patch
 
-
 from dotfiles_cli.app import cli
 
 
@@ -446,16 +445,17 @@ class TestCompletionGeneration:
         assert "_DOTFILES_COMPLETE" in result.output
         assert "dotfiles" in result.output
 
-    def test_completion_install_fish_refuses(self, cli_runner, temp_home):
-        """Fish --install refuses with a pointer to the hand-maintained script."""
-        fish_dir = temp_home / ".config" / "fish" / "completions"
-        fish_dir.mkdir(parents=True)
+    def test_completion_install_fish(self, cli_runner, temp_home):
+        """Fish --install writes the generated completion script."""
+        completion_file = (
+            temp_home / ".config" / "fish" / "completions" / "dotfiles.fish"
+        )
 
         result = cli_runner.invoke(cli, ["completion", "fish", "--install"])
 
-        assert result.exit_code != 0
-        assert "hand-maintained" in result.output
-        assert not (fish_dir / "dotfiles.fish").exists()
+        assert result.exit_code == 0
+        assert completion_file.exists()
+        assert "_DOTFILES_COMPLETE" in completion_file.read_text()
 
 
 class TestEndToEndScenarios:

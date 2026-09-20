@@ -1,11 +1,10 @@
 """Tests for CLI commands."""
 
 import time
-
-import pytest
+from pathlib import Path
 from unittest.mock import Mock, call, patch
 
-
+import pytest
 from dotfiles_cli.app import cli
 from dotfiles_cli.commands.install import _ensure_homebrew, _notify_on_idle_prompt
 from dotfiles_cli.constants import SUDO_TAGS
@@ -163,17 +162,28 @@ class TestCompletionCommand:
         assert result.exit_code == 0
         assert "_DOTFILES_COMPLETE" in result.output
 
-    def test_completion_install_fish_refuses(self, cli_runner, temp_home):
-        """Fish --install refuses (click 8.4's fish template is broken; we
-        ship a hand-maintained script via the dotfiles role instead)."""
-        fish_dir = temp_home / ".config" / "fish" / "completions"
-        fish_dir.mkdir(parents=True)
+    def test_completion_install_fish(self, cli_runner, temp_home):
+        """Test completion installation for fish."""
+        completion_file = (
+            temp_home / ".config" / "fish" / "completions" / "dotfiles.fish"
+        )
 
         result = cli_runner.invoke(cli, ["completion", "fish", "--install"])
 
-        assert result.exit_code != 0
-        assert "hand-maintained" in result.output
-        assert not (fish_dir / "dotfiles.fish").exists()
+        assert result.exit_code == 0
+        assert completion_file.exists()
+        assert "_DOTFILES_COMPLETE" in completion_file.read_text()
+
+    def test_canonical_fish_completion_matches_generated(self, cli_runner):
+        """Keep the symlinked completion file in sync with Click's template."""
+        result = cli_runner.invoke(cli, ["completion", "fish"])
+        completion_file = (
+            Path(__file__).parents[3]
+            / "profiles/shell/files/dotfiles/config/fish/completions/dotfiles.fish"
+        )
+
+        assert result.exit_code == 0
+        assert completion_file.read_text().rstrip() == result.output.rstrip()
 
     def test_completion_install_unsupported_shell(self, cli_runner):
         """Test completion installation for unsupported shell."""
@@ -186,29 +196,19 @@ class TestCompletionCommand:
         assert "not supported" in str(result.exception)
 
     def test_click_fish_template_fixed(self):
-        """click >=8.4.2 fixed both symptoms this used to guard against (was
-        `test_click_fish_template_still_broken`, a canary that failed loudly
-        the moment upstream fixed it). Verified end-to-end with
-        `_DOTFILES_COMPLETE=fish_complete dotfiles` producing one
-        `type,value<TAB>help` record per line.
-
-        The hand-maintained dotfiles.fish + --install guard in
-        completion.py is now safe to remove — left in place here since this
-        change rides on an unrelated dependency bump; removal is follow-up
-        work. This test just guards against a future regression.
-        """
+        """Guard the Click output format consumed by Fish completion."""
         import click as _click
         from click.shell_completion import (
+            _SOURCE_FISH,
             CompletionItem,
             FishComplete,
-            _SOURCE_FISH,
         )
 
         # Symptom 1 (fixed in 8.4.2): no more literal newline mid-statement
         # in `string split` — it now splits on "," instead.
         assert "string split \n" not in _SOURCE_FISH, (
             "click's fish template embeds a literal newline in `string split` "
-            "again — restore the hand-maintained dotfiles.fish workaround"
+            "and would break dotfiles completion"
         )
 
         # Symptom 2 (fixed in 8.4.2): format_completion emits a single
@@ -218,7 +218,7 @@ class TestCompletionCommand:
         ).format_completion(CompletionItem("value", type="plain", help=None))
         assert formatted.count("\n") == 0, (
             "click's fish format_completion emits multi-line records again — "
-            "restore the hand-maintained dotfiles.fish workaround"
+            "dotfiles completion expects one record per line"
         )
 
 
