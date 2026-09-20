@@ -78,7 +78,7 @@ Use backtick syntax to inject command output:
 
 ## Skills and Agents
 
-Skills and agents are now stored in generic locations and can be shared across multiple AI coding agents (Claude Code, Cursor, etc.).
+Skills and agents are now stored in generic locations and can be shared across multiple AI coding agents (Claude Code, Codex, Cursor, etc.).
 
 ### Directory Structure
 
@@ -97,6 +97,7 @@ Configure which agent destinations should receive skills and agents in your prof
 
 ```yaml
 skill_folders:
+  - ~/.agents/skills
   - ~/.claude/skills
   - ~/.cursor/skills
 

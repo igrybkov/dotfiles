@@ -56,7 +56,7 @@ These are legacy scripts. **Prefer using `hive` commands instead** - they provid
 - Sub-agents: engineering team roster (`product-manager`, `business-analyst`, `ux-designer`, `ui-specialist`, `tech-lead`, `system-architect`, `software-engineer`, `qa-automation-engineer`, `security-specialist`, `devops-engineer`) and standalone helpers (`productivity-coach`). Dual-use: invocable directly via the `Agent` tool or spawned as teammates by the `agent-team` skill.
 - Skills (git-commit, pr, pr-triage, review, test, verify, github, omnifocus)
 
-**Skills and Agents**: Located in `files/skills/` and `files/agents/` (not under `dotfiles/claude/`) and symlinked to multiple agent destinations (Claude Code, Cursor) via `skill_folders` and `agent_folders` configuration in `config.yml`.
+**Skills and Agents**: Located in `files/skills/` and `files/agents/` (not under `dotfiles/claude/`) and symlinked to multiple agent destinations (Claude Code, Codex, Cursor) via `skill_folders` and `agent_folders` configuration in `config.yml`.
 
 ### MCP Servers
 - **mcp-hub** - Aggregator that lazy-loads child MCP servers and proxies their tools, prompts, and resources. Exposes `list_servers`, `get_server_tools`, `call_tool`, `search`, and `recommend_servers`. Ships with a `mcp-hub` CLI for shell scripting.

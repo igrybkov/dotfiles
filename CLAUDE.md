@@ -216,7 +216,7 @@ allowed-tools:
 
 Workflow, usage patterns, examples...
 ```
-Skills are symlinked to both `~/.claude/skills/` and `~/.cursor/skills/` (configured via `skill_folders` in `profiles/agents/config.yml`).
+Skills are symlinked to `~/.agents/skills/`, `~/.claude/skills/`, and `~/.cursor/skills/` (configured via `skill_folders` in `profiles/agents/config.yml`).
 
 **Existing skills (16):** agent-team, changelog, claude-for-chrome, explain, fixup, git-commit, github, grill-me, grilling, handoff, omnifocus, pr, pr-triage, review, test, verify
 

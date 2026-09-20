@@ -52,6 +52,7 @@ install_cursor_cli: true
 
 # Skills and agents folders - symlink to multiple agent destinations
 skill_folders:
+  - ~/.agents/skills
   - ~/.claude/skills
   - ~/.cursor/skills
 
