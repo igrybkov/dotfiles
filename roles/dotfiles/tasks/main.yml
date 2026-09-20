@@ -9,10 +9,12 @@
     cmd: echo ~
   register: _home_dir_result
   changed_when: false
+  tags: [skills]
 
 - name: "[🔗 dotfiles] Set home directory fact"
   ansible.builtin.set_fact:
     _home_dir: "{{ _home_dir_result.stdout }}"
+  tags: [skills]
 
 # Aggregate all source directories from all profiles upfront
 - name: "[🔗 dotfiles] Aggregate source directories from all profiles"
@@ -25,6 +27,7 @@
     _all_skill_folders: "{{ lookup('aggregated_profile_var', 'skill_folders') | flatten | unique }}"
     _all_agent_folders: "{{ lookup('aggregated_profile_var', 'agent_folders') | flatten | unique }}"
     _all_copy_dirs: "{{ lookup('aggregated_profile_var', 'dotfiles_copy_dir') }}"
+  tags: [skills]
 
 # --- Cleanup dead symlinks ---
 
@@ -83,14 +86,18 @@
     max_depth: 1
 
 - name: "[🔗 dotfiles] Clean dead symlinks in skill folders"
-  ansible.builtin.include_tasks: cleanup_recursive.yml
+  ansible.builtin.include_tasks:
+    file: cleanup_recursive.yml
+    apply:
+      tags: [skills]
   loop: "{{ _all_skill_folders }}"
   loop_control:
-    label: "{{ item }}"
+    label: "{{ item.path if item is mapping else item }}"
   vars:
-    cleanup_dir: "{{ item | expanduser }}"
+    cleanup_dir: "{{ (item.path if item is mapping else item) | expanduser }}"
     max_depth: "{{ dotfiles_cleanup_depth }}"
   when: _all_skill_folders | length > 0
+  tags: [skills]
 
 - name: "[🔗 dotfiles] Clean dead symlinks in agent folders"
   ansible.builtin.include_tasks: cleanup_recursive.yml
@@ -133,22 +140,32 @@
 # Symlink skills to each skill folder (all profile sources at once)
 - name: "[🔗 dotfiles] Ensure skill destination directories exist"
   ansible.builtin.file:
-    path: "{{ item | expanduser }}"
+    path: "{{ (item.path if item is mapping else item) | expanduser }}"
     state: directory
     mode: "0755"
   loop: "{{ _all_skill_folders }}"
   loop_control:
-    label: "{{ item }}"
+    label: "{{ item.path if item is mapping else item }}"
   when: _all_skill_folders | length > 0
+  tags: [skills]
 
-- name: "[🔗 dotfiles] Symlink skills to {{ item }}"
-  ansible.builtin.include_tasks: symlink_recursive.yml
+- name: "[🔗 dotfiles] Symlink skills to configured destinations"
+  ansible.builtin.include_tasks:
+    file: symlink_recursive.yml
+    apply:
+      tags: [skills]
   loop: "{{ _all_skill_folders }}"
+  loop_control:
+    label: "{{ item.path if item is mapping else item }}"
   vars:
     source_dirs: "{{ _all_skills_dirs }}"
-    target_dir: "{{ item | expanduser }}"
+    target_dir: "{{ (item.path if item is mapping else item) | expanduser }}"
     prefix: ""
+    link_top_level_directories: >-
+      {{ item.get('link_top_level_directories', false)
+         if item is mapping else false }}
   when: _all_skill_folders | length > 0
+  tags: [skills]
 
 # Symlink agents to each agent folder (all profile sources at once)
 - name: "[🔗 dotfiles] Ensure agent destination directories exist"

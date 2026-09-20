@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import fnmatch
+import shutil
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -149,6 +150,126 @@ def create_symlink(
         return "created"
 
 
+def is_legacy_managed_directory(
+    target_dir: Path,
+    source_candidates: list[Path],
+) -> bool:
+    """Return whether *target_dir* only contains legacy managed file symlinks.
+
+    Older skill installs created a real directory and symlinked each file inside it.
+    A directory is safe to migrate only when it contains at least one symlink and every
+    non-directory entry is a symlink to the corresponding path in one of the candidate
+    source directories. Any regular file or foreign symlink makes it a conflict.
+    """
+    found_managed_symlink = False
+
+    for target_path in target_dir.rglob("*"):
+        if target_path.is_symlink():
+            relative_path = target_path.relative_to(target_dir)
+            resolved_target = target_path.resolve(strict=False)
+            expected_targets = {
+                (candidate / relative_path).resolve(strict=False)
+                for candidate in source_candidates
+            }
+            if resolved_target not in expected_targets:
+                return False
+            found_managed_symlink = True
+        elif not target_path.is_dir():
+            return False
+
+    return found_managed_symlink
+
+
+def symlink_top_level_directories(
+    source_dirs: list[Path],
+    target_dir: Path,
+    prefix: str = "",
+    exclude_dirs: list[str] | None = None,
+    dry_run: bool = False,
+    verbose: bool = False,
+) -> SymlinkResult:
+    """Symlink each top-level source directory as a whole.
+
+    Later source directories override earlier ones. Existing foreign directory
+    symlinks are yielded to, while the legacy managed-file layout is migrated to a
+    whole-directory symlink when it can be proven safe to replace.
+    """
+    result = SymlinkResult()
+    exclude_dirs = exclude_dirs or []
+    sources_by_name: dict[str, list[Path]] = {}
+
+    for source_dir in source_dirs:
+        if not source_dir.exists():
+            if verbose:
+                print(f"Skipping non-existent source: {source_dir}", file=sys.stderr)
+            continue
+
+        for source_path in sorted(source_dir.iterdir()):
+            if source_path.name.startswith("."):
+                continue
+            if source_path.name in exclude_dirs:
+                continue
+            if not source_path.is_dir():
+                continue
+            sources_by_name.setdefault(source_path.name, []).append(source_path)
+
+    for name, source_candidates in sources_by_name.items():
+        source_path = source_candidates[-1]
+        source_resolved = source_path.resolve()
+        managed_sources = {
+            candidate.resolve(strict=False) for candidate in source_candidates
+        }
+        target_path = target_dir / f"{prefix}{name}"
+        target_str = str(target_path)
+
+        if target_path.is_symlink():
+            current_resolved = target_path.resolve(strict=False)
+            if current_resolved == source_resolved:
+                status = "skipped"
+            elif current_resolved in managed_sources:
+                if not dry_run:
+                    target_path.unlink()
+                    target_path.symlink_to(source_resolved, target_is_directory=True)
+                status = "updated"
+            else:
+                result.yielded.append(target_str)
+                if verbose:
+                    print(
+                        f"  [yielded] {target_path} (owned elsewhere)",
+                        file=sys.stderr,
+                    )
+                continue
+        elif target_path.exists():
+            if not target_path.is_dir() or not is_legacy_managed_directory(
+                target_path, source_candidates
+            ):
+                status = "conflict"
+            else:
+                if not dry_run:
+                    shutil.rmtree(target_path)
+                    target_path.symlink_to(source_resolved, target_is_directory=True)
+                status = "updated"
+        else:
+            if not dry_run:
+                target_path.parent.mkdir(parents=True, exist_ok=True)
+                target_path.symlink_to(source_resolved, target_is_directory=True)
+            status = "created"
+
+        if status == "created":
+            result.created.append(target_str)
+        elif status == "updated":
+            result.updated.append(target_str)
+        elif status == "skipped":
+            result.skipped.append(target_str)
+        elif status == "conflict":
+            result.conflicts.append(target_str)
+
+        if verbose:
+            print(f"  [{status}] {target_path} -> {source_path}", file=sys.stderr)
+
+    return result
+
+
 def symlink_dotfiles(
     source_dirs: list[Path],
     target_dir: Path,
@@ -156,6 +277,7 @@ def symlink_dotfiles(
     exclude_dirs: list[str] | None = None,
     exclude_patterns: list[str] | None = None,
     marker_name: str = DEFAULT_DIRECTORY_MARKER,
+    link_top_level_directories: bool = False,
     dry_run: bool = False,
     verbose: bool = False,
 ) -> SymlinkResult:
@@ -169,6 +291,7 @@ def symlink_dotfiles(
         exclude_dirs: Top-level directory names to exclude
         exclude_patterns: File patterns to exclude (defaults to DEFAULT_EXCLUDE_PATTERNS)
         marker_name: Name of marker file for directory-level symlinks
+        link_top_level_directories: Symlink each direct child directory as a whole
         dry_run: If True, don't actually create symlinks
         verbose: If True, print detailed progress to stderr
 
@@ -177,6 +300,17 @@ def symlink_dotfiles(
     """
     result = SymlinkResult()
     exclude_dirs = exclude_dirs or []
+
+    if link_top_level_directories:
+        return symlink_top_level_directories(
+            source_dirs=source_dirs,
+            target_dir=target_dir,
+            prefix=prefix,
+            exclude_dirs=exclude_dirs,
+            dry_run=dry_run,
+            verbose=verbose,
+        )
+
     exclude_patterns = (
         exclude_patterns if exclude_patterns is not None else DEFAULT_EXCLUDE_PATTERNS
     )

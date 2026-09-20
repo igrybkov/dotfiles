@@ -29,9 +29,11 @@ argument_specs:
         default: []
 
       skill_folders:
-        description: List of destination directories for skills (e.g., ~/.claude/skills)
+        description: >
+          Skill destinations as path strings or mappings with path and optional
+          link_top_level_directories keys.
         type: list
-        elements: str
+        elements: raw
         default: []
 
       agent_folders:

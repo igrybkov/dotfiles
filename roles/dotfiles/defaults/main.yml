@@ -5,7 +5,9 @@ dotfiles_dir: "{{ playbook_dir }}/profiles/shell/files/dotfiles"
 dotfiles_copy_dir: "{{ playbook_dir }}/profiles/shell/files/dotfiles-copy"
 bin_dir: "{{ playbook_dir }}/profiles/shell/files/bin"
 additional_dotfiles_dirs: []  # List of extra dotfiles directories from custom inventories
-skill_folders: []  # List of destination directories for skills (e.g., ["~/.claude/skills", "~/.cursor/skills"])
+# Skill destinations as path strings, or mappings with path and
+# link_top_level_directories (e.g., Codex's ~/.agents/skills).
+skill_folders: []
 agent_folders: []  # List of destination directories for agents (e.g., ["~/.claude/agents", "~/.cursor/agents"])
 
 # Command to run symlink-dotfiles (installed from packages/symlink_dotfiles via uv)

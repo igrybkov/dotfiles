@@ -252,6 +252,7 @@ Run specific parts of the setup using tags:
 | `taps` | Configure Homebrew taps |
 | `mas` | Install Mac App Store apps |
 | `dotfiles` | Symlink dotfiles to home directory |
+| `skills` | Symlink AI agent skills to configured destinations |
 | `gitconfig` | Configure git (profile blocks) |
 | `ssh` | Configure SSH |
 | `python` | Python environment setup |

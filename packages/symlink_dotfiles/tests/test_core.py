@@ -428,3 +428,133 @@ class TestYieldToForeignOwner:
         link = target / "skill" / "SKILL.md"
         assert link.is_symlink()
         assert link.resolve() == (src / "skill" / "SKILL.md").resolve()
+
+
+class TestTopLevelDirectorySymlinks:
+    """Whole-directory mode used for Codex-compatible skill installs."""
+
+    def test_links_each_top_level_directory(self, tmp_path: Path):
+        src = tmp_path / "source"
+        skill = src / "grilling"
+        skill.mkdir(parents=True)
+        (skill / "SKILL.md").write_text("instructions")
+        (skill / "references").mkdir()
+        (skill / "references" / "questions.md").write_text("questions")
+        target = tmp_path / "target"
+        target.mkdir()
+
+        result = symlink_dotfiles([src], target, link_top_level_directories=True)
+
+        link = target / "grilling"
+        assert result.created == [str(link)]
+        assert link.is_symlink()
+        assert link.resolve() == skill.resolve()
+        assert not (link / "SKILL.md").is_symlink()
+        assert (link / "references" / "questions.md").read_text() == "questions"
+
+    def test_is_idempotent(self, tmp_path: Path):
+        src = tmp_path / "source"
+        skill = src / "grilling"
+        skill.mkdir(parents=True)
+        (skill / "SKILL.md").write_text("instructions")
+        target = tmp_path / "target"
+        target.mkdir()
+
+        symlink_dotfiles([src], target, link_top_level_directories=True)
+        result = symlink_dotfiles([src], target, link_top_level_directories=True)
+
+        assert result.skipped == [str(target / "grilling")]
+        assert not result.changed
+
+    def test_later_source_overrides_managed_directory_link(self, tmp_path: Path):
+        src1 = tmp_path / "source1"
+        skill1 = src1 / "grilling"
+        skill1.mkdir(parents=True)
+        (skill1 / "SKILL.md").write_text("first")
+        src2 = tmp_path / "source2"
+        skill2 = src2 / "grilling"
+        skill2.mkdir(parents=True)
+        (skill2 / "SKILL.md").write_text("second")
+        target = tmp_path / "target"
+        target.mkdir()
+        (target / "grilling").symlink_to(skill1)
+
+        result = symlink_dotfiles([src1, src2], target, link_top_level_directories=True)
+
+        assert result.updated == [str(target / "grilling")]
+        assert (target / "grilling").resolve() == skill2.resolve()
+
+    def test_yields_to_foreign_directory_link(self, tmp_path: Path):
+        src = tmp_path / "source"
+        skill = src / "grilling"
+        skill.mkdir(parents=True)
+        (skill / "SKILL.md").write_text("ours")
+        external = tmp_path / "external" / "grilling"
+        external.mkdir(parents=True)
+        (external / "SKILL.md").write_text("theirs")
+        target = tmp_path / "target"
+        target.mkdir()
+        (target / "grilling").symlink_to(external)
+
+        result = symlink_dotfiles([src], target, link_top_level_directories=True)
+
+        assert result.yielded == [str(target / "grilling")]
+        assert not result.changed
+        assert (target / "grilling").resolve() == external.resolve()
+
+    def test_migrates_legacy_managed_file_links(self, tmp_path: Path):
+        src = tmp_path / "source"
+        skill = src / "grilling"
+        skill.mkdir(parents=True)
+        (skill / "SKILL.md").write_text("instructions")
+        (skill / "references").mkdir()
+        (skill / "references" / "questions.md").write_text("questions")
+        target = tmp_path / "target"
+        legacy = target / "grilling"
+        (legacy / "references").mkdir(parents=True)
+        (legacy / "SKILL.md").symlink_to(skill / "SKILL.md")
+        (legacy / "references" / "questions.md").symlink_to(
+            skill / "references" / "questions.md"
+        )
+
+        result = symlink_dotfiles([src], target, link_top_level_directories=True)
+
+        assert result.updated == [str(legacy)]
+        assert legacy.is_symlink()
+        assert legacy.resolve() == skill.resolve()
+
+    def test_preserves_directory_containing_user_file(self, tmp_path: Path):
+        src = tmp_path / "source"
+        skill = src / "grilling"
+        skill.mkdir(parents=True)
+        (skill / "SKILL.md").write_text("instructions")
+        target = tmp_path / "target"
+        legacy = target / "grilling"
+        legacy.mkdir(parents=True)
+        (legacy / "SKILL.md").symlink_to(skill / "SKILL.md")
+        (legacy / "notes.md").write_text("user-owned")
+
+        result = symlink_dotfiles([src], target, link_top_level_directories=True)
+
+        assert result.conflicts == [str(legacy)]
+        assert result.failed
+        assert not legacy.is_symlink()
+        assert (legacy / "notes.md").read_text() == "user-owned"
+
+    def test_dry_run_does_not_migrate_legacy_directory(self, tmp_path: Path):
+        src = tmp_path / "source"
+        skill = src / "grilling"
+        skill.mkdir(parents=True)
+        (skill / "SKILL.md").write_text("instructions")
+        target = tmp_path / "target"
+        legacy = target / "grilling"
+        legacy.mkdir(parents=True)
+        (legacy / "SKILL.md").symlink_to(skill / "SKILL.md")
+
+        result = symlink_dotfiles(
+            [src], target, link_top_level_directories=True, dry_run=True
+        )
+
+        assert result.updated == [str(legacy)]
+        assert not legacy.is_symlink()
+        assert (legacy / "SKILL.md").is_symlink()
