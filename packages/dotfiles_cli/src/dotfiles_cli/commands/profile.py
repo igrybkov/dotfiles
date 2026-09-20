@@ -436,9 +436,11 @@ profile:
 # Dotfiles Configuration
 # ============================================================================
 
-# Claude Code skills and agents directories
+# AI agent skills and agent directories
 # skill_folders:
-#   - ~/.claude/skills                # Destination for skills symlinks
+#   - path: ~/.agents/skills          # Codex requires whole skill-directory links
+#     link_top_level_directories: true
+#   - ~/.claude/skills                # File-level links remain the default
 # agent_folders:
 #   - ~/.claude/agents                # Destination for agents symlinks
 

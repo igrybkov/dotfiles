@@ -7,6 +7,7 @@
 #   target_dir: Target directory for symlinks (required)
 #   prefix: Prefix for target filenames, e.g., "." for home dir dotfiles (default: "")
 #   exclude_dirs: List of top-level directory names to exclude (default: [])
+#   link_top_level_directories: Link direct child directories as units (default: false)
 
 - name: "[🔗 dotfiles] Create symlinks using symlink-dotfiles"
   ansible.builtin.command:
@@ -20,6 +21,9 @@
       {% for dir in exclude_dirs | default([]) %}
       --exclude "{{ dir }}"
       {% endfor %}
+      {% if link_top_level_directories | default(false) %}
+      --link-top-level-directories
+      {% endif %}
       --marker "{{ dotfiles_directory_marker }}"
       --json
   register: symlink_result

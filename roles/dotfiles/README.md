@@ -11,7 +11,7 @@ This role manages dotfiles by creating symlinks from a source directory to the h
 - File copying for sensitive files
 - Bin script symlinking
 - Profile-specific additional dotfiles directories
-- Multi-destination skills symlinking (for AI agent skills)
+- Per-destination file- or whole-directory skill symlinking (for AI agent skills)
 - Multi-destination agents symlinking (for AI agent definitions)
 
 ## Requirements
@@ -21,6 +21,7 @@ This role manages dotfiles by creating symlinks from a source directory to the h
 ## Tags
 
 - `dotfiles` - All dotfiles operations
+- `skills` - Skill directory cleanup and symlinking only
 
 ## Role Variables
 
@@ -54,7 +55,20 @@ Optional list of additional dotfiles directories beyond the profile's standard `
 
 ### `skill_folders`
 
-List of destination directories for skills (e.g., `["~/.claude/skills", "~/.cursor/skills"]`). Skills from all profiles are merged into each configured destination.
+List of destinations for skills. A destination can be a path string, which keeps
+recursive file-level links, or a mapping that enables whole-directory links:
+
+```yaml
+skill_folders:
+  - path: ~/.agents/skills
+    link_top_level_directories: true
+  - ~/.claude/skills
+  - ~/.cursor/skills
+```
+
+Skills from all profiles are merged into each configured destination. Use
+whole-directory links for Codex's `~/.agents/skills`; Codex discovers symlinked
+skill directories but not directories containing a symlinked `SKILL.md` file.
 
 **Default**: `[]`
 
@@ -142,6 +156,8 @@ additional_dotfiles_dirs:
 
 # Configure skills and agents to be symlinked to multiple agent destinations
 skill_folders:
+  - path: ~/.agents/skills
+    link_top_level_directories: true
   - ~/.claude/skills
   - ~/.cursor/skills
 
@@ -163,7 +179,7 @@ agent_folders:
 4. **Config symlinking**: Files in `dotfiles_dir/config/` → `~/.config/{filename}`
 5. **File copying**: Files in `dotfiles_copy_dir` → `~/.{filename}` (mode 0600)
 6. **Bin scripts**: Files in `bin_dir` → `~/.local/bin/{filename}`
-7. **Skills symlinking**: Files in `skills_dir` → each destination in aggregated `skill_folders`
+7. **Skills symlinking**: Content in `skills_dir` → each destination in aggregated `skill_folders`, using that destination's configured link mode
 8. **Agents symlinking**: Files in `agents_dir` → each destination in aggregated `agent_folders`
 9. **Additional dotfiles**: Process `additional_dotfiles_dirs` from profiles
 

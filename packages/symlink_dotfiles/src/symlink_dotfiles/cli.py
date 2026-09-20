@@ -70,6 +70,11 @@ def main() -> int:
         help=f"Don't use default exclude patterns ({', '.join(DEFAULT_EXCLUDE_PATTERNS)})",
     )
     parser.add_argument(
+        "--link-top-level-directories",
+        action="store_true",
+        help="Symlink each direct child directory as a whole",
+    )
+    parser.add_argument(
         "--dry-run",
         "-n",
         action="store_true",
@@ -108,6 +113,7 @@ def main() -> int:
         exclude_dirs=args.exclude_dirs,
         exclude_patterns=exclude_patterns,
         marker_name=args.marker_name,
+        link_top_level_directories=args.link_top_level_directories,
         dry_run=args.dry_run,
         verbose=args.verbose,
     )
