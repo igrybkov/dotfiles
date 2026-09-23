@@ -4,6 +4,6 @@ idiomatic_version_file_enable_tools = []
 
 [tools]
 node = "latest"
-talosctl = "1.14.0"
+talosctl = "1.14.1"
 uv = "latest"
 vale = "latest"
