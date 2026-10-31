@@ -3,7 +3,7 @@ name = "dotfiles"
 version = "0.1.0"
 description = "Ansible managed dotfiles"
 readme = "README.md"
-requires-python = "~=3.14.0"
+requires-python = "~=3.15.1"
 classifiers = [
   # Prevent accidental upload to PyPI
   "Private :: Do Not Upload",
