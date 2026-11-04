@@ -201,6 +201,12 @@
           {%- if server.tags is defined and server.tags -%}
             {%- set _ = server_config.update({'tags': server.tags | list}) -%}
           {%- endif -%}
+          {# mcp-hub-only flags: only the hub's own servers file understands them #}
+          {%- if 'mcp-hub' in _mcp_config_path -%}
+            {%- for flag in ['expose_prompts', 'expose_resources'] if server[flag] is defined -%}
+              {%- set _ = server_config.update({flag: server[flag] | bool}) -%}
+            {%- endfor -%}
+          {%- endif -%}
           {%- set _ = result.update({name: server_config}) -%}
         {%- endif -%}
       {%- endfor -%}

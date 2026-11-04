@@ -75,6 +75,17 @@ argument_specs:
               `headers` and `secret_headers`.
             type: dict
             required: false
+          expose_prompts:
+            description: >
+              mcp-hub only: surface this server's MCP prompts through the hub
+              (they show up as slash commands). Written only to the mcp-hub
+              servers file; other clients never see the key.
+            type: bool
+            required: false
+          expose_resources:
+            description: mcp-hub only, like expose_prompts, for MCP resources.
+            type: bool
+            required: false
           git_repo:
             description: Git repository URL to clone for the server
             type: str
