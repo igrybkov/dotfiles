@@ -630,6 +630,14 @@
             "description": "Environment variables (supports vault and 1Password secrets)",
             "type": "object"
           },
+          "expose_prompts": {
+            "description": "mcp-hub only: surface this server's MCP prompts through the hub (they show up as slash commands). Written only to the mcp-hub servers file; other clients never see the key.",
+            "type": "boolean"
+          },
+          "expose_resources": {
+            "description": "mcp-hub only, like expose_prompts, for MCP resources.",
+            "type": "boolean"
+          },
           "git_dest": {
             "description": "Destination path for the cloned repository",
             "type": "string"
