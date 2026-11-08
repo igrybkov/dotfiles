@@ -52,6 +52,15 @@ ssh_client_config_block:
   - content: |
       Include ~/.ssh/1Password/config
     position: top
+  # Reuse one GitHub connection for 4h: only the first git call asks
+  # 1Password. Agents start a new process tree per command, so without this
+  # every push and fetch prompts again.
+  - content: |
+      Host github.com
+          ControlMaster auto
+          ControlPath ~/.ssh/cm-%C
+          ControlPersist 4h
+    position: bottom
   - content: |
       Host *
           identityagent "~/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
