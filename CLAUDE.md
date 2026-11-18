@@ -290,7 +290,7 @@ Each profile can contribute patterns to the **global** git ignore list (i.e., `~
 
 When asked to "add X to the agent's gitignore", this almost always means adding X to `profiles/agents/files/gitconfig/gitignore` — **not** to `profiles/agents/.gitignore` (which controls what git ignores inside the dotfiles repo itself).
 
-The `agents` profile currently ignores: `.hive.local.yml`, `.hive.local.yaml`, `.cursor/mcp.json`, `.cursor/plans/`, `.claude/plans/`.
+The `agents` profile currently ignores: `.hive.local.yml`, `.hive.local.yaml`, `.cursor/mcp.json`, `.cursor/plans/`, `.claude/plans/`, `.claude/worktrees/`.
 
 **To add patterns:** Edit `profiles/agents/files/gitconfig/gitignore` (or create the file in any other profile).
 

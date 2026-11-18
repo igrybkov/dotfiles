@@ -9,5 +9,6 @@
 
 # Claude Code
 .claude/plans/
+.claude/worktrees/
 .claude/scheduled_tasks.lock
 .temp_wiki_content/
