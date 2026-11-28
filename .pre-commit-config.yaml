@@ -9,7 +9,7 @@ default_install_hook_types:
 default_stages:
   - pre-commit
 default_language_version:
-  python: python3.14
+  python: python3.15
 repos:
   - repo: https://github.com/adrienverge/yamllint.git
     rev: v1.37.1
@@ -17,10 +17,10 @@ repos:
       - id: yamllint
         args: [--strict]
   - repo: https://github.com/ansible/ansible-lint
-    rev: v25.12.1
+    rev: v26.11.0
     hooks:
       - id: ansible-lint
-        language_version: python3.14
+        language_version: python3.15
         always_run: false
         files: ^(playbook\.yml|requirements\.yml|\.config/ansible-lint\.yml|profiles/.*/config\.yml|roles/|molecule/|ansible_plugins/|profiles/.*/tasks/|profiles/.*/roles/)
   - repo: https://github.com/koalaman/shellcheck-precommit
