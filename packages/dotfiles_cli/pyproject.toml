@@ -6,7 +6,7 @@ requires = [ "hatchling" ]
 name = "dotfiles-cli"
 version = "0.1.0"
 description = "CLI for managing dotfiles with Ansible"
-requires-python = "~=3.14.0"
+requires-python = "~=3.15.0"
 classifiers = [
   "Private :: Do Not Upload",
   "Programming Language :: Python :: 3 :: Only",
