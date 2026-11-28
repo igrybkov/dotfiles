@@ -7,7 +7,7 @@ import json
 import logging
 from typing import Any
 
-from mcp.types import TextContent, Tool
+from mcp.types import CallToolResult, TextContent, Tool
 
 from apple_mail_mcp.client import MailClient
 
@@ -260,9 +260,28 @@ def get_outlook_tools() -> list[Tool]:
     ]
 
 
+def _error(text: str) -> CallToolResult:
+    return CallToolResult(content=[TextContent(type="text", text=text)], is_error=True)
+
+
+def _missing_required(name: str, arguments: dict[str, Any]) -> list[str] | None:
+    """Return missing required args, or None if the tool is unknown."""
+    for tool in get_outlook_tools():
+        if tool.name == name:
+            required = tool.input_schema.get("required", [])
+            return [key for key in required if key not in arguments]
+    return None
+
+
 async def handle_outlook_tool(
     name: str, arguments: dict[str, Any], client: MailClient
-) -> list[TextContent]:
+) -> CallToolResult:
+    # mcp 2.x no longer validates arguments against inputSchema for us.
+    missing = _missing_required(name, arguments)
+    if missing is None:
+        return _error(f"Error: Unknown tool: {name}")
+    if missing:
+        return _error(f"Error: missing required argument(s): {', '.join(missing)}")
     try:
         account = arguments.get("account")
         if name == "mail_get_accounts":
@@ -316,9 +335,11 @@ async def handle_outlook_tool(
             )
         else:
             raise ValueError(f"Unknown tool: {name}")
-        return [
-            TextContent(type="text", text=json.dumps(result, indent=2, default=str))
-        ]
+        return CallToolResult(
+            content=[
+                TextContent(type="text", text=json.dumps(result, indent=2, default=str))
+            ]
+        )
     except Exception as e:
         logger.exception("Error in tool %s", name)
-        return [TextContent(type="text", text=f"Error: {e}")]
+        return _error(f"Error: {e}")

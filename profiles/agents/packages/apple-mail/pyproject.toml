@@ -4,7 +4,7 @@ requires = [ "hatchling" ]
 
 [project]
 name = "apple-mail-mcp"
-version = "0.3.0"
+version = "0.4.0"
 description = "Apple Mail MCP server (JXA bridge) — read/search/draft across Mail.app accounts"
 requires-python = ">=3.11"
 classifiers = [
@@ -17,7 +17,7 @@ classifiers = [
 dependencies = [
   "linkify-it-py>=2",
   "markdown-it-py>=3",
-  "mcp>=1",
+  "mcp>=2.3,<3",
 ]
 
 scripts.apple-mail-mcp = "apple_mail_mcp.server:run"
